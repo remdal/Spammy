@@ -222,7 +222,7 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
                                  const std::string& ressourcePath )
     : device(dev->retain()), _pShaderLibrary(device->newDefaultLibrary()),
     cameraZoom(0.15f), cameraPos(simd::make_float2(0, 0)), isDragging(false),
-    blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary)
+blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f)
 {
     cmdQueue = device->newCommandQueue();
     createPipeline();
@@ -231,8 +231,17 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
     loadGameSounds(ressourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
     resizeMtkView(width, height);
-    blender.loadGlb(ressourcePath);
-    blender.createPipelineBlender(_pShaderLibrary, layerPixelFormat, depthPixelFormat);
+    _camera.initPerspectiveWithPosition(
+        {0.0f, 0.0f, 5.0f},
+        {0.0f, 0.0f, -1.0f},
+        {0.0f, 1.0f, 0.0f},
+        M_PI / 3.0f,
+        1.0f,
+        0.1f,
+        100.0f
+    );
+//    blender.loadGlb(ressourcePath);
+//    blender.createPipelineBlender(_pShaderLibrary, layerPixelFormat, depthPixelFormat);
 }
 
 GameCoordinator::~GameCoordinator() {
@@ -241,6 +250,18 @@ GameCoordinator::~GameCoordinator() {
     transformBuffer->release();
     pipelineState->release();
     cmdQueue->release();
+}
+
+void GameCoordinator::moveCamera(simd::float3 translation)
+{
+    simd::float3 newPosition = _camera.position() + translation;
+    _camera.setPosition(newPosition);
+}
+
+void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
+{
+    _camera.rotateOnAxis({0.0f, 1.0f, 0.0f}, deltaYaw);
+    _camera.rotateOnAxis(_camera.right(), deltaPitch);
 }
 
 void GameCoordinator::handleMouseDown(bool rightClick) {
@@ -326,20 +347,33 @@ void GameCoordinator::draw( MTK::View* view )
 
     MTL::CommandBuffer* cmdBuf = cmdQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
+    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
     
-    if (passDesc) {
-        passDesc->colorAttachments()->object(0)->setClearColor(
-            MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
-        
-        MTL::RenderCommandEncoder* enc = cmdBuf->renderCommandEncoder(passDesc);
-        simd::float4x4 modelMatrix =
-        {
-            simd::float4{ cosf(1.0f), 0.0f, sinf(1.0f), 0.0f },
-            simd::float4{ 0.0f, 1.0f, 0.0f, 0.0f },
-            simd::float4{ -sinf(1.0f), 0.0f, cosf(1.0f), 0.0f },
-            simd::float4{ 0.0f, 0.0f, 0.0f, 1.0f }
-        };
-        blender.drawBlender(enc, modelMatrix, modelMatrix);
+    MTL::RenderCommandEncoder* enc = cmdBuf->renderCommandEncoder(passDesc);
+    MTL::Viewport viewport;
+    viewport.originX = 0.0;
+    viewport.originY = 0.0;
+    viewport.width   = view->drawableSize().width;
+    viewport.height  = view->drawableSize().height;
+    viewport.znear   = 0.0;
+    viewport.zfar    = 1.0;
+    enc->setViewport(viewport);
+
+    _rotationAngle += 0.008f;
+    if (_rotationAngle > 2 * M_PI)
+    {
+        _rotationAngle -= 2 * M_PI;
+    }
+    simd::float4x4 modelMatrix =
+    {
+        simd::float4{ cosf(_rotationAngle), 0.0f, sinf(_rotationAngle), 0.0f },
+        simd::float4{ 0.0f, 1.0f, 0.0f, 0.0f },
+        simd::float4{ -sinf(_rotationAngle), 0.0f, cosf(_rotationAngle), 0.0f },
+        simd::float4{ 0.0f, 0.0f, 0.0f, 1.0f }
+    };
+    RMDLCameraUniforms cameraUniforms = _camera.uniforms();
+    blender.drawBlender(enc, cameraUniforms.viewProjectionMatrix * modelMatrix, modelMatrix); // matrix_identity_float4x4
+    blender.updateBlender(0.0f);
 //        enc->setRenderPipelineState(pipelineState);
 //        simd::float4x4 camera = makeCamera();
 //        // Dessiner la grille
@@ -391,10 +425,8 @@ void GameCoordinator::draw( MTK::View* view )
 //        enc->setVertexBuffer(transformBuffer, 0, 1);
 //        enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
 //                                  MTL::IndexTypeUInt16, indexBuffer, 0);
-        enc->endEncoding();
-        cmdBuf->presentDrawable(view->currentDrawable());
-    }
-    
+    enc->endEncoding();
+    cmdBuf->presentDrawable(view->currentDrawable());
     cmdBuf->commit();
     pool->release();
 }

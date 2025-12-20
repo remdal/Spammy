@@ -68,7 +68,6 @@ private:
     float                       _pCurrentTime;
     float                       _pAnimationDuration;
     simd::float4x4              boneMatrix;
-    float                       _rotationAngle;
 
     bool loadMesh(const aiScene* scene);
     bool loadTextures(const std::string& resourcesPath, const aiScene* scene);

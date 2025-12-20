@@ -9,7 +9,7 @@
 
 #import "GameViewController.h"
 
-@interface GameWindow : NSWindow <MTKViewDelegate>
+@interface GameWindow : NSWindow
 
 @property (strong) RMDLGameApplicationLoupy* gameCoordinator;
 
@@ -74,7 +74,7 @@
 
 @implementation RMDLGameApplicationLoupy
 {
-    GameWindow*                             _window;
+    GameWindow*                        _window;
     std::unique_ptr< GameCoordinator > _pGameCoordinator;
 }
 
@@ -130,8 +130,8 @@
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     _mtkView = [[MTKView alloc] initWithFrame:_window.contentLayoutRect device:device];
     _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float;
-    _mtkView.depthStencilPixelFormat = MTLPixelFormatInvalid; //MTLPixelFormatDepth32Float
+    _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float; // MTLPixelFormatRGBA8Unorm_sRGB MTLPixelFormatRGBA8Unorm
+    _mtkView.depthStencilPixelFormat = MTLPixelFormatDepth32Float; // MTLPixelFormatInvalid
     _mtkView.framebufferOnly = YES;
     _mtkView.paused = NO;
     _mtkView.delegate = self;
@@ -152,12 +152,12 @@
 
 - (void)moveCameraX:(float)x Y:(float)y Z:(float)z
 {
-    //_pGameCoordinator->moveCamera( simd::float3 {x, y, z} );
+    _pGameCoordinator->moveCamera( simd::float3 {x, y, z} );
 }
 
 - (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch
 {
-    //_pGameCoordinator->rotateCamera(yaw, pitch);
+    _pGameCoordinator->rotateCamera(yaw, pitch);
 }
 
 - (void)playSoundTestY

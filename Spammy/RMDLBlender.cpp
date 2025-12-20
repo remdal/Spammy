@@ -14,11 +14,21 @@ _pCurrentTime(0.0f), _pAnimationDuration(12.0f)
 {
     _pUniformBufferBlender = pDevice->newBuffer(sizeof(AnimatedSpriteBlender), MTL::ResourceStorageModeShared);
     doTheImportThing(resourcesPath);
+    loadGlb(resourcesPath);
+    createPipelineBlender(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
+    printf("   Pipeline: %p\n", _pPipelineStateBlender);
+    printf("   Textures: D=%p N=%p R=%p M=%p\n", _pDiffuseTexture, _pNormalTexture, _pRoughnessTexture, _pMetallicTexture);
+    printf("✓ Device: %p\n", _pDevice);
+    printf("✓ Shader library: %p\n", pShaderLibrary);
+    printf("✓ GLB path exists: %s\n", resourcesPath.c_str());
     createSampler();
 }
 
 RMDLBlender::~RMDLBlender()
 {
+    printf("Pipeline: %p (should not be nullptr)\n", _pPipelineStateBlender);
+    printf("Vertex buffer: %p\n", _pVertexBufferBlender);
+    printf("Index buffer: %p\n", _pIndexBufferBlender);
     
 }
 
@@ -91,8 +101,6 @@ void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::Pixel
     renderPipelineDesc->setVertexFunction(pShaderLibrary->newFunction(NS::String::string("vertexmain", NS::UTF8StringEncoding)));
     renderPipelineDesc->setFragmentFunction(pShaderLibrary->newFunction(NS::String::string("fragmentmain", NS::UTF8StringEncoding)));
     renderPipelineDesc->setVertexDescriptor(vertexDesc);
-
-    // Float16 HDR
     renderPipelineDesc->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
     renderPipelineDesc->setDepthAttachmentPixelFormat(pDepthPixelFormat);
 
@@ -134,7 +142,7 @@ bool RMDLBlender::loadMesh(const aiScene *scene)
 
     for (unsigned i = 0; i < mesh->mNumVertices; i++)
     {
-        _pVertices[i].position = simd::make_float3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+        _pVertices[i].position = simd::make_float3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
         if (mesh->HasNormals())
             _pVertices[i].normal = simd::make_float3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
         if (mesh->mTextureCoords[0])
@@ -287,14 +295,16 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, const simd::f
     uniforms->time = _pCurrentTime;
 
     pEncoder->setRenderPipelineState(_pPipelineStateBlender);
-//    pEncoder->setDepthStencilState(_pDepthState);
+    pEncoder->setDepthStencilState(_pDepthState);
+    pEncoder->setCullMode(MTL::CullModeNone);
+    pEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
     pEncoder->setVertexBuffer(_pVertexBufferBlender, 0, 0);
     pEncoder->setVertexBuffer(_pUniformBufferBlender, 0, 1);
     pEncoder->setFragmentBuffer(_pUniformBufferBlender, 0, 0);
     pEncoder->setFragmentTexture(_pDiffuseTexture, 0);
     pEncoder->setFragmentTexture(_pNormalTexture, 1);
     pEncoder->setFragmentTexture(_pRoughnessTexture, 2);
-    pEncoder->setFragmentTexture(_pMetallicTexture, 3);
+//    pEncoder->setFragmentTexture(_pMetallicTexture, 3);
     pEncoder->setFragmentSamplerState(_pSampler, 0);
-    pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, _pIndices.size(), MTL::IndexTypeUInt16, _pIndexBufferBlender, 0);
+    pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, _pIndices.size(), MTL::IndexTypeUInt32, _pIndexBufferBlender, 0);
 }

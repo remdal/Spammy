@@ -165,7 +165,9 @@ private:
     simd::float2 dragStart;
     int viewWidth;
     int viewHeight;
+    float                       _rotationAngle;
 
+    RMDLCamera _camera;
     MTL::PixelFormat                    _pPixelFormat;
     MTL::PixelFormat                    _pDepthPixelFormat;
     MTL::DepthStencilState*             _pDepthStencilState;
@@ -192,6 +194,8 @@ public:
     void handleKeyPress(int key);
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* pAudioEngine);
+    void moveCamera(simd::float3 translation);
+    void rotateCamera(float deltaYaw, float deltaPitch);
     void draw(MTK::View* view);
     void resizeMtkView( NS::UInteger width, NS::UInteger height );
 };

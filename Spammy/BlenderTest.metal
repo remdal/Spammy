@@ -56,14 +56,14 @@ fragment float4 fragmentmain(
     texture2d<float> diffuseTexture [[texture(0)]],
     texture2d<float> normalTexture [[texture(1)]],
     texture2d<float> roughnessTexture [[texture(2)]],
-    texture2d<float> metallicTexture [[texture(3)]],
+//    texture2d<float> metallicTexture [[texture(3)]],
     sampler textureSampler [[sampler(0)]]
 ) {
     // Sample textures
     float4 baseColor = diffuseTexture.sample(textureSampler, in.texCoord);
     float3 normalMap = normalTexture.sample(textureSampler, in.texCoord).rgb;
     float roughness = roughnessTexture.sample(textureSampler, in.texCoord).g;
-    float metallic = metallicTexture.sample(textureSampler, in.texCoord).b;
+//    float metallic = metallicTexture.sample(textureSampler, in.texCoord).b;
     
     // Normal mapping (TBN matrix)
     normalMap = normalMap * 2.0 - 1.0;
