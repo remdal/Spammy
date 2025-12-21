@@ -126,18 +126,17 @@ void GameCoordinator::createPipeline() {
     NS::Error* error = nullptr;
     MTL::Library* library = device->newLibrary(
         NS::String::string(shaderSrc, NS::UTF8StringEncoding), nullptr, &error);
-    
+
     MTL::Function* vertFunc = library->newFunction(
         NS::String::string("vertexShader", NS::UTF8StringEncoding));
     MTL::Function* fragFunc = library->newFunction(
         NS::String::string("fragmentShader", NS::UTF8StringEncoding));
-    
+
     auto* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vertFunc);
     desc->setFragmentFunction(fragFunc);
     desc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA16Float);
 
-    
     auto* vertDesc = MTL::VertexDescriptor::alloc()->init();
     vertDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
     vertDesc->attributes()->object(0)->setOffset(0);
@@ -222,7 +221,8 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
                                  const std::string& ressourcePath )
     : device(dev->retain()), _pShaderLibrary(device->newDefaultLibrary()),
     cameraZoom(0.15f), cameraPos(simd::make_float2(0, 0)), isDragging(false),
-blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f)
+blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
+skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
 {
     cmdQueue = device->newCommandQueue();
     createPipeline();
@@ -359,7 +359,7 @@ void GameCoordinator::draw( MTK::View* view )
     viewport.zfar    = 1.0;
     enc->setViewport(viewport);
 
-    _rotationAngle += 0.008f;
+    _rotationAngle += 0.0004f;
     if (_rotationAngle > 2 * M_PI)
     {
         _rotationAngle -= 2 * M_PI;
@@ -374,6 +374,12 @@ void GameCoordinator::draw( MTK::View* view )
     RMDLCameraUniforms cameraUniforms = _camera.uniforms();
     blender.drawBlender(enc, cameraUniforms.viewProjectionMatrix * modelMatrix, modelMatrix); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
+
+    auto& params = skybox.getParams();
+    params.exposure = 1.2f;
+    skybox.setTimeOfDay(1.0f);
+    skybox.render(enc, modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
+//    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 //        enc->setRenderPipelineState(pipelineState);
 //        simd::float4x4 camera = makeCamera();
 //        // Dessiner la grille

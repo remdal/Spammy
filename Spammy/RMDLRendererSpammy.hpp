@@ -20,6 +20,7 @@
 #include <vector>
 #include <stdio.h>
 
+#include "RMDLSkybox.hpp"
 #include "RMDLMainRenderer_shared.h"
 #include "RMDLCamera.hpp"
 #include "RMDLUtils.hpp"
@@ -181,7 +182,8 @@ private:
     simd::float4 getBlockColor(BlockType type);
     bool DoTheImportThing(const std::string& pFile);
     RMDLBlender blender;
-    
+    sky::RMDLSkybox skybox;
+
 public:
     GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath );
     ~GameCoordinator();

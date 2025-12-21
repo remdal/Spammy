@@ -12,7 +12,7 @@ _pDevice(pDevice->retain()),
 _pPixelFormat(pPixelFormat), _pDepthPixelFormat(pDepthPixelFormat),
 _pCurrentTime(0.0f), _pAnimationDuration(12.0f)
 {
-    _pUniformBufferBlender = pDevice->newBuffer(sizeof(AnimatedSpriteBlender), MTL::ResourceStorageModeShared);
+    _pUniformBufferBlender = _pDevice->newBuffer(sizeof(AnimatedSpriteBlender), MTL::ResourceStorageModeShared);
     doTheImportThing(resourcesPath);
     loadGlb(resourcesPath);
     createPipelineBlender(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
@@ -26,10 +26,6 @@ _pCurrentTime(0.0f), _pAnimationDuration(12.0f)
 
 RMDLBlender::~RMDLBlender()
 {
-    printf("Pipeline: %p (should not be nullptr)\n", _pPipelineStateBlender);
-    printf("Vertex buffer: %p\n", _pVertexBufferBlender);
-    printf("Index buffer: %p\n", _pIndexBufferBlender);
-    
 }
 
 bool RMDLBlender::doTheImportThing(const std::string& resourcesPath)

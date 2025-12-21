@@ -8,7 +8,8 @@
 #include <metal_stdlib>
 using namespace metal;
 
-struct VertexBlender {
+struct VertexBlender
+{
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     float2 texCoord [[attribute(2)]];
