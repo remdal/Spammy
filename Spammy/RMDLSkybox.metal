@@ -141,40 +141,6 @@ float perlinFBM(float2 uv)
     return value / maxValue;
 }
 
-float perlinFBM3D(float3 pos)
-{
-    const float SCALE = -0.2;
-    const int DETAIL = 2;
-    const float ROUGHNESS = 0.5;
-    const float DISTORTION = 33.6;
-    const float LACUNARITY = 2.0;
-    
-    float3 p = pos * SCALE;
-    
-    // Domain warping (distortion)
-    float3 q = float3(perlinNoise3D(p + float3(DISTORTION, 0.0, 0.0)),
-                      perlinNoise3D(p + float3(0.0, DISTORTION, 0.0)),
-                      perlinNoise3D(p + float3(0.0, 0.0, DISTORTION)));
-    p += q * 0.1;
-    
-    // FBM accumulation
-    float value = 0.0;
-    float amplitude = 1.0;
-    float frequency = 1.0;
-    float maxValue = 0.0;
-    
-    for (int i = 0; i < DETAIL; ++i)
-    {
-        value += perlinNoise3D(p * frequency) * amplitude;
-        maxValue += amplitude;
-        
-        amplitude *= ROUGHNESS;
-        frequency *= LACUNARITY;
-    }
-    return value / maxValue;
-}
-
-
 float2 raySphereIntersect(float3 ro, float3 rd, float r)
 {
     float b = dot(ro, rd);
@@ -231,26 +197,24 @@ float3 perlinNoiseColor3D(float3 p)
 // FBM 3D avec COLOR output
 float3 perlinFBMColor3D(float3 pos)
 {
-    const float SCALE = -0.2;
+    const float SCALE = -0.85;
     const int DETAIL = 2;
     const float ROUGHNESS = 0.5;
-    const float DISTORTION = 33.6;
+    float DISTORTION = 0.0;
     const float LACUNARITY = 2.0;
     
     float3 p = pos * SCALE;
-    
+
     // Domain warping (distortion)
-    float3 q = float3(
-        perlinNoise3D(p + float3(DISTORTION, 0.0, 0.0)),
-        perlinNoise3D(p + float3(0.0, DISTORTION, 0.0)),
-        perlinNoise3D(p + float3(0.0, 0.0, DISTORTION))
-    );
-    p += q * 0.1;
-    
+    float3 q = float3(perlinNoise3D(p + float3(DISTORTION, 0.0, 0.0)),
+                      perlinNoise3D(p + float3(0.0, DISTORTION, 0.0)),
+                      perlinNoise3D(p + float3(0.0, 0.0, DISTORTION)));
+    p += q / 0.05;
+
     // Accumulation RGB FBM
     float3 value = float3(0.0);
     float amplitude = 1.0;
-    float frequency = 1.0;
+    float frequency = 15.0;
     float maxValue = 0.0;
     
     for (int i = 0; i < DETAIL; ++i)
@@ -265,81 +229,6 @@ float3 perlinFBMColor3D(float3 pos)
     
     return value / maxValue;
 }
-
-vertex VertexOut skybox_vertex(Vertex in [[stage_in]],
-                               constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-{
-    VertexOut out;
-    out.position = float4(in.position.xy, 0.999, 1.0);
-    
-    float4 farPoint = uniforms.invViewProjection * float4(in.position.xy, 1.0, 1.0);
-    out.viewRay = farPoint.xyz / farPoint.w - uniforms.cameraPos;
-    
-    return out;
-}
-
-fragment float4 skybox_fragment(
-    VertexOut in [[stage_in]],
-    constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-{
-    float3 rd = normalize(in.viewRay);
-    
-    // Utilise direction du ray comme position 3D (comme avant)
-    float3 samplePos = rd * 10.0;
-    
-    // Sample Perlin 3D COLOR output (RGB)
-    float3 color = perlinFBMColor3D(samplePos);
-    
-    // Les couleurs sont déjà [0,1]
-    
-    // Gamma correction
-    color = pow(color, float3(1.0 / 2.2));
-    
-    return float4(color, 1.0);
-}
-
-//vertex VertexOut skybox_vertex(Vertex in [[stage_in]],
-//                               constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-//{
-//    VertexOut out;
-//    out.position = float4(in.position.xy, 0.999, 1.0);
-//    
-//    float4 farPoint = uniforms.invViewProjection * float4(in.position.xy, 1.0, 1.0);
-//    out.viewRay = farPoint.xyz / farPoint.w - uniforms.cameraPos;
-//    
-//    return out;
-//}
-//
-//fragment float4 skybox_fragment(
-//    VertexOut in [[stage_in]],
-//    constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-//{
-//    float3 rd = normalize(in.viewRay);
-//    
-//    // Sample Perlin 3D à la position du ray
-//    float3 samplePos = rd * 10.0;
-//    
-//    // Génère le noise avec les paramètres Blender
-//    float noise = perlinFBM3D(samplePos);
-//    
-//    // Remap de [-1, 1] vers [0, 1]
-//    noise = noise * 0.5 + 0.5;
-//    
-//    // Sortie en niveaux de gris comme Blender
-//    float3 color;
-//    if (noise < 0.33) {
-//        color = mix(float3(0.1, 0.1, 0.3), float3(0.3, 0.4, 0.8), noise / 0.33);
-//    } else if (noise < 0.66) {
-//        color = mix(float3(0.3, 0.4, 0.8), float3(1.0, 0.7, 0.4), (noise - 0.33) / 0.33);
-//    } else {
-//        color = mix(float3(1.0, 0.7, 0.4), float3(1.0, 0.3, 0.2), (noise - 0.66) / 0.34);
-//    }
-//    
-//    // Gamma correction
-//    color = pow(color, float3(1.0 / 2.2));
-//    
-//    return float4(color, 1.0);
-//}
 
 float3 atmosphericScattering(float3 ro, float3 rd, float3 sunDir, constant RMDLSkyboxUniforms& u)
 {
@@ -402,41 +291,29 @@ float3 atmosphericScattering(float3 ro, float3 rd, float3 sunDir, constant RMDLS
     return scatter;
 }
 
-vertex VertexOut skyboxvertex(Vertex in [[stage_in]],
+vertex VertexOut skybox_vertex(Vertex in [[stage_in]],
                                constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
 {
     VertexOut out;
     out.position = float4(in.position.xy, 0.999, 1.0);
-    
     float4 farPoint = uniforms.invViewProjection * float4(in.position.xy, 1.0, 1.0);
     out.viewRay = farPoint.xyz / farPoint.w - uniforms.cameraPos;
-    
     return out;
 }
 
-fragment float4 skyboxfragment(VertexOut in [[stage_in]], constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
+fragment float4 skybox_fragment(VertexOut in [[stage_in]],
+                                constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
 {
     float3 rd = normalize(in.viewRay);
-    float3 ro = uniforms.cameraPos + float3(0, uniforms.planetRadius, 0);
-    
-    // Base atmospheric scattering
-    float3 color = atmosphericScattering(ro, rd, uniforms.sunDir, uniforms);
-    
-    // Perlin noise overlay (pour texture atmosphérique)
-    // Projette le ray sur une sphère pour UV stables
-    float2 sphereUV = float2(
-        atan2(rd.z, rd.x) / (2.0 * M_PI_F) + 0.5,
-        asin(rd.y) / M_PI_F + 0.5
-    );
-    
-    // Génère noise avec tes params
-    float noise = perlinFBM(sphereUV * 10.0 + uniforms.timeOfDay * 0.5);
-    
-    // Applique le noise comme texture atmosphérique (subtle)
-    // Plus visible près de l'horizon
-    float horizonMask = 1.0 - abs(rd.y);
-    color += float3(noise) * 0.05 * horizonMask;
-    
+    float3 color = perlinFBMColor3D(rd);
+    // Adoucit les couleurs (effet pastel)
+    color = color * 0.5 + 0.7;
+    // Boost légèrement la saturation
+    float gray = dot(color, float3(0.299, 0.587, 0.114));
+    color = mix(float3(gray), color, 1.3);
+    color = saturate(color);
+    // Gamma correction
+    color = pow(color, float3(1.0 / 2.5));
     // Sun disk avec bloom
     float sunDot = dot(rd, uniforms.sunDir);
     if (sunDot > 0.9995) {
@@ -446,154 +323,88 @@ fragment float4 skyboxfragment(VertexOut in [[stage_in]], constant RMDLSkyboxUni
     float sunHalo = pow(max(0.0, sunDot), 32.0);
     color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
     
-    // Tone mapping (ACES approximation)
-    color = color / (color + float3(1.0));
-    
-    // Exposure
-    color *= uniforms.exposure;
-    
-    // Gamma correction
-    color = pow(color, float3(1.0 / 2.2));
-    
+
     return float4(color, 1.0);
 }
-//float3 atmosphericScattering(float3 ro, float3 rd, float3 sunDir, constant RMDLSkyboxUniforms& u)
-//{
-//    float2 atmoHit = raySphereIntersect(ro, rd, u.atmosphereRadius);
-//    if (atmoHit.x < 0.0) return float3(0.0);
+
+//    // Base atmospheric scattering
+//    float3 color = atmosphericScattering(ro, rd, uniforms.sunDir, uniforms);
 //    
-//    float tMax = atmoHit.y;
-//    int steps = 16; // Réduit pour perf avec le 3D noise
-//    float dt = tMax / float(steps);
-//    
-//    float3 totalRayleigh = float3(0.0);
-//    float3 totalMie = float3(0.0);
-//    float opticalDepthR = 0.0;
-//    float opticalDepthM = 0.0;
-//    
-//    for (int i = 0; i < steps; ++i) {
-//        float t = dt * (float(i) + 0.5);
-//        float3 pos = ro + rd * t;
-//        float height = length(pos) - u.planetRadius;
-//        
-//        float hr = exp(-height / u.rayleighHeight) * dt;
-//        float hm = exp(-height / u.mieHeight) * dt;
-//        
-//        opticalDepthR += hr;
-//        opticalDepthM += hm;
-//        
-//        float2 sunHit = raySphereIntersect(pos, sunDir, u.atmosphereRadius);
-//        float tSun = sunHit.y;
-//        float odLightR = 0.0;
-//        float odLightM = 0.0;
-//        
-//        int lightSteps = 4; // Réduit aussi
-//        float dtLight = tSun / float(lightSteps);
-//        
-//        for (int j = 0; j < lightSteps; ++j) {
-//            float tl = dtLight * (float(j) + 0.5);
-//            float3 posL = pos + sunDir * tl;
-//            float hL = length(posL) - u.planetRadius;
-//            odLightR += exp(-hL / u.rayleighHeight) * dtLight;
-//            odLightM += exp(-hL / u.mieHeight) * dtLight;
-//        }
-//        
-//        float3 tau = u.rayleighCoeff * (opticalDepthR + odLightR) +
-//                    u.mieCoeff * (opticalDepthM + odLightM);
-//        float3 attenuation = exp(-tau);
-//        
-//        totalRayleigh += hr * attenuation;
-//        totalMie += hm * attenuation;
-//    }
-//    
-//    float cosTheta = dot(rd, sunDir);
-//    float phaseR = phaseRayleigh(cosTheta);
-//    float phaseM = phaseMie(cosTheta, u.mieG);
-//    
-//    float3 scatter = u.sunIntensity * (
-//        phaseR * u.rayleighCoeff * totalRayleigh +
-//        phaseM * u.mieCoeff * totalMie
+//    // Perlin noise overlay (pour texture atmosphérique)
+//    // Projette le ray sur une sphère pour UV stables
+//    float2 sphereUV = float2(
+//        atan2(rd.z, rd.x) / (2.0 * M_PI_F) + 0.5,
+//        asin(rd.y) / M_PI_F + 0.5
 //    );
 //    
-//    return scatter;
+//    // Génère noise avec tes params
+//    float noise = perlinFBM(sphereUV * 10.0 + uniforms.timeOfDay * 0.5);
+//    
+//    // Applique le noise comme texture atmosphérique (subtle)
+//    // Plus visible près de l'horizon
+//    float horizonMask = 1.0 - abs(rd.y);
+//    color += float3(noise) * 0.05 * horizonMask;
+//    // Tone mapping (ACES approximation)
+//    color = color / (color + float3(1.0));
+//    
+//    // Exposure
+//    color *= uniforms.exposure;
+//
+//    return float4(color, 1.0);
 //}
 
-
-vertex VertexOut skyboxertex(Vertex in [[stage_in]],
-                               constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-{
-    VertexOut out;
-    out.position = float4(in.position.xy, 0.999, 1.0);
-    
-    float4 farPoint = uniforms.invViewProjection * float4(in.position.xy, 1.0, 1.0);
-    out.viewRay = farPoint.xyz / farPoint.w - uniforms.cameraPos;
-    
-    return out;
-}
-
-fragment float4 skyboxragment(VertexOut in [[stage_in]],
-                                constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
-{
-    float3 rd = normalize(in.viewRay);
-    
-    // ========================================================================
-    // OPTION 1: Skybox Perlin 3D Pure (comme Blender)
-    // ========================================================================
-    
-    // Utilise direction du ray comme position 3D
-    float3 samplePos = rd * 10.0; // Scale pour contrôler la fréquence
-    
-    // Sample le Perlin 3D avec animation temporelle
-    float noise = perlinFBM3D(samplePos + float3(0, uniforms.timeOfDay * 2.0, 0));
-    
-    // Remap [-1,1] vers [0,1]
-    noise = noise * 0.5 + 0.5;
-    
-    // Colorisation (gradient bleu -> blanc -> orange)
-    float3 color;
-    if (noise < 0.4) {
-        // Zones sombres = bleu profond
-        color = mix(float3(0.1, 0.2, 0.4), float3(0.3, 0.5, 0.8), noise / 0.4);
-    } else if (noise < 0.6) {
-        // Milieu = blanc/gris
-        color = mix(float3(0.3, 0.5, 0.8), float3(0.9, 0.9, 0.95), (noise - 0.4) / 0.2);
-    } else {
-        // Zones claires = orange/jaune
-        color = mix(float3(0.9, 0.9, 0.95), float3(1.0, 0.8, 0.5), (noise - 0.6) / 0.4);
-    }
-    
-    // ========================================================================
-    // OPTION 2: Atmospheric + Perlin Clouds (mix des deux)
-    // Décommente si tu veux garder l'atmosphère réaliste
-    // ========================================================================
-    /*
-    float3 ro = uniforms.cameraPos + float3(0, uniforms.planetRadius, 0);
-    float3 baseColor = atmosphericScattering(ro, rd, uniforms.sunDir, uniforms);
-    
-    // Perlin 3D pour nuages volumétriques
-    float3 cloudPos = rd * 5.0 + float3(uniforms.timeOfDay * 0.5, 0, 0);
-    float cloudNoise = perlinFBM3D(cloudPos);
-    cloudNoise = saturate(cloudNoise * 0.5 + 0.5);
-    
-    // Mix atmosphère + nuages
-    float cloudDensity = pow(cloudNoise, 2.0); // Contraste
-    color = mix(baseColor, float3(1.0), cloudDensity * 0.7);
-    
-    // Sun disk
-    float sunDot = dot(rd, uniforms.sunDir);
-    if (sunDot > 0.9995) {
-        color += float3(1.0) * uniforms.sunIntensity * 0.1;
-    }
-    float sunHalo = pow(max(0.0, sunDot), 32.0);
-    color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
-    
-    // Tone mapping
-    color = color / (color + float3(1.0));
-    color *= uniforms.exposure;
-    */
-    
-    // Gamma correction
-    color = pow(color, float3(1.0 / 2.2));
-    
-    return float4(color, 1.0);
-}
+//fragment float4 skyboxragment(VertexOut in [[stage_in]],
+//                                constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
+//{
+//    float3 rd = normalize(in.viewRay);
+//    
+//    // ========================================================================
+//    // OPTION 1: Skybox Perlin 3D Pure (comme Blender)
+//    // ========================================================================
+//    
+//    // Utilise direction du ray comme position 3D
+//    float3 samplePos = rd * 10.0; // Scale pour contrôler la fréquence
+//    
+//    // Sample le Perlin 3D avec animation temporelle
+//    float noise = perlinFBM3D(samplePos + float3(0, uniforms.timeOfDay * 2.0, 0));
+//    
+//    // Remap [-1,1] vers [0,1]
+//    noise = noise * 0.5 + 0.5;
+//    
+//    // Colorisation (gradient bleu -> blanc -> orange)
+//    float3 color;
+//    if (noise < 0.4) {
+//        // Zones sombres = bleu profond
+//        color = mix(float3(0.1, 0.2, 0.4), float3(0.3, 0.5, 0.8), noise / 0.4);
+//    } else if (noise < 0.6) {
+//        // Milieu = blanc/gris
+//        color = mix(float3(0.3, 0.5, 0.8), float3(0.9, 0.9, 0.95), (noise - 0.4) / 0.2);
+//    } else {
+//        // Zones claires = orange/jaune
+//        color = mix(float3(0.9, 0.9, 0.95), float3(1.0, 0.8, 0.5), (noise - 0.6) / 0.4);
+//    }
+//    
+//    // ========================================================================
+//    // OPTION 2: Atmospheric + Perlin Clouds (mix des deux)
+//    // Décommente si tu veux garder l'atmosphère réaliste
+//    // ========================================================================
+//    /*
+//    float3 ro = uniforms.cameraPos + float3(0, uniforms.planetRadius, 0);
+//    float3 baseColor = atmosphericScattering(ro, rd, uniforms.sunDir, uniforms);
+//    
+//    // Perlin 3D pour nuages volumétriques
+//    float3 cloudPos = rd * 5.0 + float3(uniforms.timeOfDay * 0.5, 0, 0);
+//    float cloudNoise = perlinFBM3D(cloudPos);
+//    cloudNoise = saturate(cloudNoise * 0.5 + 0.5);
+//    
+//    // Mix atmosphère + nuages
+//    float cloudDensity = pow(cloudNoise, 2.0); // Contraste
+//    color = mix(baseColor, float3(1.0), cloudDensity * 0.7);
+//
+//    // Sun disk
+//    float sunDot = dot(rd, uniforms.sunDir);
+//    if (sunDot > 0.9995) {
+//        color += float3(1.0) * uniforms.sunIntensity * 0.1;
+//    }
+//    float sunHalo = pow(max(0.0, sunDot), 32.0);
+//    color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;

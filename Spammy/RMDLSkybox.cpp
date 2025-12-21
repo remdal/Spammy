@@ -14,12 +14,10 @@ _pDevice(pDevice->retain()), _pPixelFormat(pPixelFormat), _pDepthPixelFormat(pDe
 {
     _pUniformBuffer = _pDevice->newBuffer(sizeof(RMDLSkyboxUniforms), MTL::ResourceStorageModeShared);
     createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
-    float vertices[] = {
-        -1.0f, -1.0f, 0.0f,
-         1.0f, -1.0f, 0.0f,
-        -1.0f,  1.0f, 0.0f,
-         1.0f,  1.0f, 0.0f,
-    };
+    float vertices[] = { -1.0f, -1.0f, 0.0f,
+                          1.0f, -1.0f, 0.0f,
+                         -1.0f,  1.0f, 0.0f,
+                          1.0f,  1.0f, 0.0f };
     _pVertexCount = 4;
     _pVertexBuffer = _pDevice->newBuffer(vertices, sizeof(vertices), MTL::ResourceStorageModeShared);
 }

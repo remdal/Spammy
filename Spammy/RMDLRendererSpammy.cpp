@@ -222,7 +222,8 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
     : device(dev->retain()), _pShaderLibrary(device->newDefaultLibrary()),
     cameraZoom(0.15f), cameraPos(simd::make_float2(0, 0)), isDragging(false),
 blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
-skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
+skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
+snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
 {
     cmdQueue = device->newCommandQueue();
     createPipeline();
@@ -371,6 +372,7 @@ void GameCoordinator::draw( MTK::View* view )
         simd::float4{ -sinf(_rotationAngle), 0.0f, cosf(_rotationAngle), 0.0f },
         simd::float4{ 0.0f, 0.0f, 0.0f, 1.0f }
     };
+    simd::float4x4 modelMatrix2 = math::makeIdentity();
     RMDLCameraUniforms cameraUniforms = _camera.uniforms();
     blender.drawBlender(enc, cameraUniforms.viewProjectionMatrix * modelMatrix, modelMatrix); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
@@ -378,7 +380,9 @@ void GameCoordinator::draw( MTK::View* view )
     auto& params = skybox.getParams();
     params.exposure = 1.2f;
     skybox.setTimeOfDay(1.0f);
-    skybox.render(enc, modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
+    skybox.render(enc, modelMatrix2, cameraUniforms.viewProjectionMatrix * modelMatrix2, {0,0,0});
+    snow.render(enc, modelMatrix2, {0,0,0});
+    
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 //        enc->setRenderPipelineState(pipelineState);
 //        simd::float4x4 camera = makeCamera();

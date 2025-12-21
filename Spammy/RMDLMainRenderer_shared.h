@@ -123,4 +123,19 @@ struct RMDLSkyboxUniforms
     float _pad1;
 };
 
+struct RMDLSnowUniforms {
+    float deltaTime;
+    float time;
+    simd::float3 cameraPos;
+    float spawnRadius;
+    float spawnHeight;
+    float fallSpeed;
+    simd::float3 windDirection;
+    float windStrength;
+    float turbulence;
+    float respawnThreshold;
+    float intensity;
+    float _pad;
+};
+
 #endif /* RMDLMAINRENDERER_SHARED_H */

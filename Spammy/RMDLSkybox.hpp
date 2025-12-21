@@ -19,7 +19,7 @@ namespace sky {
 
 struct AtmosphereParams {
     simd::float3 sunDirection{0.0f, 0.5f, 0.5f};
-    float sunIntensity = 122.0f;
+    float sunIntensity = 12200.0f;
     // Rayleigh scattering (bleu du ciel)
     simd::float3 rayleighScattering{5.8e-6f, 13.5e-6f, 33.1e-6f};
     float rayleighScaleHeight = 8000.0f;
@@ -62,8 +62,7 @@ private:
     MTL::PixelFormat                _pDepthPixelFormat;
     MTL::DepthStencilState*         _pDepthState;
     MTL::RenderPipelineState*       _pPipelineStateBlender;
-   
-    
+
     AtmosphereParams                _pAtmosphereParams;
     uint32_t                        _pVertexCount;
 };

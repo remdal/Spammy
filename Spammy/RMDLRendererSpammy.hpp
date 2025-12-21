@@ -21,6 +21,7 @@
 #include <stdio.h>
 
 #include "RMDLSkybox.hpp"
+#include "RMDLSnow.hpp"
 #include "RMDLMainRenderer_shared.h"
 #include "RMDLCamera.hpp"
 #include "RMDLUtils.hpp"
@@ -183,6 +184,8 @@ private:
     bool DoTheImportThing(const std::string& pFile);
     RMDLBlender blender;
     sky::RMDLSkybox skybox;
+    snow::RMDLSnow snow;
+    
 
 public:
     GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath );
