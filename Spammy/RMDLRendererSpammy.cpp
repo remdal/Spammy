@@ -1,10 +1,10 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /*                                        +       +          */
-/*      File: RMDLRendererSpammy.cpp            +++    +++  **/
+/*      File: RMDLRendererSpammy.cpp            +++    +++   */
 /*                                        +       +          */
-/*      By: Laboitederemdal      **        +       +        **/
+/*      By: Laboitederemdal                +       +         */
 /*                                       +           +       */
-/*      Created: 27/10/2025 18:44:15      + + + + + +   * ****/
+/*      Created: 27/10/2025 18:44:15      + + + + + +        */
 /*                                                           */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -136,6 +136,7 @@ void GameCoordinator::createPipeline() {
     desc->setVertexFunction(vertFunc);
     desc->setFragmentFunction(fragFunc);
     desc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA16Float);
+    desc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
 
     auto* vertDesc = MTL::VertexDescriptor::alloc()->init();
     vertDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
@@ -149,6 +150,11 @@ void GameCoordinator::createPipeline() {
     
     pipelineState = device->newRenderPipelineState(desc, &error);
     
+    NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLessEqual);
+    pDepthStencilDesc->setDepthWriteEnabled(false);
+    _pDepthStencilState = device->newDepthStencilState(pDepthStencilDesc.get());
+    
     vertFunc->release();
     fragFunc->release();
     library->release();
@@ -156,23 +162,20 @@ void GameCoordinator::createPipeline() {
     vertDesc->release();
 }
 
-void GameCoordinator::createBuffers() {
+void GameCoordinator::createBuffers()
+{
     Vertex vertices[] = {
         {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         {{ 0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}
-    };
-    
+        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}} };
+
     uint16_t indices[] = {0, 1, 2, 0, 2, 3};
-    
-    vertexBuffer = device->newBuffer(vertices, sizeof(vertices),
-                                     MTL::ResourceStorageModeShared);
-    indexBuffer = device->newBuffer(indices, sizeof(indices),
-                                    MTL::ResourceStorageModeShared);
-    transformBuffer = device->newBuffer(sizeof(Transform),
-                                        MTL::ResourceStorageModeShared);
-    
+
+    vertexBuffer = device->newBuffer(vertices, sizeof(vertices), MTL::ResourceStorageModeShared);
+    indexBuffer = device->newBuffer(indices, sizeof(indices), MTL::ResourceStorageModeShared);
+    transformBuffer = device->newBuffer(sizeof(Transform), MTL::ResourceStorageModeShared);
+
     // Bloc core de départ
     Block startBlock;
     startBlock.type = BLOCK_CORE;
@@ -384,57 +387,58 @@ void GameCoordinator::draw( MTK::View* view )
     snow.render(enc, modelMatrix2, {0,0,0});
     
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
-//        enc->setRenderPipelineState(pipelineState);
-//        simd::float4x4 camera = makeCamera();
-//        // Dessiner la grille
-//        for (int x = -10; x <= 10; x++) {
-//            for (int y = -10; y <= 10; y++) {
-//                simd::float4x4 model = makeTransform(
-//                    simd::make_float2((float)x, (float)y), 0.95f);
-//                Transform t;
-//                t.mvp = camera * model;
-//                memcpy(transformBuffer->contents(), &t, sizeof(Transform));
-//
-//                Vertex* verts = (Vertex*)vertexBuffer->contents();
-//                simd::float4 gridColor = simd::make_float4(0.15f, 0.2f, 0.25f, 1.0f);
-//                for (int i = 0; i < 4; i++) verts[i].color = gridColor;
-//                
-//                enc->setVertexBuffer(vertexBuffer, 0, 0);
-//                enc->setVertexBuffer(transformBuffer, 0, 1);
-//                enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-//                                          MTL::IndexTypeUInt16, indexBuffer, 0);
-//            }
-//        }
-//        // Dessiner les blocs
-//        for (auto& block : blocks) {
-//            simd::float4x4 model = makeTransform(block.gridPos, 0.98f);
-//            Transform t;
-//            t.mvp = camera * model;
-//            memcpy(transformBuffer->contents(), &t, sizeof(Transform));
-//            
-//            Vertex* verts = (Vertex*)vertexBuffer->contents();
-//            for (int i = 0; i < 4; i++) verts[i].color = block.color;
-//            
-//            enc->setVertexBuffer(vertexBuffer, 0, 0);
-//            enc->setVertexBuffer(transformBuffer, 0, 1);
-//            enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-//                                      MTL::IndexTypeUInt16, indexBuffer, 0);
-//        }
-//        // Curseur
-//        simd::float2 gridPos = simd::make_float2(roundf(cursorPos.x), roundf(cursorPos.y));
-//        simd::float4x4 cursorModel = makeTransform(gridPos, 0.95f);
-//        Transform cursorT;
-//        cursorT.mvp = camera * cursorModel;
-//        memcpy(transformBuffer->contents(), &cursorT, sizeof(Transform));
-//        
-//        Vertex* verts = (Vertex*)vertexBuffer->contents();
-//        simd::float4 cursorColor = simd::make_float4(1.0f, 1.0f, 0.3f, 0.5f);
-//        for (int i = 0; i < 4; i++) verts[i].color = cursorColor;
-//        
-//        enc->setVertexBuffer(vertexBuffer, 0, 0);
-//        enc->setVertexBuffer(transformBuffer, 0, 1);
-//        enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-//                                  MTL::IndexTypeUInt16, indexBuffer, 0);
+    enc->setDepthStencilState(_pDepthStencilState);
+        enc->setRenderPipelineState(pipelineState);
+        simd::float4x4 camera = makeCamera();
+        // Dessiner la grille
+        for (int x = -10; x <= 10; x++) {
+            for (int y = -10; y <= 10; y++) {
+                simd::float4x4 model = makeTransform(
+                    simd::make_float2((float)x, (float)y), 0.95f);
+                Transform t;
+                t.mvp = camera * model;
+                memcpy(transformBuffer->contents(), &t, sizeof(Transform));
+
+                Vertex* verts = (Vertex*)vertexBuffer->contents();
+                simd::float4 gridColor = simd::make_float4(0.15f, 0.2f, 0.25f, 1.0f);
+                for (int i = 0; i < 4; i++) verts[i].color = gridColor;
+                
+                enc->setVertexBuffer(vertexBuffer, 0, 0);
+                enc->setVertexBuffer(transformBuffer, 0, 1);
+                enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
+                                          MTL::IndexTypeUInt16, indexBuffer, 0);
+            }
+        }
+        // Dessiner les blocs
+        for (auto& block : blocks) {
+            simd::float4x4 model = makeTransform(block.gridPos, 0.98f);
+            Transform t;
+            t.mvp = camera * model;
+            memcpy(transformBuffer->contents(), &t, sizeof(Transform));
+            
+            Vertex* verts = (Vertex*)vertexBuffer->contents();
+            for (int i = 0; i < 4; i++) verts[i].color = block.color;
+            
+            enc->setVertexBuffer(vertexBuffer, 0, 0);
+            enc->setVertexBuffer(transformBuffer, 0, 1);
+            enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
+                                      MTL::IndexTypeUInt16, indexBuffer, 0);
+        }
+        // Curseur
+        simd::float2 gridPos = simd::make_float2(roundf(cursorPos.x), roundf(cursorPos.y));
+        simd::float4x4 cursorModel = makeTransform(gridPos, 0.95f);
+        Transform cursorT;
+        cursorT.mvp = camera * cursorModel;
+        memcpy(transformBuffer->contents(), &cursorT, sizeof(Transform));
+        
+        Vertex* verts = (Vertex*)vertexBuffer->contents();
+        simd::float4 cursorColor = simd::make_float4(1.0f, 1.0f, 0.3f, 0.5f);
+        for (int i = 0; i < 4; i++) verts[i].color = cursorColor;
+        
+        enc->setVertexBuffer(vertexBuffer, 0, 0);
+        enc->setVertexBuffer(transformBuffer, 0, 1);
+        enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
+                                  MTL::IndexTypeUInt16, indexBuffer, 0);
     enc->endEncoding();
     cmdBuf->presentDrawable(view->currentDrawable());
     cmdBuf->commit();

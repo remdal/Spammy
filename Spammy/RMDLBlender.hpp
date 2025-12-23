@@ -34,7 +34,7 @@ struct AnimatedSpriteBlender
 {
     simd::float4x4 modelMatrix;
     simd::float4x4 viewProjectionMatrix;
-    simd::float4x4 boneMatrices[3];
+    simd::float4x4 boneMatrices[10];
     float time;
 };
 

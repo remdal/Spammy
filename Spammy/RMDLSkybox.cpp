@@ -10,7 +10,7 @@
 namespace sky {
 
 RMDLSkybox::RMDLSkybox(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary) :
-_pDevice(pDevice->retain()), _pPixelFormat(pPixelFormat), _pDepthPixelFormat(pDepthPixelFormat)
+_pDevice(pDevice->retain())
 {
     _pUniformBuffer = _pDevice->newBuffer(sizeof(RMDLSkyboxUniforms), MTL::ResourceStorageModeShared);
     createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
@@ -42,7 +42,7 @@ void RMDLSkybox::createPipeline(MTL::Library *pShaderLibrary, MTL::PixelFormat p
     pRenderDescriptor->setVertexFunction(pVertexFunction.get());
     pRenderDescriptor->setFragmentFunction(pFragmentFunction.get());
     pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
-    pRenderDescriptor->setDepthAttachmentPixelFormat(_pDepthPixelFormat);
+    pRenderDescriptor->setDepthAttachmentPixelFormat(pDepthPixelFormat);
     pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);//??
 
     NS::Error* pError = nullptr;

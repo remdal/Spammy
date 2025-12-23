@@ -58,8 +58,6 @@ private:
     MTL::Device*                    _pDevice;
     MTL::Buffer*                    _pVertexBuffer;
     MTL::Buffer*                    _pUniformBuffer;
-    MTL::PixelFormat                _pPixelFormat;
-    MTL::PixelFormat                _pDepthPixelFormat;
     MTL::DepthStencilState*         _pDepthState;
     MTL::RenderPipelineState*       _pPipelineStateBlender;
 
