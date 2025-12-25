@@ -91,131 +91,6 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
     ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData));
 }
 
-void GameCoordinator::createPipeline() {
-    const char* shaderSrc = R"(
-        #include <metal_stdlib>
-        using namespace metal;
-        
-        struct Vertex {
-            float3 pos [[attribute(0)]];
-            float4 color [[attribute(1)]];
-        };
-        
-        struct VertexOut {
-            float4 pos [[position]];
-            float4 color;
-        };
-        
-        struct Transform {
-            float4x4 mvp;
-        };
-        
-        vertex VertexOut vertexShader(Vertex in [[stage_in]],
-                                     constant Transform& transform [[buffer(1)]]) {
-            VertexOut out;
-            out.pos = transform.mvp * float4(in.pos, 1.0);
-            out.color = in.color;
-            return out;
-        }
-        
-        fragment float4 fragmentShader(VertexOut in [[stage_in]]) {
-            return in.color;
-        }
-    )";
-    
-    NS::Error* error = nullptr;
-    MTL::Library* library = device->newLibrary(
-        NS::String::string(shaderSrc, NS::UTF8StringEncoding), nullptr, &error);
-
-    MTL::Function* vertFunc = library->newFunction(
-        NS::String::string("vertexShader", NS::UTF8StringEncoding));
-    MTL::Function* fragFunc = library->newFunction(
-        NS::String::string("fragmentShader", NS::UTF8StringEncoding));
-
-    auto* desc = MTL::RenderPipelineDescriptor::alloc()->init();
-    desc->setVertexFunction(vertFunc);
-    desc->setFragmentFunction(fragFunc);
-    desc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA16Float);
-    desc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
-
-    auto* vertDesc = MTL::VertexDescriptor::alloc()->init();
-    vertDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
-    vertDesc->attributes()->object(0)->setOffset(0);
-    vertDesc->attributes()->object(0)->setBufferIndex(0);
-    vertDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat4);
-    vertDesc->attributes()->object(1)->setOffset(sizeof(simd::float3));
-    vertDesc->attributes()->object(1)->setBufferIndex(0);
-    vertDesc->layouts()->object(0)->setStride(sizeof(Vertex));
-    desc->setVertexDescriptor(vertDesc);
-    
-    pipelineState = device->newRenderPipelineState(desc, &error);
-    
-    NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-    pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLessEqual);
-    pDepthStencilDesc->setDepthWriteEnabled(false);
-    _pDepthStencilState = device->newDepthStencilState(pDepthStencilDesc.get());
-    
-    vertFunc->release();
-    fragFunc->release();
-    library->release();
-    desc->release();
-    vertDesc->release();
-}
-
-void GameCoordinator::createBuffers()
-{
-    Vertex vertices[] = {
-        {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}} };
-
-    uint16_t indices[] = {0, 1, 2, 0, 2, 3};
-
-    vertexBuffer = device->newBuffer(vertices, sizeof(vertices), MTL::ResourceStorageModeShared);
-    indexBuffer = device->newBuffer(indices, sizeof(indices), MTL::ResourceStorageModeShared);
-    transformBuffer = device->newBuffer(sizeof(Transform), MTL::ResourceStorageModeShared);
-
-    // Bloc core de départ
-    Block startBlock;
-    startBlock.type = BLOCK_CORE;
-    startBlock.gridPos = simd::make_float2(0, 0);
-    startBlock.color = simd::make_float4(0.2f, 0.6f, 1.0f, 1.0f);
-    startBlock.placed = true;
-    blocks.push_back(startBlock);
-}
-
-simd::float4x4 GameCoordinator::makeTransform(simd::float2 pos, float scale) {
-    simd::float4x4 m = {
-        simd::make_float4(scale, 0, 0, 0),
-        simd::make_float4(0, scale, 0, 0),
-        simd::make_float4(0, 0, 1, 0),
-        simd::make_float4(pos.x, pos.y, 0, 1)
-    };
-    return m;
-}
-
-simd::float4x4 GameCoordinator::makeCamera() {
-    float zoom = cameraZoom;
-    simd::float4x4 proj = {
-        simd::make_float4(zoom, 0, 0, 0),
-        simd::make_float4(0, zoom, 0, 0),
-        simd::make_float4(0, 0, 1, 0),
-        simd::make_float4(-cameraPos.x * zoom, -cameraPos.y * zoom, 0, 1)
-    };
-    return proj;
-}
-
-simd::float4 GameCoordinator::getBlockColor(BlockType type) {
-    switch(type) {
-        case BLOCK_CORE: return simd::make_float4(0.2f, 0.6f, 1.0f, 1.0f);
-        case BLOCK_ARMOR: return simd::make_float4(0.5f, 0.5f, 0.5f, 1.0f);
-        case BLOCK_WHEEL: return simd::make_float4(0.1f, 0.1f, 0.1f, 1.0f);
-        case BLOCK_WEAPON: return simd::make_float4(1.0f, 0.3f, 0.2f, 1.0f);
-        default: return simd::make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-}
-
 GameCoordinator::GameCoordinator(MTL::Device* dev,
                                  MTL::PixelFormat layerPixelFormat,
                                  MTL::PixelFormat depthPixelFormat,
@@ -223,32 +98,21 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
                                  NS::UInteger height,
                                  const std::string& ressourcePath )
     : device(dev->retain()), _pShaderLibrary(device->newDefaultLibrary()),
-    cameraZoom(0.15f), cameraPos(simd::make_float2(0, 0)), isDragging(false),
 blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
 skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
-snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
+snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
+world(device, layerPixelFormat, depthPixelFormat)
 {
     cmdQueue = device->newCommandQueue();
-    createPipeline();
-    createBuffers();
     _pAudioEngine = std::make_unique<PhaseAudio>(ressourcePath);
     loadGameSounds(ressourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
     resizeMtkView(width, height);
-    _camera.initPerspectiveWithPosition(
-        {0.0f, 0.0f, 5.0f},
-        {0.0f, 0.0f, -1.0f},
-        {0.0f, 1.0f, 0.0f},
-        M_PI / 3.0f,
-        1.0f,
-        0.1f,
-        100.0f
-    );
-//    blender.loadGlb(ressourcePath);
-//    blender.createPipelineBlender(_pShaderLibrary, layerPixelFormat, depthPixelFormat);
+    _camera.initPerspectiveWithPosition({0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 3.0f, 1.0f, 0.1f, 100.0f);
 }
 
-GameCoordinator::~GameCoordinator() {
+GameCoordinator::~GameCoordinator()
+{
     vertexBuffer->release();
     indexBuffer->release();
     transformBuffer->release();
@@ -268,53 +132,17 @@ void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
     _camera.rotateOnAxis(_camera.right(), deltaPitch);
 }
 
-void GameCoordinator::handleMouseDown(bool rightClick) {
-    if (rightClick) {
-        isDragging = true;
-        dragStart = cursorPos;
-    } else {
-        simd::float2 gridPos = simd::make_float2(roundf(cursorPos.x), roundf(cursorPos.y));
-        
-        // Vérifier si position occupée
-        for (auto& block : blocks) {
-            if (block.gridPos.x == gridPos.x && block.gridPos.y == gridPos.y) {
-                return;
-            }
-        }
-        
-        // Vérifier adjacence
-        bool adjacent = false;
-        for (auto& block : blocks) {
-            float dx = fabs(block.gridPos.x - gridPos.x);
-            float dy = fabs(block.gridPos.y - gridPos.y);
-            if ((dx == 1 && dy == 0) || (dx == 0 && dy == 1)) {
-                adjacent = true;
-                break;
-            }
-        }
-        
-        if (adjacent || blocks.empty()) {
-            BlockType type = BLOCK_ARMOR;
-            if (blocks.size() % 3 == 0) type = BLOCK_WHEEL;
-            if (blocks.size() % 5 == 0) type = BLOCK_WEAPON;
-            
-            Block newBlock;
-            newBlock.type = type;
-            newBlock.gridPos = gridPos;
-            newBlock.color = getBlockColor(type);
-            newBlock.placed = true;
-            blocks.push_back(newBlock);
-        }
-    }
+void GameCoordinator::handleMouseDown(bool rightClick)
+{
 }
 
-void GameCoordinator::handleMouseUp() {
+void GameCoordinator::handleMouseUp()
+{
     isDragging = false;
 }
 
-void GameCoordinator::handleScroll(float deltaY) {
-    cameraZoom *= (1.0f + deltaY * 0.1f);
-    cameraZoom = fmax(0.05f, fmin(cameraZoom, 0.5f));
+void GameCoordinator::handleScroll(float deltaY)
+{
 }
 
 void GameCoordinator::loadGameSounds(const std::string &resourcePath, PhaseAudio *pAudioEngine)
@@ -329,19 +157,10 @@ void GameCoordinator::playSoundTestY()
     _pAudioEngine->playSoundEvent("Test.m4a");
 }
 
-void GameCoordinator::handleKeyPress(int key) {
-    // R pour reset
-    
-    if (key == 15) {
-        blocks.clear();
-        Block startBlock;
-        startBlock.type = BLOCK_CORE;
-        startBlock.gridPos = simd::make_float2(0, 0);
-        startBlock.color = simd::make_float4(0.2f, 0.6f, 1.0f, 1.0f);
-        startBlock.placed = true;
-        blocks.push_back(startBlock);
-        cameraPos = simd::make_float2(0, 0);
-        cameraZoom = 0.15f;
+void GameCoordinator::handleKeyPress(int key)
+{
+    if (key == 15) // R
+    {
     }
 }
 
@@ -380,65 +199,21 @@ void GameCoordinator::draw( MTK::View* view )
     blender.drawBlender(enc, cameraUniforms.viewProjectionMatrix * modelMatrix, modelMatrix); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
-    auto& params = skybox.getParams();
-    params.exposure = 1.2f;
-    skybox.setTimeOfDay(1.0f);
     skybox.render(enc, modelMatrix2, cameraUniforms.viewProjectionMatrix * modelMatrix2, {0,0,0});
     snow.render(enc, modelMatrix2, {0,0,0});
-    
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
-    enc->setDepthStencilState(_pDepthStencilState);
-        enc->setRenderPipelineState(pipelineState);
-        simd::float4x4 camera = makeCamera();
-        // Dessiner la grille
-        for (int x = -10; x <= 10; x++) {
-            for (int y = -10; y <= 10; y++) {
-                simd::float4x4 model = makeTransform(
-                    simd::make_float2((float)x, (float)y), 0.95f);
-                Transform t;
-                t.mvp = camera * model;
-                memcpy(transformBuffer->contents(), &t, sizeof(Transform));
 
-                Vertex* verts = (Vertex*)vertexBuffer->contents();
-                simd::float4 gridColor = simd::make_float4(0.15f, 0.2f, 0.25f, 1.0f);
-                for (int i = 0; i < 4; i++) verts[i].color = gridColor;
-                
-                enc->setVertexBuffer(vertexBuffer, 0, 0);
-                enc->setVertexBuffer(transformBuffer, 0, 1);
-                enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-                                          MTL::IndexTypeUInt16, indexBuffer, 0);
-            }
-        }
-        // Dessiner les blocs
-        for (auto& block : blocks) {
-            simd::float4x4 model = makeTransform(block.gridPos, 0.98f);
-            Transform t;
-            t.mvp = camera * model;
-            memcpy(transformBuffer->contents(), &t, sizeof(Transform));
-            
-            Vertex* verts = (Vertex*)vertexBuffer->contents();
-            for (int i = 0; i < 4; i++) verts[i].color = block.color;
-            
-            enc->setVertexBuffer(vertexBuffer, 0, 0);
-            enc->setVertexBuffer(transformBuffer, 0, 1);
-            enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-                                      MTL::IndexTypeUInt16, indexBuffer, 0);
-        }
-        // Curseur
-        simd::float2 gridPos = simd::make_float2(roundf(cursorPos.x), roundf(cursorPos.y));
-        simd::float4x4 cursorModel = makeTransform(gridPos, 0.95f);
-        Transform cursorT;
-        cursorT.mvp = camera * cursorModel;
-        memcpy(transformBuffer->contents(), &cursorT, sizeof(Transform));
-        
-        Vertex* verts = (Vertex*)vertexBuffer->contents();
-        simd::float4 cursorColor = simd::make_float4(1.0f, 1.0f, 0.3f, 0.5f);
-        for (int i = 0; i < 4; i++) verts[i].color = cursorColor;
-        
-        enc->setVertexBuffer(vertexBuffer, 0, 0);
-        enc->setVertexBuffer(transformBuffer, 0, 1);
-        enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, 6,
-                                  MTL::IndexTypeUInt16, indexBuffer, 0);
+    
+    
+//    float dt = 0.016f;
+//    world.updateTime(dt);
+//
+//    MTL::CommandBuffer* cmdBufWorld = cmdQueue->commandBuffer();
+//    passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+//    passDesc->depthAttachment()->setClearDepth(1.0);
+//    
+//    enc = cmdBuf->renderCommandEncoder(passDesc);
+
     enc->endEncoding();
     cmdBuf->presentDrawable(view->currentDrawable());
     cmdBuf->commit();

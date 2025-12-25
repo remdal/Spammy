@@ -31,6 +31,7 @@
 //#include "BumpAllocator.hpp"
 #include "RMDLMathUtils.hpp"
 #include "RMDLBlender.hpp"
+#include "VoronoiVoxel4D.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -40,25 +41,6 @@ struct Vertex {
     simd::float3 pos;
     simd::float4 color;
 };
-
-struct Transform {
-    simd::float4x4 mvp;
-};
-
-enum BlockType {
-    BLOCK_CORE,
-    BLOCK_ARMOR,
-    BLOCK_WHEEL,
-    BLOCK_WEAPON
-};
-
-struct Block {
-    BlockType type;
-    simd::float2 gridPos;
-    simd::float4 color;
-    bool placed;
-};
-
 
 struct TriangleData
 {
@@ -158,11 +140,9 @@ private:
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
     MTL::Library*                       _pShaderLibrary;
-    
-    std::vector<Block> blocks;
+
     simd::float2 cursorPos;
     float cameraZoom;
-    simd::float2 cameraPos;
     bool isDragging;
     simd::float2 dragStart;
     int viewWidth;
@@ -176,15 +156,11 @@ private:
     PhaseAudio*                             pAudioEngine;
     std::unique_ptr<PhaseAudio> _pAudioEngine;
     
-    void createPipeline();
-    void createBuffers();
-    simd::float4x4 makeTransform(simd::float2 pos, float scale);
-    simd::float4x4 makeCamera();
-    simd::float4 getBlockColor(BlockType type);
     bool DoTheImportThing(const std::string& pFile);
     RMDLBlender blender;
     sky::RMDLSkybox skybox;
     snow::RMDLSnow snow;
+    VoxelWorld world;
     
 
 public:
