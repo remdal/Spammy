@@ -43,7 +43,7 @@ void RMDLSkybox::createPipeline(MTL::Library *pShaderLibrary, MTL::PixelFormat p
     pRenderDescriptor->setFragmentFunction(pFragmentFunction.get());
     pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
     pRenderDescriptor->setDepthAttachmentPixelFormat(pDepthPixelFormat);
-    pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);//??
+    pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
 
     NS::Error* pError = nullptr;
     _pPipelineStateBlender = _pDevice->newRenderPipelineState(pRenderDescriptor.get(), &pError);
@@ -61,8 +61,7 @@ void RMDLSkybox::updateUniforms(const simd::float4x4& view, const simd::float4x4
     simd::float4x4 viewProj = simd_mul(proj, view);
     pUniforms->invViewProjection = simd_inverse(viewProj);
     pUniforms->cameraPos = camPos;
-    
-    // Atmosphere params
+
     pUniforms->sunDir = simd_normalize(_pAtmosphereParams.sunDirection);
     pUniforms->sunIntensity = _pAtmosphereParams.sunIntensity;
     pUniforms->rayleighCoeff = _pAtmosphereParams.rayleighScattering;

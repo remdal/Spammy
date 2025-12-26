@@ -207,6 +207,8 @@ void GameCoordinator::draw( MTK::View* view )
     
     float dt = 0.016f;
     world.update(dt, _camera.position());
+    world.updateTime(dt);
+    cameraUniforms.position = _camera.position();
     enc->setVertexBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
     enc->setFragmentBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
     world.render(enc, cameraUniforms.viewProjectionMatrix);

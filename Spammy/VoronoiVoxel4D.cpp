@@ -33,21 +33,16 @@ void VoronoiVoxel4D::generateSitesForRegion(int chunkX, int chunkZ, float time)
     const int regionSize = 3; // 3x3 chunks
     int numSites = 50 + (hash(chunkX, chunkZ, (int)time) % 30);
     
-    for (int i = 0; i < numSites; ++i) {
+    for (int i = 0; i < numSites; ++i)
+    {
         uint32_t h = hash(chunkX * 1000 + i, chunkZ * 1000, (int)(time * 100));
         std::mt19937 localRng(h);
-        std::uniform_real_distribution<float> dist(-regionSize * CHUNK_SIZE * 0.5f,
-                                                     regionSize * CHUNK_SIZE * 1.5f);
+        std::uniform_real_distribution<float> dist(-regionSize * CHUNK_SIZE * 0.5f, regionSize * CHUNK_SIZE * 1.5f);
         std::uniform_real_distribution<float> distTime(-10.0f, 10.0f);
         std::uniform_real_distribution<float> distInfluence(8.0f, 25.0f);
         
         VoronoiSite4D site;
-        site.position = {
-            chunkX * CHUNK_SIZE + dist(localRng),
-            dist(localRng) * 0.3f + 40.0f, // Centré autour de y=40
-            chunkZ * CHUNK_SIZE + dist(localRng),
-            time + distTime(localRng)
-        };
+        site.position = { chunkX * CHUNK_SIZE + dist(localRng), dist(localRng) * 0.3f + 40.0f, chunkZ * CHUNK_SIZE + dist(localRng), time + distTime(localRng) }; // Centré 40 / Y
         
         // Type de bloc basé sur position 4D
         float typeNoise = sinf(site.position.x * 0.1f) * cosf(site.position.w * 0.2f);
@@ -122,53 +117,54 @@ BlockType VoronoiVoxel4D::getBlockAtPosition(int worldX, int worldY, int worldZ,
 }
 
 
-Chunk::Chunk(int x, int z) : chunkX(x), chunkZ(z), vertexBuffer(nullptr),
-                              indexBuffer(nullptr), indexCount(0), needsRebuild(true) {
-    for (int x = 0; x < CHUNK_SIZE; ++x) {
-        for (int y = 0; y < CHUNK_HEIGHT; ++y) {
-            for (int z = 0; z < CHUNK_SIZE; ++z) {
+Chunk::Chunk(int x, int z) : chunkX(x), chunkZ(z), vertexBuffer(nullptr), indexBuffer(nullptr), indexCount(0), needsRebuild(true)
+{
+    for (int x = 0; x < CHUNK_SIZE; ++x)
+    {
+        for (int y = 0; y < CHUNK_HEIGHT; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE; ++z)
                 blocks[x][y][z] = BlockType::AIR;
-            }
         }
     }
 }
 
-Chunk::~Chunk() {
-    if (vertexBuffer) vertexBuffer->release();
-    if (indexBuffer) indexBuffer->release();
+Chunk::~Chunk()
+{
+    vertexBuffer->release();
+    indexBuffer->release();
 }
 
-BlockType Chunk::getBlock(int x, int y, int z) const {
+BlockType Chunk::getBlock(int x, int y, int z) const
+{
     if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE)
         return BlockType::AIR;
     return blocks[x][y][z];
 }
 
-void Chunk::setBlock(int x, int y, int z, BlockType type) {
+void Chunk::setBlock(int x, int y, int z, BlockType type)
+{
     if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE)
         return;
     blocks[x][y][z] = type;
     needsRebuild = true;
 }
 
-bool Chunk::isBlockSolid(int x, int y, int z) const {
+bool Chunk::isBlockSolid(int x, int y, int z) const
+{
     BlockType type = getBlock(x, y, z);
     return type != BlockType::AIR;
 }
 
-void Chunk::addCubeFace(std::vector<VoxelVertex>& vertices,
-                        std::vector<uint32_t>& indices,
-                        simd::float3 pos,
-                        BlockType type,
-                        int face) {
+void Chunk::addCubeFace(std::vector<VoxelVertex>& vertices, std::vector<uint32_t>& indices, simd::float3 pos, BlockType type, int face)
+{
     simd::float4 color = BLOCK_COLORS[(int)type];
     uint32_t baseIndex = (uint32_t)vertices.size();
-    
-    simd::float3 normals[6] = {
-        {0, 1, 0}, {0, -1, 0}, {0, 0, -1}, {0, 0, 1}, {1, 0, 0}, {-1, 0, 0}
-    };
-    
-    simd::float3 faceVertices[6][4] = {
+
+    simd::float3 normals[6] = { {0, 1, 0}, {0, -1, 0}, {0, 0, -1}, {0, 0, 1}, {1, 0, 0}, {-1, 0, 0} };
+
+    simd::float3 faceVertices[6][4] =
+    {
         {{0,1,0}, {1,1,0}, {1,1,1}, {0,1,1}},
         {{0,0,0}, {0,0,1}, {1,0,1}, {1,0,0}},
         {{0,0,0}, {1,0,0}, {1,1,0}, {0,1,0}},
@@ -176,20 +172,21 @@ void Chunk::addCubeFace(std::vector<VoxelVertex>& vertices,
         {{1,0,0}, {1,0,1}, {1,1,1}, {1,1,0}},
         {{0,0,1}, {0,0,0}, {0,1,0}, {0,1,1}}
     };
-    
+
     // Variation de couleur selon la face (éclairage ambiant)
     float brightness[6] = {1.0f, 0.5f, 0.7f, 0.7f, 0.9f, 0.6f};
     simd::float4 shadedColor = color * brightness[face];
     shadedColor.w = color.w;
-    
-    for (int i = 0; i < 4; ++i) {
+
+    for (int i = 0; i < 4; ++i)
+    {
         VoxelVertex v;
         v.position = pos + faceVertices[face][i] * VOXEL_SIZE;
         v.color = shadedColor;
         v.normal = normals[face];
         vertices.push_back(v);
     }
-    
+
     indices.push_back(baseIndex + 0);
     indices.push_back(baseIndex + 1);
     indices.push_back(baseIndex + 2);
@@ -200,52 +197,59 @@ void Chunk::addCubeFace(std::vector<VoxelVertex>& vertices,
 
 void Chunk::rebuildMesh(MTL::Device* device)
 {
-    if (!needsRebuild) return;
+    if (!needsRebuild)
+        return;
     
     std::vector<VoxelVertex> vertices;
     std::vector<uint32_t> indices;
     vertices.reserve(CHUNK_SIZE * CHUNK_SIZE * 128 * 4);
     indices.reserve(CHUNK_SIZE * CHUNK_SIZE * 128 * 6);
     
-    for (int x = 0; x < CHUNK_SIZE; ++x) {
-        for (int y = 0; y < CHUNK_HEIGHT; ++y) {
-            for (int z = 0; z < CHUNK_SIZE; ++z) {
+    for (int x = 0; x < CHUNK_SIZE; ++x)
+    {
+        for (int y = 0; y < CHUNK_HEIGHT; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE; ++z)
+            {
                 BlockType type = blocks[x][y][z];
-                if (type == BlockType::AIR) continue;
+                if (type == BlockType::AIR)
+                    continue;
                 
-                simd::float3 worldPos = {
-                    (float)(chunkX * CHUNK_SIZE + x),
-                    (float)y,
-                    (float)(chunkZ * CHUNK_SIZE + z)
-                };
+                simd::float3 worldPos = { (float)(chunkX * CHUNK_SIZE + x), (float)y, (float)(chunkZ * CHUNK_SIZE + z) };
                 
-                if (!isBlockSolid(x, y+1, z)) addCubeFace(vertices, indices, worldPos, type, 0);
-                if (!isBlockSolid(x, y-1, z)) addCubeFace(vertices, indices, worldPos, type, 1);
-                if (!isBlockSolid(x, y, z-1)) addCubeFace(vertices, indices, worldPos, type, 2);
-                if (!isBlockSolid(x, y, z+1)) addCubeFace(vertices, indices, worldPos, type, 3);
-                if (!isBlockSolid(x+1, y, z)) addCubeFace(vertices, indices, worldPos, type, 4);
-                if (!isBlockSolid(x-1, y, z)) addCubeFace(vertices, indices, worldPos, type, 5);
+                if (!isBlockSolid(x, y + 1, z))
+                    addCubeFace(vertices, indices, worldPos, type, 0);
+                if (!isBlockSolid(x, y - 1, z))
+                    addCubeFace(vertices, indices, worldPos, type, 1);
+                if (!isBlockSolid(x, y, z - 1))
+                    addCubeFace(vertices, indices, worldPos, type, 2);
+                if (!isBlockSolid(x, y, z + 1))
+                    addCubeFace(vertices, indices, worldPos, type, 3);
+                if (!isBlockSolid(x + 1, y, z))
+                    addCubeFace(vertices, indices, worldPos, type, 4);
+                if (!isBlockSolid(x - 1, y, z))
+                    addCubeFace(vertices, indices, worldPos, type, 5);
             }
         }
     }
-    
-    if (vertexBuffer) vertexBuffer->release();
-    if (indexBuffer) indexBuffer->release();
-    
-    if (vertices.empty()) {
+
+    if (vertexBuffer)
+        vertexBuffer->release();
+    if (indexBuffer)
+        indexBuffer->release();
+
+    if (vertices.empty())
+    {
         vertexBuffer = nullptr;
         indexBuffer = nullptr;
         indexCount = 0;
-    } else {
-        vertexBuffer = device->newBuffer(vertices.data(),
-                                        vertices.size() * sizeof(VoxelVertex),
-                                        MTL::ResourceStorageModeShared);
-        indexBuffer = device->newBuffer(indices.data(),
-                                       indices.size() * sizeof(uint32_t),
-                                       MTL::ResourceStorageModeShared);
+    }
+    else
+    {
+        vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(VoxelVertex), MTL::ResourceStorageModeShared);
+        indexBuffer = device->newBuffer(indices.data(), indices.size() * sizeof(uint32_t), MTL::ResourceStorageModeShared);
         indexCount = (uint32_t)indices.size();
     }
-    
     needsRebuild = false;
 }
 
@@ -256,15 +260,16 @@ VoxelWorld::VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL:
     createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
 }
 
-VoxelWorld::~VoxelWorld() {
-    for (auto& [key, chunk] : chunks) {
+VoxelWorld::~VoxelWorld()
+{
+    for (auto& [key, chunk] : chunks)
         delete chunk;
-    }
-    if (_pPipelineState) _pPipelineState->release();
+    _pPipelineState->release();
     _pDevice->release();
 }
 
-void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ) {
+void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ)
+{
     chunkX = worldX >> 5; // Division par 32
     chunkZ = worldZ >> 5;
     localX = worldX & 31; // Modulo 32
@@ -284,61 +289,69 @@ Chunk* VoxelWorld::getChunk(int chunkX, int chunkZ)
 {
     uint64_t key = chunkKey(chunkX, chunkZ);
     auto it = chunks.find(key);
-    
-    if (it != chunks.end()) {
+
+    if (it != chunks.end())
         return it->second;
-    }
-    
+
     Chunk* chunk = new Chunk(chunkX, chunkZ);
     chunks[key] = chunk;
     generateTerrainVoronoi(chunkX, chunkZ);
     return chunk;
 }
 
-void VoxelWorld::generateTerrainVoronoi(int chunkX, int chunkZ) {
+void VoxelWorld::generateTerrainVoronoi(int chunkX, int chunkZ)
+{
     Chunk* chunk = getChunk(chunkX, chunkZ);
-    
-    // Génère les sites Voronoi pour cette région
+
     voronoiGen.generateSitesForRegion(chunkX, chunkZ, currentTime);
-    
-    for (int x = 0; x < CHUNK_SIZE; ++x) {
-        for (int z = 0; z < CHUNK_SIZE; ++z) {
+
+    for (int x = 0; x < CHUNK_SIZE; ++x)
+    {
+        for (int z = 0; z < CHUNK_SIZE; ++z)
+        {
             int worldX = chunkX * CHUNK_SIZE + x;
             int worldZ = chunkZ * CHUNK_SIZE + z;
-            
-            for (int y = 0; y < CHUNK_HEIGHT; ++y) {
+
+            for (int y = 0; y < CHUNK_HEIGHT; ++y)
+            {
                 BlockType type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
-                
+
                 // Ajoute du vide en bas et en haut
-                if (y < 5 || y > 100) type = BlockType::AIR;
-                
+                if (y < 5 || y > 100)
+                    type = BlockType::AIR;
+
                 chunk->setBlock(x, y, z, type);
             }
         }
     }
 }
 
-BlockType VoxelWorld::getBlock(int worldX, int worldY, int worldZ) {
-    if (worldY < 0 || worldY >= CHUNK_HEIGHT) return BlockType::AIR;
-    
+BlockType VoxelWorld::getBlock(int worldX, int worldY, int worldZ)
+{
+    if (worldY < 0 || worldY >= CHUNK_HEIGHT)
+        return BlockType::AIR;
+
     int chunkX, chunkZ, localX, localZ;
     worldToChunk(worldX, worldZ, chunkX, chunkZ, localX, localZ);
-    
+
     Chunk* chunk = getChunk(chunkX, chunkZ);
     return chunk->getBlock(localX, worldY, localZ);
 }
 
-void VoxelWorld::setBlock(int worldX, int worldY, int worldZ, BlockType type) {
-    if (worldY < 0 || worldY >= CHUNK_HEIGHT) return;
-    
+void VoxelWorld::setBlock(int worldX, int worldY, int worldZ, BlockType type)
+{
+    if (worldY < 0 || worldY >= CHUNK_HEIGHT)
+        return;
+
     int chunkX, chunkZ, localX, localZ;
     worldToChunk(worldX, worldZ, chunkX, chunkZ, localX, localZ);
-    
+
     Chunk* chunk = getChunk(chunkX, chunkZ);
     chunk->setBlock(localX, worldY, localZ, type);
 }
 
-void VoxelWorld::removeBlock(int worldX, int worldY, int worldZ) {
+void VoxelWorld::removeBlock(int worldX, int worldY, int worldZ)
+{
     setBlock(worldX, worldY, worldZ, BlockType::AIR);
 }
 
@@ -371,140 +384,86 @@ void VoxelWorld::createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat p
     pVertexDesc->layouts()->object(0)->setStride(sizeof(VoxelVertex));
     pVertexDesc->layouts()->object(0)->setStepRate(1);
     pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
-    
-    pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
 
     NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
     pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
     pDepthStencilDesc->setDepthWriteEnabled(true);
-    
-//    MTL::CommandBuffer* cmdBufWorld = cmdQueue->commandBuffer();
-//    passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
-//    passDesc->depthAttachment()->setClearDepth(1.0);
-//    
-//    enc = cmdBuf->renderCommandEncoder(passDesc);
 
+    pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
     _pPipelineState = _pDevice->newRenderPipelineState(pRenderDescriptor.get(), &error);
     _pDepthStencilState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
 }
 
-void VoxelWorld::update(float dt, simd::float3 cameraPos) {
+void VoxelWorld::update(float dt, simd::float3 cameraPos)
+{
     int camChunkX = (int)floorf(cameraPos.x / CHUNK_SIZE);
     int camChunkZ = (int)floorf(cameraPos.z / CHUNK_SIZE);
-    
-    for (int x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; ++x) {
-        for (int z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; ++z) {
+
+    for (int x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; ++x)
+    {
+        for (int z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; ++z)
+        {
             int chunkX = camChunkX + x;
             int chunkZ = camChunkZ + z;
             Chunk* chunk = getChunk(chunkX, chunkZ);
-            
-            if (chunk->needsRebuild) {
+
+            if (chunk->needsRebuild)
                 chunk->rebuildMesh(_pDevice);
-            }
         }
     }
-    
-    for (auto it = chunks.begin(); it != chunks.end();) {
+    for (auto it = chunks.begin(); it != chunks.end();)
+    {
         Chunk* chunk = it->second;
         int dx = abs(chunk->chunkX - camChunkX);
         int dz = abs(chunk->chunkZ - camChunkZ);
-        
-        if (dx > RENDER_DISTANCE + 3 || dz > RENDER_DISTANCE + 3) {
+
+        if (dx > RENDER_DISTANCE + 3 || dz > RENDER_DISTANCE + 3)
+        {
             delete chunk;
             it = chunks.erase(it);
-        } else {
-            ++it;
         }
+        else
+            ++it;
     }
 }
 
-void VoxelWorld::render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewProjectionMatrix) {
-    if (!_pPipelineState) return;
-    
-    encoder->setRenderPipelineState(_pPipelineState);
-    encoder->setDepthStencilState(_pDepthStencilState);
-    encoder->setCullMode(MTL::CullModeBack);
-    
-    for (auto& [key, chunk] : chunks) {
-        if (chunk->indexCount == 0) continue;
-        
-        encoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
-//        encoder->setFragmentBuffer(_pUniformBuffer, 0, 1);
-        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-                                      chunk->indexCount,
-                                      MTL::IndexTypeUInt32,
-                                      chunk->indexBuffer,
-                                      0);
+void VoxelWorld::render(MTL::RenderCommandEncoder* pEncoder, simd::float4x4 viewProjectionMatrix)
+{
+    pEncoder->setRenderPipelineState(_pPipelineState);
+    pEncoder->setDepthStencilState(_pDepthStencilState);
+    pEncoder->setCullMode(MTL::CullModeBack);
+
+    for (auto& [key, chunk] : chunks)
+    {
+        if (chunk->indexCount == 0)
+            continue;
+
+        pEncoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
+        pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, chunk->indexCount, MTL::IndexTypeUInt32, chunk->indexBuffer, 0);
     }
 }
 
-bool VoxelWorld::raycast(simd::float3 origin, simd::float3 direction,
-                         float maxDistance,
-                         simd::int3& hitBlock,
-                         simd::int3& adjacentBlock) {
+bool VoxelWorld::raycast(simd::float3 origin, simd::float3 direction, float maxDistance, simd::int3& hitBlock, simd::int3& adjacentBlock)
+{
     simd::float3 pos = origin;
     simd::float3 step = simd::normalize(direction) * 0.1f;
     simd::float3 prevPos = pos;
-    
-    for (float dist = 0; dist < maxDistance; dist += 0.1f) {
+
+    for (float dist = 0; dist < maxDistance; dist += 0.1f)
+    {
         int x = (int)floorf(pos.x);
         int y = (int)floorf(pos.y);
         int z = (int)floorf(pos.z);
-        
-        if (getBlock(x, y, z) != BlockType::AIR) {
+
+        if (getBlock(x, y, z) != BlockType::AIR)
+        {
             hitBlock = {x, y, z};
-            adjacentBlock = {
-                (int)floorf(prevPos.x),
-                (int)floorf(prevPos.y),
-                (int)floorf(prevPos.z)
-            };
+            adjacentBlock = { (int)floorf(prevPos.x), (int)floorf(prevPos.y), (int)floorf(prevPos.z) };
             return true;
         }
-        
+
         prevPos = pos;
         pos += step;
     }
-    
     return false;
 }
-
-
-//VoxelCamera::VoxelCamera() : position{0, 60, 0}, yaw(0), pitch(0) {}
-//
-//simd::float3 VoxelCamera::forward() const {
-//    float yawRad = yaw * M_PI / 180.0f;
-//    float pitchRad = pitch * M_PI / 180.0f;
-//    return {
-//        cosf(pitchRad) * sinf(yawRad),
-//        sinf(pitchRad),
-//        cosf(pitchRad) * cosf(yawRad)
-//    };
-//}
-//
-//simd::float3 VoxelCamera::right() const {
-//    float yawRad = yaw * M_PI / 180.0f;
-//    return {sinf(yawRad - M_PI_2), 0, cosf(yawRad - M_PI_2)};
-//}
-//
-//simd::float3 VoxelCamera::up() const {
-//    return {0, 1, 0};
-//}
-//
-//void VoxelCamera::move(simd::float3 direction, float speed, float dt) {
-//    position += direction * speed * dt;
-//}
-//
-//void VoxelCamera::rotate(float deltaYaw, float deltaPitch) {
-//    yaw += deltaYaw;
-//    pitch += deltaPitch;
-//    pitch = fmaxf(-89.0f, fminf(89.0f, pitch));
-//}
-
-//simd::float4x4 VoxelCamera::viewMatrix() const {
-//    simd::float3 target = position + forward();
-//    return matrix_look_at_left_hand(position, target, up());
-//}
-//
-//simd::float4x4 VoxelCamera::projectionMatrix(float aspect, float fov, float near, float far) const {
-//    return matrix_perspective_left_hand(fov, aspect, near, far);
-//}

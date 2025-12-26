@@ -83,7 +83,7 @@ struct RenderData
 class RMDLRendererSpammy
 {
 public:
-    RMDLRendererSpammy( MTL::Device* pDevice, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath );
+    RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath);
     ~RMDLRendererSpammy();
 
     void loadPngAndFont( const std::string& resourcesPath );

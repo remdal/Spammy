@@ -48,14 +48,16 @@ const simd::float4 BLOCK_COLORS[] = {
     {0.1f, 0.05f, 0.15f, 1.0f}     // VOID_MATTER
 };
 
-struct VoxelVertex {
+struct VoxelVertex
+{
     simd::float3 position;
     simd::float4 color;
     simd::float3 normal;
 };
 
 // Point Voronoi dans l'espace 4D
-struct VoronoiSite4D {
+struct VoronoiSite4D
+{
     simd::float4 position;
     BlockType blockType;
     float influence;
@@ -85,9 +87,9 @@ public:
     void setTimeOffset(float t) { timeOffset = t; }
     float getTimeOffset() const { return timeOffset; }
 private:
-    std::vector<VoronoiSite4D> sites;
-    std::mt19937 rng;
-    float timeOffset; // 4ème dimension = temps
+    std::vector<VoronoiSite4D>  sites;
+    std::mt19937                rng;
+    float                       timeOffset; // 4ème dimension = temps
     
     // Hash pour positions cohérentes
     uint32_t hash(int x, int y, int z);
@@ -96,13 +98,13 @@ private:
 class Chunk
 {
 public:
-    int chunkX, chunkZ;
-    BlockType blocks[CHUNK_SIZE][CHUNK_HEIGHT][CHUNK_SIZE];
+    int             chunkX, chunkZ;
+    BlockType       blocks[CHUNK_SIZE][CHUNK_HEIGHT][CHUNK_SIZE];
     
-    MTL::Buffer* vertexBuffer;
-    MTL::Buffer* indexBuffer;
-    uint32_t indexCount;
-    bool needsRebuild;
+    MTL::Buffer*    vertexBuffer;
+    MTL::Buffer*    indexBuffer;
+    uint32_t        indexCount;
+    bool            needsRebuild;
     
     Chunk(int x, int z);
     ~Chunk();
@@ -121,7 +123,8 @@ private:
                      int face);
 };
 
-class VoxelWorld {
+class VoxelWorld
+{
 public:
     VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary);
     ~VoxelWorld();
@@ -147,7 +150,8 @@ public:
     void generateTerrainVoronoi(int chunkX, int chunkZ);
     
     // Anime la 4ème dimension
-    void updateTime(float dt) {
+    void updateTime(float dt)
+    {
         currentTime += dt * 0.1f; // Vitesse d'évolution
         voronoiGen.setTimeOffset(currentTime);
     }
@@ -161,7 +165,7 @@ private:
     VoronoiVoxel4D voronoiGen;
     float currentTime;
     
-    const int RENDER_DISTANCE = 3; // Plus de chunks avec M2 Pro (default 12)
+    const int RENDER_DISTANCE = 2; // Plus de chunks avec M2 Pro (default 12)
     
     uint64_t chunkKey(int x, int z) const {
         return ((uint64_t)(x) << 32) | ((uint64_t)(z) & 0xFFFFFFFF);
@@ -169,24 +173,5 @@ private:
     
     void worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ);
 };
-
-//class VoxelCamera {
-//public:
-//    simd::float3 position;
-//    float yaw;
-//    float pitch;
-//    
-//    VoxelCamera();
-//    
-//    simd::float3 forward() const;
-//    simd::float3 right() const;
-//    simd::float3 up() const;
-//    
-//    void move(simd::float3 direction, float speed, float dt);
-//    void rotate(float deltaYaw, float deltaPitch);
-//    
-//    simd::float4x4 viewMatrix() const;
-//    simd::float4x4 projectionMatrix(float aspect, float fov, float near, float far) const;
-//};
 
 #endif /* VoronoiVoxel4D_hpp */
