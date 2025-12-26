@@ -8,8 +8,9 @@
 #ifndef VoronoiVoxel4D_hpp
 #define VoronoiVoxel4D_hpp
 
-#include <stdio.h>
 #include <Metal/Metal.hpp>
+
+#include <stdio.h>
 #include <simd/simd.h>
 #include <unordered_map>
 #include <vector>
@@ -122,7 +123,7 @@ private:
 
 class VoxelWorld {
 public:
-    VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
+    VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary);
     ~VoxelWorld();
     
     Chunk* getChunk(int chunkX, int chunkZ);
@@ -136,7 +137,7 @@ public:
                  simd::int3& hitBlock,
                  simd::int3& adjacentBlock);
 
-    void createPipeline(MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
+    void createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
     
     void update(float dt, simd::float3 cameraPos);
     void render(MTL::RenderCommandEncoder* encoder,
@@ -160,7 +161,7 @@ private:
     VoronoiVoxel4D voronoiGen;
     float currentTime;
     
-    const int RENDER_DISTANCE = 12; // Plus de chunks avec M2 Pro
+    const int RENDER_DISTANCE = 3; // Plus de chunks avec M2 Pro (default 12)
     
     uint64_t chunkKey(int x, int z) const {
         return ((uint64_t)(x) << 32) | ((uint64_t)(z) & 0xFFFFFFFF);
@@ -169,23 +170,23 @@ private:
     void worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ);
 };
 
-class VoxelCamera {
-public:
-    simd::float3 position;
-    float yaw;
-    float pitch;
-    
-    VoxelCamera();
-    
-    simd::float3 forward() const;
-    simd::float3 right() const;
-    simd::float3 up() const;
-    
-    void move(simd::float3 direction, float speed, float dt);
-    void rotate(float deltaYaw, float deltaPitch);
-    
-    simd::float4x4 viewMatrix() const;
-    simd::float4x4 projectionMatrix(float aspect, float fov, float near, float far) const;
-};
+//class VoxelCamera {
+//public:
+//    simd::float3 position;
+//    float yaw;
+//    float pitch;
+//    
+//    VoxelCamera();
+//    
+//    simd::float3 forward() const;
+//    simd::float3 right() const;
+//    simd::float3 up() const;
+//    
+//    void move(simd::float3 direction, float speed, float dt);
+//    void rotate(float deltaYaw, float deltaPitch);
+//    
+//    simd::float4x4 viewMatrix() const;
+//    simd::float4x4 projectionMatrix(float aspect, float fov, float near, float far) const;
+//};
 
 #endif /* VoronoiVoxel4D_hpp */

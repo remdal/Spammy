@@ -292,7 +292,7 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, const simd::f
 
     pEncoder->setRenderPipelineState(_pPipelineStateBlender);
     pEncoder->setDepthStencilState(_pDepthState);
-    pEncoder->setCullMode(MTL::CullModeNone);
+    pEncoder->setCullMode(MTL::CullModeFront);
     pEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
     pEncoder->setVertexBuffer(_pVertexBufferBlender, 0, 0);
     pEncoder->setVertexBuffer(_pUniformBufferBlender, 0, 1);

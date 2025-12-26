@@ -22,7 +22,7 @@
     NSString *chars = [event charactersIgnoringModifiers];
     if (chars.length == 0) { return; }
     unichar character = [chars characterAtIndex:0];
-    float moveSpeed = 0.065f;
+    float moveSpeed = 1.065f;
     switch (character)
     {
         case 'w':

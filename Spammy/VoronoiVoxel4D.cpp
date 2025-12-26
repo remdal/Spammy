@@ -250,10 +250,10 @@ void Chunk::rebuildMesh(MTL::Device* device)
 }
 
 
-VoxelWorld::VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
+VoxelWorld::VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary)
     : _pDevice(pDevice->retain()), voronoiGen(12345), currentTime(0.0f)
 {
-    createPipeline(pPixelFormat, pDepthPixelFormat);
+    createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
 }
 
 VoxelWorld::~VoxelWorld() {
@@ -280,7 +280,8 @@ void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, 
     }
 }
 
-Chunk* VoxelWorld::getChunk(int chunkX, int chunkZ) {
+Chunk* VoxelWorld::getChunk(int chunkX, int chunkZ)
+{
     uint64_t key = chunkKey(chunkX, chunkZ);
     auto it = chunks.find(key);
     
@@ -289,8 +290,8 @@ Chunk* VoxelWorld::getChunk(int chunkX, int chunkZ) {
     }
     
     Chunk* chunk = new Chunk(chunkX, chunkZ);
-    generateTerrainVoronoi(chunkX, chunkZ);
     chunks[key] = chunk;
+    generateTerrainVoronoi(chunkX, chunkZ);
     return chunk;
 }
 
@@ -341,9 +342,50 @@ void VoxelWorld::removeBlock(int worldX, int worldY, int worldZ) {
     setBlock(worldX, worldY, worldZ, BlockType::AIR);
 }
 
-void VoxelWorld::createPipeline(MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
+void VoxelWorld::createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
 {
+    NS::Error* error = nullptr;
+
+    NS::SharedPtr<MTL::Function> pVertexFunction = NS::TransferPtr(pShaderLibrary->newFunction(NS::String::string("voxel_vertex", NS::UTF8StringEncoding)));
+    NS::SharedPtr<MTL::Function> pFragmentFunction = NS::TransferPtr(pShaderLibrary->newFunction(NS::String::string("voxel_fragment", NS::UTF8StringEncoding)));
+
+    NS::SharedPtr<MTL::RenderPipelineDescriptor> pRenderDescriptor = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
+    pRenderDescriptor->setVertexFunction(pVertexFunction.get());
+    pRenderDescriptor->setFragmentFunction(pFragmentFunction.get());
+    pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
+    pRenderDescriptor->setDepthAttachmentPixelFormat(pDepthPixelFormat);
     
+    NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
+    pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+    pVertexDesc->attributes()->object(0)->setOffset(0);
+    pVertexDesc->attributes()->object(0)->setBufferIndex(0);
+
+    pVertexDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat4);
+    pVertexDesc->attributes()->object(1)->setOffset(sizeof(simd::float3));
+    pVertexDesc->attributes()->object(1)->setBufferIndex(0);
+
+    pVertexDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat3);
+    pVertexDesc->attributes()->object(2)->setOffset(sizeof(simd::float3) + sizeof(simd::float4));
+    pVertexDesc->attributes()->object(2)->setBufferIndex(0);
+
+    pVertexDesc->layouts()->object(0)->setStride(sizeof(VoxelVertex));
+    pVertexDesc->layouts()->object(0)->setStepRate(1);
+    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+    
+    pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
+
+    NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
+    pDepthStencilDesc->setDepthWriteEnabled(true);
+    
+//    MTL::CommandBuffer* cmdBufWorld = cmdQueue->commandBuffer();
+//    passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+//    passDesc->depthAttachment()->setClearDepth(1.0);
+//    
+//    enc = cmdBuf->renderCommandEncoder(passDesc);
+
+    _pPipelineState = _pDevice->newRenderPipelineState(pRenderDescriptor.get(), &error);
+    _pDepthStencilState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
 }
 
 void VoxelWorld::update(float dt, simd::float3 cameraPos) {
@@ -380,12 +422,14 @@ void VoxelWorld::render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewP
     if (!_pPipelineState) return;
     
     encoder->setRenderPipelineState(_pPipelineState);
+    encoder->setDepthStencilState(_pDepthStencilState);
     encoder->setCullMode(MTL::CullModeBack);
     
     for (auto& [key, chunk] : chunks) {
         if (chunk->indexCount == 0) continue;
         
         encoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
+//        encoder->setFragmentBuffer(_pUniformBuffer, 0, 1);
         encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
                                       chunk->indexCount,
                                       MTL::IndexTypeUInt32,
@@ -425,36 +469,36 @@ bool VoxelWorld::raycast(simd::float3 origin, simd::float3 direction,
 }
 
 
-VoxelCamera::VoxelCamera() : position{0, 60, 0}, yaw(0), pitch(0) {}
-
-simd::float3 VoxelCamera::forward() const {
-    float yawRad = yaw * M_PI / 180.0f;
-    float pitchRad = pitch * M_PI / 180.0f;
-    return {
-        cosf(pitchRad) * sinf(yawRad),
-        sinf(pitchRad),
-        cosf(pitchRad) * cosf(yawRad)
-    };
-}
-
-simd::float3 VoxelCamera::right() const {
-    float yawRad = yaw * M_PI / 180.0f;
-    return {sinf(yawRad - M_PI_2), 0, cosf(yawRad - M_PI_2)};
-}
-
-simd::float3 VoxelCamera::up() const {
-    return {0, 1, 0};
-}
-
-void VoxelCamera::move(simd::float3 direction, float speed, float dt) {
-    position += direction * speed * dt;
-}
-
-void VoxelCamera::rotate(float deltaYaw, float deltaPitch) {
-    yaw += deltaYaw;
-    pitch += deltaPitch;
-    pitch = fmaxf(-89.0f, fminf(89.0f, pitch));
-}
+//VoxelCamera::VoxelCamera() : position{0, 60, 0}, yaw(0), pitch(0) {}
+//
+//simd::float3 VoxelCamera::forward() const {
+//    float yawRad = yaw * M_PI / 180.0f;
+//    float pitchRad = pitch * M_PI / 180.0f;
+//    return {
+//        cosf(pitchRad) * sinf(yawRad),
+//        sinf(pitchRad),
+//        cosf(pitchRad) * cosf(yawRad)
+//    };
+//}
+//
+//simd::float3 VoxelCamera::right() const {
+//    float yawRad = yaw * M_PI / 180.0f;
+//    return {sinf(yawRad - M_PI_2), 0, cosf(yawRad - M_PI_2)};
+//}
+//
+//simd::float3 VoxelCamera::up() const {
+//    return {0, 1, 0};
+//}
+//
+//void VoxelCamera::move(simd::float3 direction, float speed, float dt) {
+//    position += direction * speed * dt;
+//}
+//
+//void VoxelCamera::rotate(float deltaYaw, float deltaPitch) {
+//    yaw += deltaYaw;
+//    pitch += deltaPitch;
+//    pitch = fmaxf(-89.0f, fminf(89.0f, pitch));
+//}
 
 //simd::float4x4 VoxelCamera::viewMatrix() const {
 //    simd::float3 target = position + forward();

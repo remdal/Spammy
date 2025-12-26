@@ -101,7 +101,7 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
 blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
 skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
 snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
-world(device, layerPixelFormat, depthPixelFormat)
+world(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
 {
     cmdQueue = device->newCommandQueue();
     _pAudioEngine = std::make_unique<PhaseAudio>(ressourcePath);
@@ -200,19 +200,16 @@ void GameCoordinator::draw( MTK::View* view )
     blender.updateBlender(0.0f);
 
     skybox.render(enc, modelMatrix2, cameraUniforms.viewProjectionMatrix * modelMatrix2, {0,0,0});
-    snow.render(enc, modelMatrix2, {0,0,0});
+//    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
     
     
-//    float dt = 0.016f;
-//    world.updateTime(dt);
-//
-//    MTL::CommandBuffer* cmdBufWorld = cmdQueue->commandBuffer();
-//    passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
-//    passDesc->depthAttachment()->setClearDepth(1.0);
-//    
-//    enc = cmdBuf->renderCommandEncoder(passDesc);
+    float dt = 0.016f;
+    world.update(dt, _camera.position());
+    enc->setVertexBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
+    enc->setFragmentBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
+    world.render(enc, cameraUniforms.viewProjectionMatrix);
 
     enc->endEncoding();
     cmdBuf->presentDrawable(view->currentDrawable());
