@@ -35,7 +35,7 @@ RMDLCamera::~RMDLCamera()
 {
 }
 
-RMDLCamera& RMDLCamera::initPerspectiveWithPosition( simd::float3 position, simd::float3 direction, simd::float3 up, float viewAngle, float aspectRatio, float nearPlane, float farPlane )
+RMDLCamera& RMDLCamera::initPerspectiveWithPosition(simd::float3 position, simd::float3 direction, simd::float3 up, float viewAngle, float aspectRatio, float nearPlane, float farPlane)
 {
     _up = up;
     orthogonalizeFromNewForward(direction);
@@ -46,10 +46,10 @@ RMDLCamera& RMDLCamera::initPerspectiveWithPosition( simd::float3 position, simd
     _nearPlane = nearPlane;
     _farPlane = farPlane;
     _uniformsDirty = true;
-    return (*this);
+    return *this;
 }
     
-RMDLCamera& RMDLCamera::initParallelWithPosition( simd::float3 position, simd::float3 direction, simd::float3 up, float width, float height, float nearPlane, float farPlane )
+RMDLCamera& RMDLCamera::initParallelWithPosition(simd::float3 position, simd::float3 direction, simd::float3 up, float width, float height, float nearPlane, float farPlane)
 {
     _up = up;
     orthogonalizeFromNewForward(direction);
@@ -60,7 +60,7 @@ RMDLCamera& RMDLCamera::initParallelWithPosition( simd::float3 position, simd::f
     _nearPlane = nearPlane;
     _farPlane = farPlane;
     _uniformsDirty = true;
-    return (*this);
+    return *this;
 }
     
 bool RMDLCamera::isPerspective() const

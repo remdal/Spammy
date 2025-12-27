@@ -98,11 +98,11 @@ GameCoordinator::GameCoordinator(MTL::Device* dev,
                                  NS::UInteger width,
                                  NS::UInteger height,
                                  const std::string& ressourcePath )
-    : device(dev->retain()), _pShaderLibrary(device->newDefaultLibrary()),
-blender(device, layerPixelFormat, depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
-skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
-snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
-world(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
+: device(dev->retain()), m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat), _pShaderLibrary(device->newDefaultLibrary()),
+blender(device, layerPixelFormat, m_depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
+skybox(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary),
+snow(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary),
+world(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary)
 {
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
     cmdQueue = device->newCommandQueue();
@@ -172,7 +172,7 @@ void GameCoordinator::draw( MTK::View* view )
 
     MTL::CommandBuffer* cmdBuf = cmdQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
-    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
+//    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
     
     MTL::RenderCommandEncoder* enc = cmdBuf->renderCommandEncoder(passDesc);
     MTL::Viewport viewport;
@@ -226,16 +226,8 @@ void GameCoordinator::resizeMtkView( NS::UInteger width, NS::UInteger height )
     
 }
 
-RMDLRendererSpammy::RMDLRendererSpammy( MTL::Device* pDevice,
-                                        MTL::PixelFormat layerPixelFormat,
-                                        MTL::PixelFormat depthPixelFormat,
-                                        NS::UInteger width, NS::UInteger height,
-                                        const std::string& resourcePath )
-:
-    _pDevice(pDevice->retain()),
-    _pPixelFormat(layerPixelFormat),
-    _pDepthPixelFormat(depthPixelFormat),
-    _frame(0)
+RMDLRendererSpammy::RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, NS::UInteger width, NS::UInteger height, const std::string& resourcePath )
+: _pDevice(pDevice->retain()), _pixelFormat(pixelFormat), _frame(0)
 {
     _pCommandQueue = _pDevice->newMTL4CommandQueue();
     _pShaderLibrary = _pDevice->newDefaultLibrary();
@@ -324,7 +316,7 @@ void RMDLRendererSpammy::buildDepthStencilStates( NS::UInteger width, NS::UInteg
     pDepthStencilDesc->setDepthWriteEnabled(false);
     _pDepthStencilState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
 
-    MTL::TextureDescriptor* pTextureDesc = MTL::TextureDescriptor::textureCubeDescriptor(_pDepthPixelFormat, 3.3f, false);
+    MTL::TextureDescriptor* pTextureDesc = MTL::TextureDescriptor::textureCubeDescriptor(m_depthPixelFormat, 3.3f, false);
     pTextureDesc->setUsage( MTL::TextureUsageRenderTarget );
     pTextureDesc->setStorageMode( MTL::StorageModePrivate );
 }
@@ -350,7 +342,7 @@ void RMDLRendererSpammy::draw( MTK::View* view )
 void RMDLRendererSpammy::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
 {
     setViewportWindow(width, height);
-    _pDepthTextureDesc = MTL::TextureDescriptor::texture2DDescriptor(_pDepthPixelFormat, width, height, false);
+    _pDepthTextureDesc = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
     _pDepthTextureDesc->setUsage(MTL::TextureUsageRenderTarget);
     _pDepthTextureDesc->setStorageMode(MTL::StorageModePrivate);
     _pTexture = _pDevice->newTexture(_pDepthTextureDesc);

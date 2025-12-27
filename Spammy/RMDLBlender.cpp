@@ -7,15 +7,14 @@
 
 #include "RMDLBlender.hpp"
 
-RMDLBlender::RMDLBlender(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary) :
+RMDLBlender::RMDLBlender(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary) :
 _pDevice(pDevice->retain()),
-_pPixelFormat(pPixelFormat), _pDepthPixelFormat(pDepthPixelFormat),
 _pCurrentTime(0.0f), _pAnimationDuration(12.0f)
 {
     _pUniformBufferBlender = _pDevice->newBuffer(sizeof(AnimatedSpriteBlender), MTL::ResourceStorageModeShared);
     doTheImportThing(resourcesPath);
     loadGlb(resourcesPath);
-    createPipelineBlender(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
+    createPipelineBlender(pShaderLibrary, pixelFormat, depthPixelFormat);
     printf("   Pipeline: %p\n", _pPipelineStateBlender);
     printf("   Textures: D=%p N=%p R=%p M=%p\n", _pDiffuseTexture, _pNormalTexture, _pRoughnessTexture, _pMetallicTexture);
     printf("✓ Device: %p\n", _pDevice);
@@ -66,7 +65,7 @@ bool RMDLBlender::loadGlb(const std::string &resourcesPath)
     return true;
 }
 
-void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
+void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat)
 {
     MTL::VertexDescriptor* vertexDesc = MTL::VertexDescriptor::alloc()->init();
 
@@ -97,8 +96,8 @@ void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::Pixel
     renderPipelineDesc->setVertexFunction(pShaderLibrary->newFunction(NS::String::string("vertexmain", NS::UTF8StringEncoding)));
     renderPipelineDesc->setFragmentFunction(pShaderLibrary->newFunction(NS::String::string("fragmentmain", NS::UTF8StringEncoding)));
     renderPipelineDesc->setVertexDescriptor(vertexDesc);
-    renderPipelineDesc->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
-    renderPipelineDesc->setDepthAttachmentPixelFormat(pDepthPixelFormat);
+    renderPipelineDesc->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+    renderPipelineDesc->setDepthAttachmentPixelFormat(depthPixelFormat);
 
     NS::Error* pError = nullptr;
     _pPipelineStateBlender = _pDevice->newRenderPipelineState(renderPipelineDesc, &pError);

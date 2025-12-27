@@ -21,6 +21,7 @@
 #include <limits>
 
 #include "RMDLUtils.hpp"
+#include "RMDLMainRenderer_shared.h"
 
 static constexpr int CHUNK_SIZE = 32;
 static constexpr int CHUNK_HEIGHT = 128;

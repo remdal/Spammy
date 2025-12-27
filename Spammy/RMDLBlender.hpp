@@ -41,12 +41,12 @@ struct AnimatedSpriteBlender
 class RMDLBlender
 {
 public:
-    RMDLBlender(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary);
+    RMDLBlender(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary);
     ~RMDLBlender();
 
     bool doTheImportThing(const std::string& resourcesPath);
     bool loadGlb(const std::string& resourcesPath);
-    void createPipelineBlender(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
+    void createPipelineBlender(MTL::Library* pShaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat);
     void updateBlender(float deltaTime);
     void drawBlender(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewProjectionMatrix, const simd::float4x4& model);
 private:
@@ -58,8 +58,6 @@ private:
     MTL::Texture*               _pNormalTexture = nullptr;
     MTL::Texture*               _pRoughnessTexture = nullptr;
     MTL::Texture*               _pMetallicTexture = nullptr;
-    MTL::PixelFormat            _pPixelFormat;
-    MTL::PixelFormat            _pDepthPixelFormat;
     MTL::SamplerState*          _pSampler = nullptr;
     MTL::DepthStencilState*     _pDepthState;
     MTL::RenderPipelineState*   _pPipelineStateBlender;

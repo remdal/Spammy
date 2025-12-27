@@ -315,7 +315,7 @@ Mesh createMeshFromModelIOMesh(MDLMesh *modelIOMesh,
     AAPL_ASSERT( !err, "Error loading MTKMesh" );
     if (pError && err)
     {
-        *pError = (__bridge_retained NS::Error*)err;
+        *pError = (__bridge NS::Error*)err;
     }
     
     for (NSUInteger argumentIndex = 0; argumentIndex < metalKitMesh.vertexBuffers.count; argumentIndex++)
@@ -323,7 +323,7 @@ Mesh createMeshFromModelIOMesh(MDLMesh *modelIOMesh,
         MTKMeshBuffer * mtkMeshBuffer = metalKitMesh.vertexBuffers[argumentIndex];
         if((NSNull*)mtkMeshBuffer != [NSNull null])
         {
-            MTL::Buffer* pBuffer = (__bridge_retained MTL::Buffer *)mtkMeshBuffer.buffer;
+            MTL::Buffer* pBuffer = (__bridge MTL::Buffer *)mtkMeshBuffer.buffer;
 
             vertexBuffers.emplace_back( MeshBuffer(pBuffer,
                                                    mtkMeshBuffer.offset,
@@ -389,10 +389,7 @@ static std::vector<Mesh> createMeshesFromModelIOObject(MDLObject* object,
     return newMeshes;
 }
 
-std::vector<Mesh> newMeshesFromBundlePath(const char* bundlePath,
-                                          MTL::Device* pDevice,
-                                          const MTL::VertexDescriptor& vertexDescriptor,
-                                          NS::Error** pError)
+std::vector<Mesh> newMeshesFromBundlePath(const char* bundlePath, MTL::Device* pDevice, const MTL::VertexDescriptor& vertexDescriptor, NS::Error** pError)
 {
     // Create a ModelIO vertexDescriptor so that the format/layout of the ModelIO mesh vertices
     //   cah be made to match Metal render pipeline's vertex descriptor layout
@@ -413,16 +410,13 @@ std::vector<Mesh> newMeshesFromBundlePath(const char* bundlePath,
 
     // Create a MetalKit mesh buffer allocator so that ModelIO will load mesh data directly into
     // Metal buffers accessible by the GPU.
-    MTKMeshBufferAllocator *bufferAllocator =
-        [[MTKMeshBufferAllocator alloc] initWithDevice:(__bridge id<MTLDevice>)pDevice];
+    MTKMeshBufferAllocator *bufferAllocator = [[MTKMeshBufferAllocator alloc] initWithDevice:(__bridge id<MTLDevice>)pDevice];
 
     // Use ModelIO to load the model file at the URL.  This returns a ModelIO asset object, which
     // contains a hierarchy of ModelIO objects composing a "scene" described by the model file.
     // This hierarchy may include lights, cameras, and, most importantly, mesh and submesh data
     // that we'll render with Metal.
-    MDLAsset *asset = [[MDLAsset alloc] initWithURL:modelFileURL
-                                   vertexDescriptor:nil
-                                    bufferAllocator:bufferAllocator];
+    MDLAsset *asset = [[MDLAsset alloc] initWithURL:modelFileURL vertexDescriptor:nil bufferAllocator:bufferAllocator];
 
     AAPL_ASSERT( asset, "Failed to open model file with given URL:", modelFileURL.absoluteString.UTF8String );
 

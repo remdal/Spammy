@@ -83,16 +83,16 @@ struct RenderData
 class RMDLRendererSpammy
 {
 public:
-    RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath);
+    RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& assetSearchPath);
     ~RMDLRendererSpammy();
 
-    void loadPngAndFont( const std::string& resourcesPath );
-    void loadSoundMp3( const std::string& resourcesPath, PhaseAudio* pAudioEngine );
+    void loadPngAndFont(const std::string& assetSearchPath);
+    void loadSoundMp3(const std::string& assetSearchPath, PhaseAudio* pAudioEngine);
     void makeArgumentTable();
-    void buildDepthStencilStates( NS::UInteger width, NS::UInteger height );
+    void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
     
-    void draw( MTK::View* view );
+    void draw(MTK::View* pView);
     void resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height);
 private:
     MTL::Device*                        _pDevice;
@@ -104,11 +104,11 @@ private:
     MTL::Texture*                       _pTextureNormalShadow_GBuffer;
     MTL::Texture*                       _pTextureAlbedoSpectacular_GBuffer;
     MTL::Library*                       _pShaderLibrary;
-    MTL::Viewport                       _pViewport;
-    MTL::PixelFormat                    _pPixelFormat;
-    MTL::PixelFormat                    _pDepthPixelFormat;
-    MTL::PixelFormat                    _pNormalShadowPixelFormat_GBuffer;
-    MTL::PixelFormat                    _pAlbedoSpectacularPixelFormat_GBuffer;
+    MTL::Viewport                       _viewport;
+    MTL::PixelFormat                    _pixelFormat;
+    MTL::PixelFormat                    m_depthPixelFormat{MTL::PixelFormatDepth32Float};
+    MTL::PixelFormat                    _normalShadowPixelFormat_GBuffer;
+    MTL::PixelFormat                    _albedoSpectacularPixelFormat_GBuffer;
     MTL::SharedEvent*                   _pSharedEvent;
     MTL::ResidencySet*                  _pResidencySet;
     MTL::TextureDescriptor*             _pDepthTextureDesc;
@@ -158,8 +158,8 @@ private:
     float                       _rotationAngle;
 
     RMDLCamera _camera;
-    MTL::PixelFormat                    _pPixelFormat;
-    MTL::PixelFormat                    _pDepthPixelFormat;
+    MTL::PixelFormat                    m_pixelFormat;
+    MTL::PixelFormat                    m_depthPixelFormat;
     MTL::DepthStencilState*             _pDepthStencilState;
     PhaseAudio*                             pAudioEngine;
     std::unique_ptr<PhaseAudio> _pAudioEngine;

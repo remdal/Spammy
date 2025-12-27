@@ -368,7 +368,7 @@ void Chunk::rebuildMesh(MTL::Device* device)
 
 
 VoxelWorld::VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary)
-    : _pDevice(pDevice->retain()), voronoiGen(12345), currentTime(0.0f)
+    : _pDevice(pDevice->retain()), voronoiGen(89), currentTime(0.0f)
 {
     createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
 }
@@ -388,11 +388,13 @@ void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, 
     localX = worldX & 31; // Modulo 32
     localZ = worldZ & 31;
     
-    if (worldX < 0 && localX != 0) {
+    if (worldX < 0 && localX != 0)
+    {
         chunkX--;
         localX = CHUNK_SIZE + localX;
     }
-    if (worldZ < 0 && localZ != 0) {
+    if (worldZ < 0 && localZ != 0)
+    {
         chunkZ--;
         localZ = CHUNK_SIZE + localZ;
     }
