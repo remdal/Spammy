@@ -101,10 +101,14 @@ private:
     MTL::Buffer*                        _pBuffer[kMaxBuffersInFlight];
     MTL::Buffer*                        _pCBuffer[kMaxBuffersInFlight];
     MTL::Texture*                       _pTexture;
+    MTL::Texture*                       _pTextureNormalShadow_GBuffer;
+    MTL::Texture*                       _pTextureAlbedoSpectacular_GBuffer;
     MTL::Library*                       _pShaderLibrary;
     MTL::Viewport                       _pViewport;
     MTL::PixelFormat                    _pPixelFormat;
     MTL::PixelFormat                    _pDepthPixelFormat;
+    MTL::PixelFormat                    _pNormalShadowPixelFormat_GBuffer;
+    MTL::PixelFormat                    _pAlbedoSpectacularPixelFormat_GBuffer;
     MTL::SharedEvent*                   _pSharedEvent;
     MTL::ResidencySet*                  _pResidencySet;
     MTL::TextureDescriptor*             _pDepthTextureDesc;
@@ -129,6 +133,10 @@ private:
     simd_uint2                          _pViewportSize;
     dispatch_semaphore_t                _semaphore;
 };
+
+//inline MTL::Texture* RMDLRendererSpammy::
+
+
     
 
 class GameCoordinator {

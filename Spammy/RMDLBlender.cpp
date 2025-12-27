@@ -204,7 +204,7 @@ MTL::Texture* RMDLBlender::loadEmbeddedTexture(aiTexture *aiTexture, bool sRGB)
     MTL::Texture* texture = _pDevice->newTexture(desc);
     MTL::Region region = MTL::Region::Make2D(0, 0, width, height);
     texture->replaceRegion(region, 0, data, width * 4);
-    
+
     if (aiTexture->mHeight == 0)
         stbi_image_free(data);
     desc->release();

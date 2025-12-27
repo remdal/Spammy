@@ -20,7 +20,7 @@ public:
     Fixed(const int n);
     Fixed(const float n);
     Fixed(const Fixed &src);
-    Fixed& operator= (const Fixed &original);
+    Fixed& operator=(const Fixed &original);
     ~Fixed();
 
     int     getRawBits() const;
@@ -65,7 +65,7 @@ public:
     Point();
     Point(const Point &src);
     Point(const float x, const float y);
-    Point& operator= (const Point &original);
+    Point& operator=(const Point &original);
     ~Point();
     
     Fixed   getX(void) const;

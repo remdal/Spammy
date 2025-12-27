@@ -130,8 +130,8 @@
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     _mtkView = [[MTKView alloc] initWithFrame:_window.contentLayoutRect device:device];
     _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float; // MTLPixelFormatRGBA8Unorm_sRGB MTLPixelFormatRGBA8Unorm
-    _mtkView.depthStencilPixelFormat = MTLPixelFormatDepth32Float; // MTLPixelFormatInvalid
+    _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float;
+    _mtkView.depthStencilPixelFormat = MTLPixelFormatDepth32Float;
     _mtkView.framebufferOnly = YES;
     _mtkView.paused = NO;
     _mtkView.delegate = self;

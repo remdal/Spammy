@@ -6,36 +6,28 @@
 
 #include <stdio.h>
 
-MTL::Texture* newTextureFromFile( const std::string& texturePath, MTL::Device* pDevice )
+MTL::Texture* newTextureFromFile(const std::string& texturePath, MTL::Device* pDevice)
 {
     NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:texturePath.c_str()]];
     MTKTextureLoader* loader = [[MTKTextureLoader alloc] initWithDevice:(__bridge id<MTLDevice>)pDevice];
     
     NSError* __autoreleasing error = nil;
-    id<MTLTexture> texture = [loader newTextureWithContentsOfURL:url
-                                                         options:@{MTKTextureLoaderOptionLoadAsArray : @(YES),
-                                                                   MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate),
-                                                                   MTKTextureLoaderOptionTextureUsage : @(MTLTextureUsageShaderRead),
-                                                                   MTKTextureLoaderOptionGenerateMipmaps : @(YES)}
-                                                           error:&error];
-
+    id<MTLTexture> texture = [loader newTextureWithContentsOfURL:url options:@{MTKTextureLoaderOptionLoadAsArray : @(YES),
+                                                                               MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate),
+                                                                               MTKTextureLoaderOptionTextureUsage : @(MTLTextureUsageShaderRead),
+                                                                               MTKTextureLoaderOptionGenerateMipmaps : @(YES)} error:&error];
     if (!texture)
-    {
         NSLog(@"Error loading texture at \"%s\": %@", texturePath.c_str(), error.localizedDescription);
-    }
     assert(texture);
-
     return (__bridge MTL::Texture *)texture;
 }
 
 MTL::Texture* newTextureArrayFromFiles(const std::vector<std::string>& texturePaths, MTL::Device* pDevice, MTL::CommandBuffer* pCommandBuffer)
 {
     std::vector<NS::SharedPtr<MTL::Texture>> textures;
+
     for (size_t i = 0; i < texturePaths.size(); ++i)
-    {
-        //printf("%u\n", i); // 0, 1, 2, 0, 1
-        textures.push_back( NS::TransferPtr(newTextureFromFile(texturePaths[i], pDevice)) );
-    }
+        textures.push_back(NS::TransferPtr(newTextureFromFile(texturePaths[i], pDevice)));
     
     MTL::Texture* pTexture = nullptr;
     if (textures.size() > 0)
@@ -58,9 +50,8 @@ MTL::Texture* newTextureArrayFromFiles(const std::vector<std::string>& texturePa
             auto w = textures[i]->width();
             auto h = textures[i]->height();
             auto d = textures[i]->depth();
-            
-            pBlit->copyFromTexture(textures[i].get(), 0, 0, MTL::Origin(0,0,0), MTL::Size(w,h,d),
-                                   pTexture, i, 0, MTL::Origin(0,0,0));
+
+            pBlit->copyFromTexture(textures[i].get(), 0, 0, MTL::Origin(0,0,0), MTL::Size(w,h,d), pTexture, i, 0, MTL::Origin(0,0,0));
         }
         pBlit->generateMipmaps(pTexture);
         pBlit->endEncoding();
@@ -94,10 +85,10 @@ FontAtlas newFontAtlas(MTL::Device* pDevice)
     const uint32_t bitmapSize = bitmapW * bitmapH * bitmapChannels;
     const uint32_t bitsPerComponent = 8;
     const uint32_t bytesPerRow = bitmapW * bitmapChannels;
-    
+
     uint8_t* bitmap = new uint8_t[bitmapSize];
-    memset(bitmap, 0x0, bitmapSize);
-    
+    ft_memset(bitmap, 0x0, bitmapSize);
+
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef ctx = CGBitmapContextCreate(bitmap,
                                              bitmapW,

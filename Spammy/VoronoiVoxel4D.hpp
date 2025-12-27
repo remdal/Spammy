@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "RMDLUtils.hpp"
+
 static constexpr int CHUNK_SIZE = 32;
 static constexpr int CHUNK_HEIGHT = 128;
 static constexpr float VOXEL_SIZE = 1.0f;
@@ -63,6 +65,9 @@ struct VoronoiSite4D
     float influence;
 };
 
+// Hash pour positions cohérentes
+uint32_t hash(int x, int y, int z);
+
 class VoronoiVoxel4D
 {
 public:
@@ -71,6 +76,7 @@ public:
     
     // Génère sites pour une région 3D à un temps donné
     void generateSitesForRegion(int chunkX, int chunkZ, float time);
+    void generateSitesForRegion2(int chunkX, int chunkZ, float time);
     
     // Trouve le site Voronoi le plus proche en 4D
     VoronoiSite4D* findClosestSite(simd::float3 worldPos, float time);
@@ -83,6 +89,7 @@ public:
     
     // Worley noise (distance au plus proche site)
     float worleyNoise(simd::float3 pos, float time);
+    float worleyNoise2(simd::float3 pos, float time);
     
     void setTimeOffset(float t) { timeOffset = t; }
     float getTimeOffset() const { return timeOffset; }
@@ -90,9 +97,6 @@ private:
     std::vector<VoronoiSite4D>  sites;
     std::mt19937                rng;
     float                       timeOffset; // 4ème dimension = temps
-    
-    // Hash pour positions cohérentes
-    uint32_t hash(int x, int y, int z);
 };
 
 class Chunk

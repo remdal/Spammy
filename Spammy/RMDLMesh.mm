@@ -6,38 +6,25 @@
 #include "RMDLMesh.hpp"
 
 #import "RMDLMainRenderer_shared.h"
-#include "RMDLUtilities.h"
 
 #include <Metal/Metal.hpp>
 
 #pragma mark - MeshBuffer Implementation
 
 MeshBuffer::MeshBuffer()
-: m_pBuffer( nullptr )
-, m_offset( 0 )
-, m_length( 0 )
-, m_argumentIndex( 0 )
+: m_pBuffer(nullptr), m_offset(0), m_length(0), m_argumentIndex(0)
 {
     
 }
 
-inline MeshBuffer::MeshBuffer(MTL::Buffer* pBuffer,
-                              NS::UInteger offset,
-                              NS::UInteger length,
-                              NS::UInteger argumentIndex )
-: m_pBuffer(pBuffer->retain())
-, m_offset(offset)
-, m_length(length)
-, m_argumentIndex(argumentIndex)
+inline MeshBuffer::MeshBuffer(MTL::Buffer* pBuffer, NS::UInteger offset, NS::UInteger length, NS::UInteger argumentIndex)
+: m_pBuffer(pBuffer->retain()), m_offset(offset), m_length(length), m_argumentIndex(argumentIndex)
 {
     
 }
 
 MeshBuffer::MeshBuffer(const MeshBuffer& rhs)
-: m_pBuffer( rhs.m_pBuffer->retain() )
-, m_length( rhs.m_length )
-, m_offset( rhs.m_offset )
-, m_argumentIndex( rhs.m_argumentIndex )
+: m_pBuffer(rhs.m_pBuffer->retain()), m_length(rhs.m_length), m_offset(rhs.m_offset), m_argumentIndex(rhs.m_argumentIndex)
 {
     
 }
@@ -52,10 +39,7 @@ MeshBuffer& MeshBuffer::operator=(MeshBuffer& rhs)
 }
 
 MeshBuffer::MeshBuffer(MeshBuffer&& rhs)
-: m_pBuffer( rhs.m_pBuffer->retain() )
-, m_length( rhs.m_length )
-, m_offset( rhs.m_offset )
-, m_argumentIndex( rhs.m_argumentIndex )
+: m_pBuffer(rhs.m_pBuffer->retain()), m_length(rhs.m_length), m_offset(rhs.m_offset), m_argumentIndex(rhs.m_argumentIndex)
 {
     rhs.m_pBuffer->release();
     rhs.m_pBuffer = nullptr;
@@ -66,7 +50,7 @@ MeshBuffer& MeshBuffer::operator=(MeshBuffer&& rhs)
     m_pBuffer = rhs.m_pBuffer->retain();
     rhs.m_pBuffer->release();
     rhs.m_pBuffer = nullptr;
-    
+
     m_length = rhs.m_length;
     m_offset = rhs.m_offset;
     m_argumentIndex = rhs.m_argumentIndex;
@@ -82,55 +66,34 @@ MeshBuffer::~MeshBuffer()
 #pragma mark - Submesh Implementation
 
 Submesh::Submesh()
-: m_primitiveType( MTL::PrimitiveTypeTriangle )
-, m_indexType( MTL::IndexTypeUInt16 )
-, m_indexCount( 0 )
-, m_indexBuffer(nullptr, (NS::UInteger)0, (NS::UInteger)0)
+: m_primitiveType(MTL::PrimitiveTypeTriangle)
+, m_indexType(MTL::IndexTypeUInt16), m_indexCount(0), m_indexBuffer(nullptr, (NS::UInteger)0, (NS::UInteger)0)
 {
     
 }
 
-Submesh::Submesh(MTL::PrimitiveType primitiveType,
-                        MTL::IndexType indexType,
-                        NS::UInteger indexCount,
-                        const MeshBuffer& indexBuffer,
-                        const SubmeshTextureArray& pTextures)
-: m_primitiveType(primitiveType)
-, m_indexType(indexType)
-, m_indexCount(indexCount)
-, m_indexBuffer(indexBuffer)
-, m_pTextures( pTextures )
+Submesh::Submesh(MTL::PrimitiveType primitiveType, MTL::IndexType indexType, NS::UInteger indexCount, const MeshBuffer& indexBuffer, const std::array< MTL::Texture*, kSubmeshTextureCount >& pTextures)
+: m_primitiveType(primitiveType), m_indexType(indexType), m_indexCount(indexCount), m_indexBuffer(indexBuffer), m_pTextures(pTextures)
 {
-    for ( auto&& pTexture : m_pTextures )
+    for (auto&& pTexture : m_pTextures)
     {
         pTexture->retain();
     }
 }
 
-// Initialize a submesh without textures
-inline Submesh::Submesh(MTL::PrimitiveType primitiveType,
-                        MTL::IndexType indexType,
-                        NS::UInteger indexCount,
-                        const MeshBuffer& indexBuffer)
-: m_primitiveType(primitiveType)
-, m_indexType(indexType)
-, m_indexCount(indexCount)
-, m_indexBuffer(indexBuffer)
+inline Submesh::Submesh(MTL::PrimitiveType primitiveType, MTL::IndexType indexType, NS::UInteger indexCount, const MeshBuffer& indexBuffer)
+: m_primitiveType(primitiveType), m_indexType(indexType), m_indexCount(indexCount), m_indexBuffer(indexBuffer)
 {
-    for ( size_t i = 0; i < 3; ++i )
+    for (size_t i = 0; i < 3; ++i)
     {
         m_pTextures[i] = nullptr;
     }
 }
 
 Submesh::Submesh(const Submesh& rhs)
-: m_primitiveType( rhs.m_primitiveType )
-, m_indexType( rhs.m_indexType )
-, m_indexCount( rhs.m_indexCount )
-, m_indexBuffer( rhs.m_indexBuffer )
-, m_pTextures( rhs.m_pTextures )
+: m_primitiveType(rhs.m_primitiveType), m_indexType(rhs.m_indexType), m_indexCount(rhs.m_indexCount), m_indexBuffer(rhs.m_indexBuffer), m_pTextures(rhs.m_pTextures)
 {
-    for ( size_t i = 0; i < 3; ++i )
+    for (size_t i = 0; i < 3; ++i)
     {
         m_pTextures[i]->retain();
     }
@@ -143,23 +106,18 @@ Submesh& Submesh::operator=(Submesh& rhs)
     m_indexCount = rhs.m_indexCount;
     m_indexBuffer = rhs.m_indexBuffer;
     m_pTextures = rhs.m_pTextures;
-    
-    for ( size_t i = 0; i < 3; ++i )
+
+    for (size_t i = 0; i < 3; ++i)
     {
         m_pTextures[i]->retain();
     }
-    
     return *this;
 }
 
 Submesh::Submesh(Submesh&& rhs)
-: m_primitiveType( rhs.m_primitiveType )
-, m_indexType( rhs.m_indexType )
-, m_indexCount( rhs.m_indexCount )
-, m_indexBuffer( rhs.m_indexBuffer )
-, m_pTextures( rhs.m_pTextures )
+: m_primitiveType(rhs.m_primitiveType), m_indexType(rhs.m_indexType), m_indexCount(rhs.m_indexCount), m_indexBuffer(rhs.m_indexBuffer), m_pTextures(rhs.m_pTextures)
 {
-    for ( size_t i = 0; i < 3; ++i )
+    for (size_t i = 0; i < 3; ++i)
     {
         m_pTextures[i]->retain();
         rhs.m_pTextures[i]->release();
@@ -174,21 +132,20 @@ Submesh& Submesh::operator=(Submesh&& rhs)
     m_indexCount = rhs.m_indexCount;
     m_indexBuffer = rhs.m_indexBuffer;
     m_pTextures = rhs.m_pTextures;
-    
-    for ( size_t i = 0; i < 3; ++i )
+
+    for (size_t i = 0; i < 3; ++i)
     {
         m_pTextures[i]->retain();
         rhs.m_pTextures[i]->release();
         rhs.m_pTextures[i] = nullptr;
     }
-    
     return *this;
 
 }
 
 Submesh::~Submesh()
 {
-    for ( auto&& pTexture : m_pTextures )
+    for (auto&& pTexture : m_pTextures)
     {
         pTexture->release();
     }
@@ -198,29 +155,23 @@ Submesh::~Submesh()
 
 Mesh::Mesh()
 {
-    // Construct a mesh with no submeshes and no `vertexBuffer`.
+    
 }
 
-
-inline Mesh::Mesh(const std::vector<Submesh>& submeshes,
-                  const std::vector<MeshBuffer>& vertexBuffers)
-: m_submeshes(submeshes)
-, m_vertexBuffers(vertexBuffers)
+inline Mesh::Mesh(const std::vector<Submesh>& submeshes, const std::vector<MeshBuffer>& vertexBuffers)
+: m_submeshes(submeshes), m_vertexBuffers(vertexBuffers)
 {
     
 }
 
-
-inline Mesh::Mesh(const Submesh& submesh,
-                  const std::vector<MeshBuffer> & vertexBuffers)
+inline Mesh::Mesh(const Submesh& submesh, const std::vector<MeshBuffer> & vertexBuffers)
 : m_vertexBuffers(vertexBuffers)
 {
     m_submeshes.emplace_back(submesh);
 }
 
 Mesh::Mesh(const Mesh& rhs)
-: m_submeshes( rhs.m_submeshes)
-, m_vertexBuffers( rhs.m_vertexBuffers )
+: m_submeshes(rhs.m_submeshes), m_vertexBuffers(rhs.m_vertexBuffers)
 {
     
 }
@@ -233,8 +184,7 @@ Mesh& Mesh::operator=(const Mesh& rhs)
 }
 
 Mesh::Mesh(Mesh&& rhs)
-: m_submeshes( rhs.m_submeshes)
-, m_vertexBuffers( rhs.m_vertexBuffers )
+: m_submeshes(rhs.m_submeshes), m_vertexBuffers(rhs.m_vertexBuffers)
 {
     
 }
@@ -250,79 +200,33 @@ Mesh::~Mesh()
 {
 }
 
-static MTL::Texture* createTextureFromMaterial(MDLMaterial * material,
-                                         MDLMaterialSemantic materialSemantic,
-                                         MTKTextureLoader* textureLoader)
+static MTL::Texture* createTextureFromMaterial(MDLMaterial * material, MDLMaterialSemantic materialSemantic, MTKTextureLoader* textureLoader)
 {
-    NSArray<MDLMaterialProperty *> *propertiesWithSemantic =
-        [material propertiesWithSemantic:materialSemantic];
+    NSArray<MDLMaterialProperty *> *propertiesWithSemantic = [material propertiesWithSemantic:materialSemantic];
 
     for (MDLMaterialProperty *property in propertiesWithSemantic)
     {
-        if(property.type == MDLMaterialPropertyTypeString ||
-           property.type == MDLMaterialPropertyTypeURL)
+        if (property.type == MDLMaterialPropertyTypeString || property.type == MDLMaterialPropertyTypeURL)
         {
-            // Load the textures with shader read using private storage
-            NSDictionary<MTKTextureLoaderOption, id>* options = @{
-                    MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate),
-                    MTKTextureLoaderOptionTextureUsage : @(MTLTextureUsageShaderRead)
-            };
+            NSDictionary<MTKTextureLoaderOption, id>* options = @{ MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate), MTKTextureLoaderOptionTextureUsage : @(MTLTextureUsageShaderRead) };
 
-            // Start by interpreting the string as a file path and attempt to load it with
-            //    -[MTKTextureLoader newTextureWithContentsOfURL:options:error:]
-
-            
             NSError* __autoreleasing err = nil;
-            // Attempt to load the texture from the catalog by interpreting
-            // the string as an asset catalog resource name
-            
-            MTL::Texture* pTexture = (__bridge_retained MTL::Texture*)
-            [textureLoader newTextureWithName:property.stringValue
-                                  scaleFactor:1.0
-                                       bundle:nil
-                                      options:options
-                                        error:&err];
-            
-            // If the texture has been found for a material using the string as a file path name...
-            if(pTexture)
-            {
-                // ...return it
+            MTL::Texture* pTexture = (__bridge MTL::Texture*)[textureLoader newTextureWithName:property.stringValue scaleFactor:1.0 bundle:nil options:options error:&err];
+
+            if (pTexture)
                 return pTexture;
-            }
 
-            // If no texture has been found by interpreting the URL as a path, attempt to load it
-            // from the file system.
+            pTexture = (__bridge MTL::Texture*)[textureLoader newTextureWithContentsOfURL:property.URLValue options:options error:&err];
 
-            pTexture = (__bridge_retained  MTL::Texture*)[textureLoader newTextureWithContentsOfURL:property.URLValue
-                                                                                   options:options
-                                                                                     error:&err];
-            
             AAPL_ASSERT( !err, "Error loading texture:", property.URLValue );
 
-            // If a texture is found by interpreting the URL as an asset catalog name return it.
-            if( pTexture )
-            {
+            if (pTexture)
                 return pTexture;
-            }
 
-            // If did not find the texture in by interpreting it as a file path or as an asset name
-            // in the asset catalog, something went wrong (Perhaps the file was missing or
-            // misnamed in the asset catalog, model/material file, or file system)
-
-            // Depending on how the Metal render pipeline use with this submesh is implemented,
-            // this condition can be handled more gracefully.  The app could load a dummy texture
-            // that will look okay when set with the pipeline or ensure that the pipelines
-            // rendering this submesh do not require a material with this property.
-
-            [NSException raise:@"Texture data for material property not found"
-                        format:@"Requested material property semantic: %lu string: %@",
-                                materialSemantic, property.stringValue];
+            [NSException raise:@"Texture data for material property not found" format:@"Requested material property semantic: %lu string: %@", materialSemantic, property.stringValue];
         }
     }
-
-    [NSException raise:@"No appropriate material property from which to create texture"
-                format:@"Requested material property semantic: %lu", materialSemantic];
-
+    [NSException raise:@"No appropriate material property from which to create texture" format:@"Requested material property semantic: %lu", materialSemantic];
     return nullptr;
 }
 
@@ -336,7 +240,7 @@ static Submesh createSubmesh(MDLSubmesh *modelIOSubmesh,
     //   submesh's material property
 
     // Create an array with three null textures that will be immediately replaced.
-    SubmeshTextureArray textures;
+    std::array< MTL::Texture*, kSubmeshTextureCount > textures;
 
     // Now that createSubmesh has added dummy elements, it can replace indices in the vector
     // with real textures.
@@ -353,7 +257,7 @@ static Submesh createSubmesh(MDLSubmesh *modelIOSubmesh,
                                                                 MDLMaterialSemanticTangentSpaceNormal,
                                                                 textureLoader);
 
-    MTL::Buffer* pMetalIndexBuffer = (__bridge_retained MTL::Buffer*)(metalKitSubmesh.indexBuffer.buffer);
+    MTL::Buffer* pMetalIndexBuffer = (__bridge MTL::Buffer*)(metalKitSubmesh.indexBuffer.buffer);
 
     MeshBuffer indexBuffer(pMetalIndexBuffer, metalKitSubmesh.indexBuffer.offset, metalKitSubmesh.indexBuffer.length);
 
@@ -414,7 +318,7 @@ Mesh createMeshFromModelIOMesh(MDLMesh *modelIOMesh,
         *pError = (__bridge_retained NS::Error*)err;
     }
     
-    for(NSUInteger argumentIndex = 0; argumentIndex < metalKitMesh.vertexBuffers.count; argumentIndex++)
+    for (NSUInteger argumentIndex = 0; argumentIndex < metalKitMesh.vertexBuffers.count; argumentIndex++)
     {
         MTKMeshBuffer * mtkMeshBuffer = metalKitMesh.vertexBuffers[argumentIndex];
         if((NSNull*)mtkMeshBuffer != [NSNull null])
@@ -839,9 +743,7 @@ Mesh makeSphereMesh(MTL::Device* pDevice,
 }
 
 
-Mesh makeIcosahedronMesh(MTL::Device* pDevice,
-                         const MTL::VertexDescriptor& vertexDescriptor,
-                         float radius)
+Mesh makeIcosahedronMesh(MTL::Device* pDevice, const MTL::VertexDescriptor& vertexDescriptor, float radius)
 {
     const float Z = radius;
     const float X = (Z / (1.0 + sqrtf(5.0))) * 2;
@@ -862,7 +764,6 @@ Mesh makeIcosahedronMesh(MTL::Device* pDevice,
     };
 
     const uint16_t vertexCount = sizeof(positions) / sizeof(vector_float3);
-
     const uint16_t indices[][3] =
     {
         {  0,  1,  4 },
@@ -890,10 +791,7 @@ Mesh makeIcosahedronMesh(MTL::Device* pDevice,
     NS::UInteger indexCount = sizeof(indices) / sizeof(uint16_t);
     NS::UInteger indexBufferSize = sizeof(indices);
 
-    std::vector<MeshBuffer> vertexBuffers = MeshBuffer::makeVertexBuffers(pDevice,
-                                                                          &vertexDescriptor,
-                                                                          vertexCount,
-                                                                          indexBufferSize);
+    std::vector<MeshBuffer> vertexBuffers = MeshBuffer::makeVertexBuffers(pDevice, &vertexDescriptor, vertexCount, indexBufferSize);
 
     MTL::Buffer* pBuffer = vertexBuffers[0].buffer();
 
@@ -901,7 +799,7 @@ Mesh makeIcosahedronMesh(MTL::Device* pDevice,
 
     uint8_t * bufferContents = (uint8_t*)pBuffer->contents();
 
-    memcpy(bufferContents, indices, indexBufferSize);
+    ft_memcpy(bufferContents, indices, indexBufferSize);
 
     {
         MTL::VertexFormat positionFormat      = vertexDescriptor.attributes()->object(VertexAttributePosition)->format();
@@ -909,7 +807,6 @@ Mesh makeIcosahedronMesh(MTL::Device* pDevice,
         NS::UInteger positionVertexOffset = vertexDescriptor.attributes()->object(VertexAttributePosition)->offset();
         NS::UInteger positionBufferOffset = vertexBuffers[positionBufferIndex].offset();
         NS::UInteger positionStride       = vertexDescriptor.layouts()->object(positionBufferIndex)->stride();
-
 
         uint8_t *positionData = bufferContents + positionBufferOffset + positionVertexOffset;
 
@@ -920,31 +817,20 @@ Mesh makeIcosahedronMesh(MTL::Device* pDevice,
         }
     }
 
-    Submesh submesh(MTL::PrimitiveTypeTriangle,
-                    MTL::IndexTypeUInt16,
-                    indexCount,
-                    indexBuffer);
+    Submesh submesh(MTL::PrimitiveTypeTriangle, MTL::IndexTypeUInt16, indexCount, indexBuffer);
 
     return Mesh(submesh, vertexBuffers);
 }
 
-MTL::Texture* newTextureFromCatalog( MTL::Device* pDevice, const char* name, MTL::StorageMode storageMode, MTL::TextureUsage usage )
+MTL::Texture* newTextureFromCatalog(MTL::Device* pDevice, const char* name, MTL::StorageMode storageMode, MTL::TextureUsage usage)
 {
-    NSDictionary<MTKTextureLoaderOption, id>* options = @{
-            MTKTextureLoaderOptionTextureStorageMode : @( (MTLStorageMode)storageMode ),
-            MTKTextureLoaderOptionTextureUsage : @( (MTLTextureUsage)usage )
-    };
-        
+    NSDictionary<MTKTextureLoaderOption, id>* options = @{ MTKTextureLoaderOptionTextureStorageMode : @((MTLStorageMode)storageMode), MTKTextureLoaderOptionTextureUsage : @((MTLTextureUsage)usage) };
+
     MTKTextureLoader* textureLoader = [[MTKTextureLoader alloc] initWithDevice:(__bridge id<MTLDevice>)pDevice];
 
     NSError* __autoreleasing err = nil;
-    id< MTLTexture > texture = [textureLoader newTextureWithName:[NSString stringWithUTF8String:name]
-                                                     scaleFactor:1
-                                                          bundle:nil
-                                                         options:options
-                                                           error:&err];
+    id< MTLTexture > texture = [textureLoader newTextureWithName:[NSString stringWithUTF8String:name] scaleFactor:1 bundle:nil options:options error:&err];
 
     AAPL_ASSERT( !err, "Error loading texture:", name );
-    
-    return (__bridge_retained MTL::Texture*)texture;
+    return (__bridge MTL::Texture *)texture;
 }

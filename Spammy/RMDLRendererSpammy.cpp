@@ -36,6 +36,7 @@
 #include <string.h>
 
 #include "RMDLRendererSpammy.hpp"
+#include "RMDLUtilities.h"
 
 #define kMaxFramesInFlight 3
 
@@ -103,6 +104,7 @@ skybox(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
 snow(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary),
 world(device, layerPixelFormat, depthPixelFormat, _pShaderLibrary)
 {
+    AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
     cmdQueue = device->newCommandQueue();
     _pAudioEngine = std::make_unique<PhaseAudio>(ressourcePath);
     loadGameSounds(ressourcePath, _pAudioEngine.get());
