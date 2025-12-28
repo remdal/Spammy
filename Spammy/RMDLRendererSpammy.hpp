@@ -31,7 +31,9 @@
 //#include "BumpAllocator.hpp"
 #include "RMDLMathUtils.hpp"
 #include "RMDLBlender.hpp"
+#include "RMDLUi.hpp"
 #include "VoronoiVoxel4D.hpp"
+#include "Utils/NonCopyable.h"
 
 #define kMaxBuffersInFlight 3
 
@@ -47,6 +49,26 @@ struct TriangleData
     VertexData vertex0;
     VertexData vertex1;
     VertexData vertex2;
+};
+
+struct UIConfig
+{
+    NS::UInteger                            canvasWidth;
+    NS::UInteger                            canvasHeight;
+    FontAtlas                               fontAtlas;
+    NS::SharedPtr<MTL::RenderPipelineState> uiPso;
+};
+
+struct UIRenderData
+{
+    std::array<NS::SharedPtr<MTL::Heap>, kMaxBuffersInFlight>      resourceHeaps;
+    std::array<NS::SharedPtr<MTL::Buffer>, kMaxBuffersInFlight>    frameDataBuf;
+    std::array<NS::SharedPtr<MTL::Buffer>, kMaxBuffersInFlight>    highScorePositionBuf;
+    std::array<NS::SharedPtr<MTL::Buffer>, kMaxBuffersInFlight>    currentScorePositionBuf;
+    NS::SharedPtr<MTL::Buffer>                                     textureTable;
+    NS::SharedPtr<MTL::Buffer>                                     samplerTable;
+    NS::SharedPtr<MTL::SamplerState>                               pSampler;
+    NS::SharedPtr<MTL::ResidencySet>                               pResidencySet;
 };
 
 struct GameConfig
@@ -80,7 +102,7 @@ struct RenderData
     NS::SharedPtr<MTL::ResidencySet> residencySet;
 };
 
-class RMDLRendererSpammy
+class RMDLRendererSpammy : NonCopyable
 {
 public:
     RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& assetSearchPath);
@@ -141,13 +163,13 @@ private:
 
 class GameCoordinator {
 private:
-    MTL::Device* device;
+    MTL::Device* m_device;
     MTL::CommandQueue* cmdQueue;
     MTL::RenderPipelineState* pipelineState;
     MTL::Buffer* vertexBuffer;
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
-    MTL::Library*                       _pShaderLibrary;
+    MTL::Library*                       m_shaderLibrary;
 
     simd::float2 cursorPos;
     float cameraZoom;
@@ -169,10 +191,16 @@ private:
     sky::RMDLSkybox skybox;
     snow::RMDLSnow snow;
     VoxelWorld world;
+    MetalUIManager ui;
+
+    
+    FontAtlas                           _fontAtlas;
+    UIConfig                            _uiConfig;
+    UIRenderData                        _renderData;
     
 
 public:
-    GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger Heigth, const std::string& resourcePath );
+    GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath );
     ~GameCoordinator();
     
     void setViewSize(int width, int height);

@@ -92,20 +92,20 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
     ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData));
 }
 
-GameCoordinator::GameCoordinator(MTL::Device* dev,
-                                 MTL::PixelFormat layerPixelFormat,
-                                 MTL::PixelFormat depthPixelFormat,
-                                 NS::UInteger width,
-                                 NS::UInteger height,
-                                 const std::string& ressourcePath )
-: device(dev->retain()), m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat), _pShaderLibrary(device->newDefaultLibrary()),
-blender(device, layerPixelFormat, m_depthPixelFormat, ressourcePath, _pShaderLibrary), _rotationAngle(0.0f),
-skybox(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary),
-snow(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary),
-world(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary)
+GameCoordinator::GameCoordinator(MTL::Device* device,
+                                 MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat,
+                                 NS::UInteger width, NS::UInteger height,
+                                 const std::string& ressourcePath)
+: m_device(device->retain()), m_shaderLibrary(m_device->newDefaultLibrary()),
+m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat),
+blender(m_device, layerPixelFormat, m_depthPixelFormat, ressourcePath, m_shaderLibrary), _rotationAngle(0.0f),
+skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
+snow(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
+world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
+ui(m_device, layerPixelFormat, depthPixelFormat, width, height, m_shaderLibrary)
 {
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
-    cmdQueue = device->newCommandQueue();
+    cmdQueue = m_device->newCommandQueue();
     _pAudioEngine = std::make_unique<PhaseAudio>(ressourcePath);
     loadGameSounds(ressourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
@@ -115,6 +115,8 @@ world(device, layerPixelFormat, m_depthPixelFormat, _pShaderLibrary)
 
 GameCoordinator::~GameCoordinator()
 {
+    m_shaderLibrary->release();
+
     vertexBuffer->release();
     indexBuffer->release();
     transformBuffer->release();
@@ -201,7 +203,7 @@ void GameCoordinator::draw( MTK::View* view )
     blender.drawBlender(enc, cameraUniforms.viewProjectionMatrix * modelMatrix, modelMatrix); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
-    skybox.render(enc, modelMatrix2, cameraUniforms.viewProjectionMatrix * modelMatrix2, {0,0,0});
+    skybox.render(enc, modelMatrix2, cameraUniforms.viewProjectionMatrix * modelMatrix2, _camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
@@ -214,6 +216,13 @@ void GameCoordinator::draw( MTK::View* view )
     enc->setVertexBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
     enc->setFragmentBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
     world.render(enc, cameraUniforms.viewProjectionMatrix);
+    
+    ui.beginFrame(enc, 720, 1080);
+    ui.drawText("Hello Metal!", 10, 10);
+    if (ui.drawButton("Click me", UIRect(100, 100, 150, 40))) {
+        // Bouton cliqué
+    }
+    ui.endFrame(enc);
 
     enc->endEncoding();
     cmdBuf->presentDrawable(view->currentDrawable());
