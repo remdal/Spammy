@@ -9,6 +9,10 @@
 #define RMDLUi_hpp
 
 #include <Metal/Metal.hpp>
+
+#include <CoreGraphics/CoreGraphics.h>
+#include <CoreText/CoreText.h>
+
 #include <simd/simd.h>
 #include <vector>
 #include <string>
@@ -17,6 +21,14 @@
 
 #include "RMDLMathUtils.hpp"
 #include "RMDLUtils.hpp"
+#include "RMDLFontLoader.h"
+
+#include "RMDLMainRenderer_shared.h"
+
+struct RMDLUi
+{
+    simd::float4x4 uiProjectionMatrix;
+};
 
 struct UIVertex
 {
@@ -43,6 +55,14 @@ struct FontCharacter
     float advance;
 };
 
+enum class BatchType { Shape, Text };
+
+struct RenderBatch {
+    BatchType type;
+    size_t startIndex;
+    size_t indexCount;
+};
+
 class MetalUIManager
 {
 public:
@@ -58,20 +78,17 @@ public:
     void drawRoundedRect(const UIRect& rect, float radius, simd::float4 color, bool filled = true);
     void drawCircle(float x, float y, float radius, simd::float4 color, bool filled = true);
     void drawLine(float x1, float y1, float x2, float y2, float thickness, simd::float4 color);
-    
-    bool drawButton(const std::string& label, const UIRect& rect, bool* hovered = nullptr);
+
     void drawPanel(const UIRect& rect, simd::float4 bgColor, float borderWidth = 2.0f, simd::float4 borderColor = {1, 1, 1, 1});
     void drawProgressBar(const UIRect& rect, float progress, simd::float4 bgColor, simd::float4 fgColor);
-
-    void setMousePosition(float x, float y) { m_mouseX = x; m_mouseY = y; }
-    void setMouseButton(bool pressed) { m_mousePressed = pressed; }
     
 private:
     bool createFontAtlas(MTL::Device* device, MTL::PixelFormat pixelFormat);
-    bool createShadersAndPipelineStates(MTL::Library *shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device);
+    bool createShadersAndPipelineStates(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device);
     bool createBuffers(MTL::Device* device);
 
-    void addQuad(const UIVertex* vertices);
+    void startNewBatch(BatchType type);
+    void addQuad(const UIVertex* vertices, BatchType type);
 
     float toNDCX(float x, float width) const;
     float toNDCY(float y, float height) const;
@@ -88,14 +105,14 @@ private:
     std::vector<uint16_t> m_indices;
     NS::SharedPtr<MTL::Buffer> m_vertexBuffer;
     NS::SharedPtr<MTL::Buffer> m_indexBuffer;
+    NS::SharedPtr<MTL::Buffer> m_frameDataBuffer;
     size_t m_maxVertices;
     size_t m_maxIndices;
-    simd::float4x4 m_projectionMatrix;
-    
-    // Input state
-    float m_mouseX, m_mouseY;
-    bool m_mousePressed;
-    bool m_mousePressedLastFrame;
+
+    RMDLUi uiMatrix;
+    Font fontAtlas;
+    NS::SharedPtr<MTL::SamplerState> m_sampler;
+    std::vector<RenderBatch> m_batches;
 };
 
 #endif /* RMDLUi_hpp */

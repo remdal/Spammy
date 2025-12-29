@@ -217,11 +217,8 @@ void GameCoordinator::draw( MTK::View* view )
     enc->setFragmentBytes(&cameraUniforms, sizeof(cameraUniforms), 1);
     world.render(enc, cameraUniforms.viewProjectionMatrix);
     
-    ui.beginFrame(enc, 720, 1080);
-    ui.drawText("Hello Metal!", 10, 10);
-    if (ui.drawButton("Click me", UIRect(100, 100, 150, 40))) {
-        // Bouton cliqué
-    }
+    ui.beginFrame(enc, viewport.width, viewport.height);
+    ui.drawText("Hello 89 ! Make sense", 100, 100);
     ui.endFrame(enc);
 
     enc->endEncoding();

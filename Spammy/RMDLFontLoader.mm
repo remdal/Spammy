@@ -421,3 +421,110 @@ Char | UVs: (-1.05665e+36, 1.4013e-45) ...
 Char } UVs: (-1.05665e+36, 1.4013e-45) ...
 Char ~ UVs: (0, 0) ...
 TextMesh 'Hello': 30 indices. */
+
+Font createFont(MTL::Device* device)
+{
+    Font fontAtlas;
+    const uint32_t bitmapW = 2048;
+    const uint32_t bitmapH = 2048;
+    const uint32_t bitmapChannels = 4;
+    const uint32_t bitmapSize = bitmapW * bitmapH * bitmapChannels;
+    const uint32_t bytesPerRow = bitmapW * bitmapChannels;
+    
+    uint8_t* bitmap = new uint8_t[bitmapSize];
+    memset(bitmap, 0x0, bitmapSize);
+    
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(bitmap, bitmapW, bitmapH, 8, bytesPerRow,
+                                             colorSpace, kCGImageAlphaPremultipliedLast);
+    
+    CGFloat margin = (CGFloat)bitmapW * 0.02;
+    CGColorRef color = CGColorCreateGenericRGB(1.0, 1.0, 1.0, 1.0);
+    CGFloat fontSize = (CGFloat)bitmapW * 0.045;
+    CFStringRef fontName = CFSTR("Helvetica");
+    
+    CTFontRef font = CTFontCreateWithName(fontName, fontSize, nullptr);
+    
+    CGFloat x = margin;
+    CGFloat y = margin;
+    
+    CGRect minBounds = calculateReferenceBounds('X', font, color, ctx);
+    
+    // Caractères imprimables ASCII
+    static const char printableChars[] =
+        " !\"#$%&'()*+,-./0123456789:;<=>?@"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
+        "abcdefghijklmnopqrstuvwxyz{|}~";
+    
+    for (size_t i = 0; i < strlen(printableChars); ++i)
+    {
+        char c = printableChars[i];
+        
+        NSString* str = [NSString stringWithFormat:@"%c", c];
+        NSMutableAttributedString* attributedString = [[NSMutableAttributedString alloc] initWithString:str];
+        [attributedString addAttribute:NSFontAttributeName value:(__bridge id)font range:NSMakeRange(0, 1)];
+        [attributedString addAttribute:NSForegroundColorAttributeName value:(__bridge id)color range:NSMakeRange(0, 1)];
+        
+        CTLineRef lineOfText = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)attributedString);
+        
+        CGContextSetTextPosition(ctx, 0, 0);
+        CGRect rect = CTLineGetImageBounds(lineOfText, ctx);
+        
+        // Normaliser la taille
+        CGSize oldSize = rect.size;
+        rect.size.width = std::max(rect.size.width, minBounds.size.width);
+        rect.size.height = std::max(rect.size.height, minBounds.size.height);
+        
+        CGFloat dx = (rect.size.width - oldSize.width) * 0.5;
+        CGFloat dy = (rect.size.height - oldSize.height) * 0.5;
+        
+        rect.origin.x -= dx;
+        rect.origin.y -= dy;
+        
+        // Dessiner le caractère
+        CGContextSetTextPosition(ctx, x, y);
+        CTLineDraw(lineOfText, ctx);
+        
+        // Calculer et stocker les UVs
+        Font::CharUV& uvs = fontAtlas.charUV[c];
+        uvs.sw = simd_make_float2((x + rect.origin.x) / bitmapW,
+                                  (-(y + rect.origin.y) + bitmapH) / bitmapH);
+        uvs.se = simd_make_float2((x + rect.origin.x + rect.size.width) / bitmapW,
+                                  (-(y + rect.origin.y) + bitmapH) / bitmapH);
+        uvs.ne = simd_make_float2((x + rect.origin.x + rect.size.width) / bitmapW,
+                                  (-(y + rect.origin.y + rect.size.height) + bitmapH) / bitmapH);
+        uvs.nw = simd_make_float2((x + rect.origin.x) / bitmapW,
+                                  (-(y + rect.origin.y + rect.size.height) + bitmapH) / bitmapH);
+        uvs.width = rect.size.width;
+        uvs.height = rect.size.height;
+        
+        // Position suivante
+        x += rect.size.width + margin;
+        if ((x + rect.size.width + margin/2) >= (CGFloat)bitmapW) {
+            x = margin;
+            y += rect.size.height + margin;
+        }
+        
+        CFRelease(lineOfText);
+    }
+    
+    // Créer texture Metal
+    auto textureDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
+    textureDesc->setWidth(bitmapW);
+    textureDesc->setHeight(bitmapH);
+    textureDesc->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+    textureDesc->setTextureType(MTL::TextureType2D);
+    textureDesc->setUsage(MTL::TextureUsageShaderRead);
+    textureDesc->setStorageMode(MTL::StorageModeShared);
+    
+    fontAtlas.texture = NS::TransferPtr(device->newTexture(textureDesc.get()));
+    fontAtlas.texture->setLabel(NS::String::string("UI Font Atlas", NS::UTF8StringEncoding));
+    fontAtlas.texture->replaceRegion(MTL::Region(0, 0, bitmapW, bitmapH), 0, bitmap, bytesPerRow);
+    
+    CFRelease(color);
+    CFRelease(font);
+    CGContextRelease(ctx);
+    CGColorSpaceRelease(colorSpace);
+    delete[] bitmap;
+    return fontAtlas;
+}

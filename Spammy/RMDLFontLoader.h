@@ -55,4 +55,22 @@ struct FiraCode
 
 FiraCode newFiraCode( MTL::Device* pDevice );
 
+
+struct Font
+{
+    struct CharUV
+    {
+        simd::float2 nw;
+        simd::float2 ne;
+        simd::float2 se;
+        simd::float2 sw;
+        float width;
+        float height;
+    };
+    NS::SharedPtr<MTL::Texture> texture;
+    std::unordered_map<char, CharUV> charUV;
+};
+
+Font createFont(MTL::Device* device);
+
 #endif // RMDLFONTLOADER_H

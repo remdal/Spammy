@@ -55,7 +55,7 @@ struct UIConfig
 {
     NS::UInteger                            canvasWidth;
     NS::UInteger                            canvasHeight;
-    FontAtlas                               fontAtlas;
+//    FontAtlas                               fontAtlas;
     NS::SharedPtr<MTL::RenderPipelineState> uiPso;
 };
 
@@ -192,12 +192,6 @@ private:
     snow::RMDLSnow snow;
     VoxelWorld world;
     MetalUIManager ui;
-
-    
-    FontAtlas                           _fontAtlas;
-    UIConfig                            _uiConfig;
-    UIRenderData                        _renderData;
-    
 
 public:
     GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath );

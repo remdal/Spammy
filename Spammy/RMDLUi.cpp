@@ -11,56 +11,25 @@ MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat
     : m_fontSize(16.0f)
     , m_maxVertices(10000)
     , m_maxIndices(30000)
-    , m_mouseX(0)
-    , m_mouseY(0)
-    , m_mousePressed(false)
-    , m_mousePressedLastFrame(false)
 {
     m_vertices.reserve(m_maxVertices);
     m_indices.reserve(m_maxIndices);
 
-    createFontAtlas(device, pixelFormat);
+    fontAtlas = createFont(device);
     createShadersAndPipelineStates(shaderLibrary, pixelFormat, depthPixelFormat, device);
     createBuffers(device);
+
+    auto samplerDesc = NS::TransferPtr(MTL::SamplerDescriptor::alloc()->init());
+    samplerDesc->setMagFilter(MTL::SamplerMinMagFilterLinear);
+    samplerDesc->setMinFilter(MTL::SamplerMinMagFilterLinear);
+    samplerDesc->setRAddressMode(MTL::SamplerAddressModeClampToEdge);
+    samplerDesc->setSAddressMode(MTL::SamplerAddressModeClampToEdge);
+    samplerDesc->setTAddressMode(MTL::SamplerAddressModeClampToEdge);
+    m_sampler = NS::TransferPtr(device->newSamplerState(samplerDesc.get()));
 }
 
 MetalUIManager::~MetalUIManager()
 {
-}
-
-bool MetalUIManager::createFontAtlas(MTL::Device* device, MTL::PixelFormat pixelFormat)
-{
-    const uint32_t atlasWidth = 512;
-    const uint32_t atlasHeight = 512;
-    const uint32_t charWidth = atlasWidth / 16;
-    const uint32_t charHeight = atlasHeight / 6;
-
-    std::vector<uint8_t> atlasData(atlasWidth * atlasHeight * 4, 122); // 0 or 255 noir / blanc
-
-    for (int i = 0; i < 96; i++)
-    {
-        char c = ' ' + i;
-        int gridX = i % 16;
-        int gridY = i / 16;
-
-        FontCharacter& fc = m_fontCharacters[c];
-        fc.uvMin = simd_make_float2(gridX / 16.0f, gridY / 6.0f);
-        fc.uvMax = simd_make_float2((gridX + 1) / 16.0f, (gridY + 1) / 6.0f);
-        fc.advance = charWidth;
-    }
-
-    auto textureDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
-    textureDesc->setWidth(atlasWidth);
-    textureDesc->setHeight(atlasHeight);
-    textureDesc->setPixelFormat(MTL::PixelFormatRGBA8Unorm);//_sRGB);
-    textureDesc->setTextureType(MTL::TextureType2D);
-    textureDesc->setUsage(MTL::TextureUsageShaderRead);
-    textureDesc->setStorageMode(MTL::StorageModeShared);
-
-    m_fontTexture = NS::TransferPtr(device->newTexture(textureDesc.get()));
-    m_fontTexture->replaceRegion(MTL::Region(0, 0, atlasWidth, atlasHeight), 0, atlasData.data(), atlasWidth * 4);
-
-    return true;
 }
 
 bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device)
@@ -68,31 +37,31 @@ bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary,
     const char* shaderSource = R"(
         #include <metal_stdlib>
         using namespace metal;
-        
+
+        struct RMDLUi
+        {
+            float4x4 uiProjectionMatrix;
+        };
+
         struct VertexIn
         {
             float3 position [[attribute(0)]];
             float2 texCoord [[attribute(1)]];
             float4 color [[attribute(2)]];
         };
-        
+
         struct VertexOut
         {
             float4 position [[position]];
             float2 texCoord;
             float4 color;
         };
-        
-        struct Uniforms
-        {
-            float4x4 projection;
-        };
-        
+
         vertex VertexOut vertexShaderTxt(VertexIn in [[stage_in]],
-                                         constant Uniforms& uniforms [[buffer(1)]])
+                                         constant RMDLUi& uniforms [[buffer(1)]])
         {
             VertexOut out;
-            out.position = uniforms.projection * float4(in.position, 1.0);
+            out.position = uniforms.uiProjectionMatrix * float4(in.position, 1.0);
             out.texCoord = in.texCoord;
             out.color = in.color;
             return out;
@@ -132,12 +101,15 @@ bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary,
     vertexDesc->attributes()->object(0)->setBufferIndex(0);
 
     vertexDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
-    vertexDesc->attributes()->object(1)->setOffset(sizeof(float) * 3);
+    vertexDesc->attributes()->object(1)->setOffset(16); //sizeof(float) * 3);
     vertexDesc->attributes()->object(1)->setBufferIndex(0);
 
     vertexDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat4);
-    vertexDesc->attributes()->object(2)->setOffset(sizeof(float) * 5);
+    vertexDesc->attributes()->object(2)->setOffset(24); //sizeof(float) * 5);
     vertexDesc->attributes()->object(2)->setBufferIndex(0);
+    printf("%lu\n", sizeof(simd::float2));
+    printf("%lu\n", sizeof(simd::float3));
+    printf("%lu\n", sizeof(simd::float4));
 
     vertexDesc->layouts()->object(0)->setStride(sizeof(UIVertex));
     vertexDesc->layouts()->object(0)->setStepRate(1);
@@ -173,19 +145,19 @@ bool MetalUIManager::createBuffers(MTL::Device* device)
 
     m_indexBuffer = NS::TransferPtr(device->newBuffer(m_maxIndices * sizeof(uint16_t), MTL::ResourceStorageModeShared));
 
+    m_frameDataBuffer = NS::TransferPtr(device->newBuffer(sizeof(uiMatrix), MTL::ResourceStorageModeShared));
+
     return m_vertexBuffer && m_indexBuffer;
 }
 
 void MetalUIManager::beginFrame(MTL::RenderCommandEncoder* encoder,
                                 NS::UInteger width, NS::UInteger height)
 {
-//    m_currentEncoder = encoder;
-    m_projectionMatrix = math::makeOrtho(0, (float)width, (float)height, 0, -1, 1);
+    uiMatrix.uiProjectionMatrix = math::makeOrtho(0, (float)width, (float)height, 0, -1, 1);
 
     m_vertices.clear();
     m_indices.clear();
-
-    m_mousePressedLastFrame = m_mousePressed;
+    m_batches.clear();
 }
 
 void MetalUIManager::endFrame(MTL::RenderCommandEncoder* encoder)
@@ -193,21 +165,42 @@ void MetalUIManager::endFrame(MTL::RenderCommandEncoder* encoder)
     if (m_vertices.empty())
         return;
 
-    ft_memcpy(m_vertexBuffer->contents(), m_vertices.data(),
-           m_vertices.size() * sizeof(UIVertex));
-    ft_memcpy(m_indexBuffer->contents(), m_indices.data(),
-           m_indices.size() * sizeof(uint16_t));
-    
-    encoder->setVertexBuffer(m_vertexBuffer.get(), 0, 0);
-    encoder->setVertexBytes(&m_projectionMatrix, sizeof(simd::float4x4), 1);
-    encoder->setRenderPipelineState(m_shapePipeline.get());
-//    encoder->setRenderPipelineState(m_textPipeline.get());
-    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-                                   m_indices.size(),
-                                   MTL::IndexTypeUInt16,
-                                   m_indexBuffer.get(), 0);
+    ft_memcpy(m_vertexBuffer->contents(), m_vertices.data(), m_vertices.size() * sizeof(UIVertex));
+    ft_memcpy(m_indexBuffer->contents(), m_indices.data(), m_indices.size() * sizeof(uint16_t));
+    ft_memcpy(m_frameDataBuffer->contents(), &uiMatrix, sizeof(uiMatrix));
 
-//    m_currentEncoder = nullptr;
+    encoder->setVertexBuffer(m_vertexBuffer.get(), 0, 0);
+    encoder->setVertexBuffer(m_frameDataBuffer.get(), 0, 1);
+
+    for (size_t i = 0; i < m_batches.size(); i++)
+    {
+        const RenderBatch& batch = m_batches[i];
+
+        if (batch.type == BatchType::Text)
+        {
+            encoder->setRenderPipelineState(m_textPipeline.get());
+            encoder->setFragmentTexture(fontAtlas.texture.get(), 0);
+            encoder->setFragmentSamplerState(m_sampler.get(), 0);
+        } else {
+            encoder->setRenderPipelineState(m_shapePipeline.get());
+        }
+        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, batch.indexCount,
+                                       MTL::IndexTypeUInt16, m_indexBuffer.get(),
+                                       batch.startIndex * sizeof(uint16_t));
+    }
+//    ft_memcpy(m_vertexBuffer->contents(), m_vertices.data(),
+//           m_vertices.size() * sizeof(UIVertex));
+//    ft_memcpy(m_indexBuffer->contents(), m_indices.data(),
+//           m_indices.size() * sizeof(uint16_t));
+//
+//    encoder->setVertexBuffer(m_vertexBuffer.get(), 0, 0);
+//    encoder->setVertexBytes(&m_projectionMatrix, sizeof(simd::float4x4), 1);
+//    encoder->setRenderPipelineState(m_shapePipeline.get());
+////    encoder->setRenderPipelineState(m_textPipeline.get());
+//    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
+//                                   m_indices.size(),
+//                                   MTL::IndexTypeUInt16,
+//                                   m_indexBuffer.get(), 0);
 }
 
 void MetalUIManager::drawText(const std::string& text, float x, float y, float scale, simd::float4 color)
@@ -216,20 +209,22 @@ void MetalUIManager::drawText(const std::string& text, float x, float y, float s
     
     for (char c : text)
     {
-        if (m_fontCharacters.find(c) == m_fontCharacters.end()) continue;
-
-        const FontCharacter& fc = m_fontCharacters[c];
-        float w = fc.advance * scale;
-        float h = m_fontSize * scale;
+        auto it = fontAtlas.charUV.find(c);
+        if (it == fontAtlas.charUV.end())
+            continue;
+        
+        const Font::CharUV& uv = it->second;
+        float w = uv.width * scale;
+        float h = uv.height * scale;
 
         UIVertex vertices[4] = {
-            {{currentX, y, 0}, fc.uvMin, color},
-            {{currentX + w, y, 0}, {fc.uvMax.x, fc.uvMin.y}, color},
-            {{currentX + w, y + h, 0}, fc.uvMax, color},
-            {{currentX, y + h, 0}, {fc.uvMin.x, fc.uvMax.y}, color}
+            {{currentX, y, 0}, uv.nw, color},
+            {{currentX + w, y, 0}, uv.ne, color},
+            {{currentX + w, y + h, 0}, uv.se, color},
+            {{currentX, y + h, 0}, uv.sw, color}
         };
 
-        addQuad(vertices);
+        addQuad(vertices, BatchType::Text);
         currentX += w;
     }
 }
@@ -243,31 +238,14 @@ void MetalUIManager::drawRect(const UIRect& rect, simd::float4 color, bool fille
         {{rect.x, rect.y + rect.height, 0}, {0, 1}, color}
     };
 
-    addQuad(vertices);
+    addQuad(vertices, BatchType::Shape);
 }
 
-bool MetalUIManager::drawButton(const std::string& label, const UIRect& rect, bool* hovered)
+void MetalUIManager::addQuad(const UIVertex* vertices, BatchType type)
 {
-    bool isHovered = rect.contains(m_mouseX, m_mouseY);
-    if (hovered) *hovered = isHovered;
+    if (m_batches.empty() || m_batches.back().type != type)
+            startNewBatch(type);
 
-    simd::float4 bgColor = isHovered ?
-        simd_make_float4(0.3f, 0.5f, 0.8f, 1.0f) :
-        simd_make_float4(0.2f, 0.4f, 0.7f, 1.0f);
-
-    drawRect(rect, bgColor, true);
-
-    // Texte centré
-    float textX = rect.x + (rect.width - label.length() * 8) * 0.5f;
-    float textY = rect.y + (rect.height - 16) * 0.5f;
-    drawText(label, textX, textY, 1.0f, {1, 1, 1, 1});
-    
-    bool clicked = isHovered && m_mousePressed && !m_mousePressedLastFrame;
-    return clicked;
-}
-
-void MetalUIManager::addQuad(const UIVertex* vertices)
-{
     uint16_t baseIndex = m_vertices.size();
     
     m_vertices.insert(m_vertices.end(), vertices, vertices + 4);
@@ -278,6 +256,16 @@ void MetalUIManager::addQuad(const UIVertex* vertices)
     };
     
     m_indices.insert(m_indices.end(), indices, indices + 6);
+    m_batches.back().indexCount += 6;
+}
+
+void MetalUIManager::startNewBatch(BatchType type)
+{
+    RenderBatch batch;
+    batch.type = type;
+    batch.startIndex = m_indices.size();
+    batch.indexCount = 0;
+    m_batches.push_back(batch);
 }
 
 float MetalUIManager::toNDCX(float x, float width) const
