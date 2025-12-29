@@ -8,7 +8,7 @@
 #include "RMDLUi.hpp"
 
 MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger height, MTL::Library* shaderLibrary)
-    : m_fontSize(16.0f)
+    : m_fontSize(8.0f)
     , m_maxVertices(10000)
     , m_maxIndices(30000)
 {

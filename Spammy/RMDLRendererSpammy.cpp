@@ -218,7 +218,7 @@ void GameCoordinator::draw( MTK::View* view )
     world.render(enc, cameraUniforms.viewProjectionMatrix);
     
     ui.beginFrame(enc, viewport.width, viewport.height);
-    ui.drawText("Hello 89 ! Make sense", 100, 100);
+    ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);
     ui.endFrame(enc);
 
     enc->endEncoding();
