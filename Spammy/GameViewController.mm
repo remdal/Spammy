@@ -172,7 +172,7 @@
 
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size
 {
-    _pGameCoordinator->resizeMtkView(size.width, size.height);
+    _pGameCoordinator->resizeMtkViewAndUpdateViewportWindow(size.width, size.height);
 }
 
 @end

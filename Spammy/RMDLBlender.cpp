@@ -299,7 +299,7 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, const simd::f
     pEncoder->setFragmentTexture(_pDiffuseTexture, 0);
     pEncoder->setFragmentTexture(_pNormalTexture, 1);
     pEncoder->setFragmentTexture(_pRoughnessTexture, 2);
-//    pEncoder->setFragmentTexture(_pMetallicTexture, 3);
+    pEncoder->setFragmentTexture(_pMetallicTexture, 3);
     pEncoder->setFragmentSamplerState(_pSampler, 0);
     pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, _pIndices.size(), MTL::IndexTypeUInt32, _pIndexBufferBlender, 0);
 }

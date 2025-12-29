@@ -8,8 +8,7 @@
 #include "RMDLUi.hpp"
 
 MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger height, MTL::Library* shaderLibrary)
-    : m_fontSize(8.0f)
-    , m_maxVertices(10000)
+    : m_maxVertices(10000)
     , m_maxIndices(30000)
 {
     m_vertices.reserve(m_maxVertices);
@@ -26,13 +25,15 @@ MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat
     samplerDesc->setSAddressMode(MTL::SamplerAddressModeClampToEdge);
     samplerDesc->setTAddressMode(MTL::SamplerAddressModeClampToEdge);
     m_sampler = NS::TransferPtr(device->newSamplerState(samplerDesc.get()));
+
+    uiMatrix.uiProjectionMatrix = math::makeOrtho(0, (float)width, (float)height, 0, -1, 1);
 }
 
 MetalUIManager::~MetalUIManager()
 {
 }
 
-bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device)
+void MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device)
 {
     const char* shaderSource = R"(
         #include <metal_stdlib>
@@ -83,12 +84,6 @@ bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary,
     
     NS::Error* error = nullptr;
     MTL::Library* library = device->newLibrary(NS::String::string(shaderSource, NS::UTF8StringEncoding), nullptr, &error);
-    if (!library)
-    {
-        __builtin_printf("%s", error->localizedDescription()->utf8String());
-        printf("Failed to create shader library intern\n");
-        return false;
-    }
 
     auto vertexFunc = NS::TransferPtr(library->newFunction(NS::String::string("vertexShaderTxt", NS::UTF8StringEncoding)));
     auto fragFuncText = NS::TransferPtr(library->newFunction(NS::String::string("fragmentShaderText", NS::UTF8StringEncoding)));
@@ -136,25 +131,17 @@ bool MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary,
     }
 
     shaderLibrary = library;
-    return m_textPipeline && m_shapePipeline;
 }
 
-bool MetalUIManager::createBuffers(MTL::Device* device)
+void MetalUIManager::createBuffers(MTL::Device* device)
 {
     m_vertexBuffer = NS::TransferPtr(device->newBuffer(m_maxVertices * sizeof(UIVertex), MTL::ResourceStorageModeShared));
-
     m_indexBuffer = NS::TransferPtr(device->newBuffer(m_maxIndices * sizeof(uint16_t), MTL::ResourceStorageModeShared));
-
     m_frameDataBuffer = NS::TransferPtr(device->newBuffer(sizeof(uiMatrix), MTL::ResourceStorageModeShared));
-
-    return m_vertexBuffer && m_indexBuffer;
 }
 
-void MetalUIManager::beginFrame(MTL::RenderCommandEncoder* encoder,
-                                NS::UInteger width, NS::UInteger height)
+void MetalUIManager::beginFrame(NS::UInteger width, NS::UInteger height)
 {
-    uiMatrix.uiProjectionMatrix = math::makeOrtho(0, (float)width, (float)height, 0, -1, 1);
-
     m_vertices.clear();
     m_indices.clear();
     m_batches.clear();
@@ -181,32 +168,16 @@ void MetalUIManager::endFrame(MTL::RenderCommandEncoder* encoder)
             encoder->setRenderPipelineState(m_textPipeline.get());
             encoder->setFragmentTexture(fontAtlas.texture.get(), 0);
             encoder->setFragmentSamplerState(m_sampler.get(), 0);
-        } else {
-            encoder->setRenderPipelineState(m_shapePipeline.get());
         }
-        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, batch.indexCount,
-                                       MTL::IndexTypeUInt16, m_indexBuffer.get(),
-                                       batch.startIndex * sizeof(uint16_t));
+        else
+            encoder->setRenderPipelineState(m_shapePipeline.get());
+        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, batch.indexCount, MTL::IndexTypeUInt16, m_indexBuffer.get(), batch.startIndex * sizeof(uint16_t));
     }
-//    ft_memcpy(m_vertexBuffer->contents(), m_vertices.data(),
-//           m_vertices.size() * sizeof(UIVertex));
-//    ft_memcpy(m_indexBuffer->contents(), m_indices.data(),
-//           m_indices.size() * sizeof(uint16_t));
-//
-//    encoder->setVertexBuffer(m_vertexBuffer.get(), 0, 0);
-//    encoder->setVertexBytes(&m_projectionMatrix, sizeof(simd::float4x4), 1);
-//    encoder->setRenderPipelineState(m_shapePipeline.get());
-////    encoder->setRenderPipelineState(m_textPipeline.get());
-//    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-//                                   m_indices.size(),
-//                                   MTL::IndexTypeUInt16,
-//                                   m_indexBuffer.get(), 0);
 }
 
 void MetalUIManager::drawText(const std::string& text, float x, float y, float scale, simd::float4 color)
 {
     float currentX = x;
-    
     for (char c : text)
     {
         auto it = fontAtlas.charUV.find(c);
@@ -237,7 +208,6 @@ void MetalUIManager::drawRect(const UIRect& rect, simd::float4 color, bool fille
         {{rect.x + rect.width, rect.y + rect.height, 0}, {1, 1}, color},
         {{rect.x, rect.y + rect.height, 0}, {0, 1}, color}
     };
-
     addQuad(vertices, BatchType::Shape);
 }
 
@@ -266,14 +236,4 @@ void MetalUIManager::startNewBatch(BatchType type)
     batch.startIndex = m_indices.size();
     batch.indexCount = 0;
     m_batches.push_back(batch);
-}
-
-float MetalUIManager::toNDCX(float x, float width) const
-{
-    return (x / width) * 2.0f - 1.0f;
-}
-
-float MetalUIManager::toNDCY(float y, float height) const
-{
-    return 1.0f - (y / height) * 2.0f;
 }

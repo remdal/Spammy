@@ -48,16 +48,10 @@ struct UIRect
     }
 };
 
-struct FontCharacter
-{
-    simd::float2 uvMin;
-    simd::float2 uvMax;
-    float advance;
-};
-
 enum class BatchType { Shape, Text };
 
-struct RenderBatch {
+struct RenderBatch
+{
     BatchType type;
     size_t startIndex;
     size_t indexCount;
@@ -69,7 +63,7 @@ public:
     MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, MTL::Library* shaderLibrary);
     ~MetalUIManager();
     
-    void beginFrame(MTL::RenderCommandEncoder* encoder, NS::UInteger width, NS::UInteger height);
+    void beginFrame(NS::UInteger width, NS::UInteger height);
     void endFrame(MTL::RenderCommandEncoder* encoder);
     
     void drawText(const std::string& text, float x, float y, float scale = 1.0f, simd::float4 color = {1, 1, 1, 1});
@@ -83,23 +77,15 @@ public:
     void drawProgressBar(const UIRect& rect, float progress, simd::float4 bgColor, simd::float4 fgColor);
     
 private:
-    bool createFontAtlas(MTL::Device* device, MTL::PixelFormat pixelFormat);
-    bool createShadersAndPipelineStates(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device);
-    bool createBuffers(MTL::Device* device);
+    void createShadersAndPipelineStates(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device);
+    void createBuffers(MTL::Device* device);
 
     void startNewBatch(BatchType type);
     void addQuad(const UIVertex* vertices, BatchType type);
 
-    float toNDCX(float x, float width) const;
-    float toNDCY(float y, float height) const;
-
     NS::SharedPtr<MTL::RenderPipelineState> m_textPipeline;
     NS::SharedPtr<MTL::RenderPipelineState> m_shapePipeline;
     NS::SharedPtr<MTL::DepthStencilState> m_depthState;
-
-    NS::SharedPtr<MTL::Texture> m_fontTexture;
-    std::unordered_map<char, FontCharacter> m_fontCharacters;
-    float m_fontSize;
 
     std::vector<UIVertex> m_vertices;
     std::vector<uint16_t> m_indices;

@@ -105,11 +105,11 @@ struct RenderData
 class RMDLRendererSpammy : NonCopyable
 {
 public:
-    RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& assetSearchPath);
+    RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath);
     ~RMDLRendererSpammy();
 
-    void loadPngAndFont(const std::string& assetSearchPath);
-    void loadSoundMp3(const std::string& assetSearchPath, PhaseAudio* pAudioEngine);
+    void loadPngAndFont(const std::string& resourcePath);
+    void loadSoundMp3(const std::string& resourcePath, PhaseAudio* pAudioEngine);
     void makeArgumentTable();
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
@@ -161,7 +161,29 @@ private:
 
     
 
-class GameCoordinator {
+class GameCoordinator : NonCopyable
+{
+public:
+    GameCoordinator(MTL::Device* device, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath);
+    ~GameCoordinator();
+    
+    void setViewSize(int width, int height);
+    void setViewportWindow(NS::UInteger width, NS::UInteger height);
+    void makeArgumentTable();
+    void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
+    void handleMouseMove(float x, float y);
+    void handleMouseDown(bool rightClick);
+    void handleMouseUp();
+    void handleScroll(float deltaY);
+    void handleKeyPress(int key);
+    void playSoundTestY();
+    void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
+    void loadPngAndFont(const std::string& resourcePath);
+    void moveCamera(simd::float3 translation);
+    void rotateCamera(float deltaYaw, float deltaPitch);
+    void draw(MTK::View* view);
+    void resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height);
+
 private:
     MTL::Device* m_device;
     MTL::CommandQueue* cmdQueue;
@@ -169,7 +191,9 @@ private:
     MTL::Buffer* vertexBuffer;
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
+    MTL::Buffer*                        m_viewportSizeBuffer;
     MTL::Library*                       m_shaderLibrary;
+    MTL::Viewport                       m_viewport;
 
     simd::float2 cursorPos;
     float cameraZoom;
@@ -177,38 +201,23 @@ private:
     simd::float2 dragStart;
     int viewWidth;
     int viewHeight;
+    simd_uint2                          m_viewportSize;
     float                       _rotationAngle;
 
-    RMDLCamera _camera;
+    uint64_t                            m_frame;
+    RMDLCamera                          m_camera;
     MTL::PixelFormat                    m_pixelFormat;
     MTL::PixelFormat                    m_depthPixelFormat;
     MTL::DepthStencilState*             _pDepthStencilState;
     PhaseAudio*                             pAudioEngine;
     std::unique_ptr<PhaseAudio> _pAudioEngine;
-    
+    RMDLCameraUniforms m_cameraUniforms;
     bool DoTheImportThing(const std::string& pFile);
     RMDLBlender blender;
     sky::RMDLSkybox skybox;
     snow::RMDLSnow snow;
     VoxelWorld world;
     MetalUIManager ui;
-
-public:
-    GameCoordinator( MTL::Device* dev, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath );
-    ~GameCoordinator();
-    
-    void setViewSize(int width, int height);
-    void handleMouseMove(float x, float y);
-    void handleMouseDown(bool rightClick);
-    void handleMouseUp();
-    void handleScroll(float deltaY);
-    void handleKeyPress(int key);
-    void playSoundTestY();
-    void loadGameSounds(const std::string& resourcePath, PhaseAudio* pAudioEngine);
-    void moveCamera(simd::float3 translation);
-    void rotateCamera(float deltaYaw, float deltaPitch);
-    void draw(MTK::View* view);
-    void resizeMtkView( NS::UInteger width, NS::UInteger height );
 };
 
 //class GameCoordinator
