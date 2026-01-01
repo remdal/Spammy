@@ -34,6 +34,7 @@
 #include "RMDLUi.hpp"
 #include "VoronoiVoxel4D.hpp"
 #include "Utils/NonCopyable.h"
+#include "RMDLPerlinXVoronoiMap.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -109,7 +110,7 @@ public:
     ~RMDLRendererSpammy();
 
     void loadPngAndFont(const std::string& resourcePath);
-    void loadSoundMp3(const std::string& resourcePath, PhaseAudio* pAudioEngine);
+    void loadSoundMp3(const std::string& resourcePath, PhaseAudio* audioEngine);
     void makeArgumentTable();
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
@@ -171,11 +172,13 @@ public:
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
     void makeArgumentTable();
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
+
     void handleMouseMove(float x, float y);
     void handleMouseDown(bool rightClick);
     void handleMouseUp();
     void handleScroll(float deltaY);
     void handleKeyPress(int key);
+
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
     void loadPngAndFont(const std::string& resourcePath);
@@ -185,39 +188,37 @@ public:
     void resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height);
 
 private:
-    MTL::Device* m_device;
-    MTL::CommandQueue* cmdQueue;
-    MTL::RenderPipelineState* pipelineState;
+    MTL::Device*                m_device;
+    MTL::CommandQueue*          m_commandQueue;
+    MTL::RenderPipelineState*   m_renderPipelineState;
     MTL::Buffer* vertexBuffer;
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
-    MTL::Buffer*                        m_viewportSizeBuffer;
-    MTL::Library*                       m_shaderLibrary;
-    MTL::Viewport                       m_viewport;
+    MTL::Buffer*                m_viewportSizeBuffer;
+    MTL::Library*               m_shaderLibrary;
+    MTL::Viewport               m_viewport;
 
     simd::float2 cursorPos;
-    float cameraZoom;
-    bool isDragging;
-    simd::float2 dragStart;
-    int viewWidth;
-    int viewHeight;
     simd_uint2                          m_viewportSize;
     float                       _rotationAngle;
 
     uint64_t                            m_frame;
     RMDLCamera                          m_camera;
+    RMDLCamera                          m_cameraPNJ;
     MTL::PixelFormat                    m_pixelFormat;
     MTL::PixelFormat                    m_depthPixelFormat;
-    MTL::DepthStencilState*             _pDepthStencilState;
+    MTL::DepthStencilState*             m_depthStencilState;
     PhaseAudio*                             pAudioEngine;
     std::unique_ptr<PhaseAudio> _pAudioEngine;
-    RMDLCameraUniforms m_cameraUniforms;
+    RMDLCameraUniforms                  m_cameraUniforms;
     bool DoTheImportThing(const std::string& pFile);
     RMDLBlender blender;
     sky::RMDLSkybox skybox;
     snow::RMDLSnow snow;
     VoxelWorld world;
     MetalUIManager ui;
+    TerrainGenerator map;
+    MTL::Texture* m_terrainTexture;
 };
 
 //class GameCoordinator
