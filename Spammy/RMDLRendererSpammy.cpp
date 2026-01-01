@@ -122,8 +122,8 @@ map(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibra
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
-    map.generate(m_commandQueue, 80.0f, 6, 0.5f, 2.0f, 89, 60, width, height);
-    map.renderToTexture(m_commandQueue, m_terrainTexture, TerrainGenerator::RenderMode::Heightmap, width, height);
+//    map.generate(m_commandQueue, 80.0f, 6, 0.5f, 2.0f, 89, 60, width, height);
+//    map.renderToTexture(m_commandQueue, m_terrainTexture, TerrainGenerator::RenderMode::Heightmap, width, height);
 
     auto heightMap = map.getHeightMap(width, height);
     TerrainBlocks block = map.getBlock(128, 128, width, height);
