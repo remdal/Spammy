@@ -7,6 +7,35 @@
 
 #include "RMDLUi.hpp"
 
+const simd_float4 red = { 1.0, 0.0, 0.0, 1.0 };
+const simd_float4 yellow = { 1.0, 1.0, 0.0, 1.0 };
+
+void drawRectangle(RectangleUIData* rectangleData)
+{
+    simd_float2 position0 = { 0.0, 1.0 };
+    simd_float2 position1 = { 0.0, 0.0 };
+    simd_float2 position2 = { 1.0, 1.0 };
+    simd_float2 position3 = { 1.0, 0.0 };
+
+    rectangleData->vertex0.color = red;
+    rectangleData->vertex0.position = position0;
+
+    rectangleData->vertex1.color = red;
+    rectangleData->vertex1.position = position1;
+
+    rectangleData->vertex2.color = red;
+    rectangleData->vertex2.position = position2;
+
+    rectangleData->vertex3.color = yellow;
+    rectangleData->vertex3.position = position2;
+
+    rectangleData->vertex4.color = yellow;
+    rectangleData->vertex4.position = position1;
+
+    rectangleData->vertex5.color = yellow;
+    rectangleData->vertex5.position = position3;
+}
+
 MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger height, MTL::Library* shaderLibrary)
     : m_maxVertices(10000)
     , m_maxIndices(30000)
@@ -27,10 +56,56 @@ MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat
     m_sampler = NS::TransferPtr(device->newSamplerState(samplerDesc.get()));
 
     uiMatrix.uiProjectionMatrix = math::makeOrtho(0, (float)width, (float)height, 0, -1, 1);
+
+    RectangleUIData rectangleuidata;
+    m_rectangleDataBuffer = device->newBuffer(sizeof(RectangleUIData), MTL::ResourceStorageModeShared);
+    drawRectangle(&rectangleuidata);
+    m_viewportSize.x = 1000;
+    m_viewportSize.y = 2000;
+    m_viewportSizeBuffer = device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
+    ft_memcpy(m_viewportSizeBuffer->contents(), &m_viewportSize, sizeof(m_viewportSize));
+    NS::Error* pError = nullptr;
+    MTL4::ArgumentTableDescriptor* argumentTableDescriptor = MTL4::ArgumentTableDescriptor::alloc()->init();
+    argumentTableDescriptor->setMaxBufferBindCount(2);
+    argumentTableDescriptor->setLabel(NS::String::string("shader descriptor rectangle UI", NS::ASCIIStringEncoding));
+    m_argumentTable = device->newArgumentTable(argumentTableDescriptor, &pError);
+    argumentTableDescriptor->release();
+    MTL::ResidencySetDescriptor* residencySetDescriptor = MTL::ResidencySetDescriptor::alloc()->init();
+    residencySetDescriptor->setLabel(AAPLSTR("residency set descriptor rectangle UI"));
+    m_residencySet = device->newResidencySet(residencySetDescriptor, &pError);
+    m_residencySet->requestResidency();
+    m_residencySet->addAllocation(m_rectangleDataBuffer);
+    m_residencySet->addAllocation(m_viewportSizeBuffer);
+    m_residencySet->commit();
+//    _pCommandQueue->addResidencySet(m_residencySet);
+    residencySetDescriptor->release();
+    MTL4::Compiler* compiler = device->newCompiler(MTL4::CompilerDescriptor::alloc()->init(), &pError);
+    MTL4::RenderPipelineDescriptor* renderPipelineDescriptor = MTL4::RenderPipelineDescriptor::alloc()->init();
+    renderPipelineDescriptor->setLabel(NS::String::string("Metal 4 render pipeline UI", NS::ASCIIStringEncoding));
+    renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+    MTL4::LibraryFunctionDescriptor* vertexFunction = MTL4::LibraryFunctionDescriptor::alloc()->init();
+    vertexFunction->setName(MTLSTR("vertexShaderRectangle"));
+    vertexFunction->setLibrary(shaderLibrary);
+    MTL4::LibraryFunctionDescriptor* fragmentFunction = MTL4::LibraryFunctionDescriptor::alloc()->init();
+    fragmentFunction->setName( NS::String::string( "fragmentShaderRectangle", NS::ASCIIStringEncoding ) );
+    fragmentFunction->setLibrary(shaderLibrary);
+    renderPipelineDescriptor->setVertexFunctionDescriptor(vertexFunction);
+    renderPipelineDescriptor->setFragmentFunctionDescriptor(fragmentFunction);
+    MTL4::CompilerTaskOptions* compilerTaskOptions = MTL4::CompilerTaskOptions::alloc()->init();
+    m_psoUi = compiler->newRenderPipelineState(renderPipelineDescriptor, nullptr, &pError);
+    compilerTaskOptions->release();
+    fragmentFunction->release();
+    vertexFunction->release();
+    renderPipelineDescriptor->release();
+    compiler->release();
+    ft_memcpy(m_rectangleDataBuffer->contents(), &rectangleuidata, sizeof(RectangleUIData));
+    m_argumentTable->setAddress(m_rectangleDataBuffer->gpuAddress(), 0);
+    m_argumentTable->setAddress(m_viewportSizeBuffer->gpuAddress(), 1);
 }
 
 MetalUIManager::~MetalUIManager()
 {
+    m_rectangleDataBuffer->release();
 }
 
 void MetalUIManager::createShadersAndPipelineStates(MTL::Library *shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device)

@@ -139,4 +139,10 @@ struct RMDLSnowUniforms {
     float _pad;
 };
 
+struct VertexRectangle
+{
+    simd::float2 position;
+    simd::float4 color;
+};
+
 #endif /* RMDLMAINRENDERER_SHARED_H */

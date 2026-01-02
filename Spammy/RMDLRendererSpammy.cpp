@@ -233,6 +233,7 @@ void GameCoordinator::draw(MTK::View* view)
     ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);
     ui.endFrame(renderCommandEncoder);
 
+
     renderCommandEncoder->endEncoding();
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();

@@ -22,12 +22,23 @@
 #include "RMDLMathUtils.hpp"
 #include "RMDLUtils.hpp"
 #include "RMDLFontLoader.h"
+#include "RMDLUtilities.h"
 
 #include "RMDLMainRenderer_shared.h"
 
 struct RMDLUi
 {
     simd::float4x4 uiProjectionMatrix;
+};
+
+struct RectangleUIData
+{
+    VertexRectangle vertex0;
+    VertexRectangle vertex1;
+    VertexRectangle vertex2;
+    VertexRectangle vertex3;
+    VertexRectangle vertex4;
+    VertexRectangle vertex5;
 };
 
 struct UIVertex
@@ -99,6 +110,13 @@ private:
     Font fontAtlas;
     NS::SharedPtr<MTL::SamplerState> m_sampler;
     std::vector<RenderBatch> m_batches;
+
+    MTL::Buffer*                        m_rectangleDataBuffer;
+    MTL4::ArgumentTable*                m_argumentTable;
+    MTL::ResidencySet*                  m_residencySet;
+    MTL::Buffer*                        m_viewportSizeBuffer;
+    simd_uint2                          m_viewportSize;
+    MTL::RenderPipelineState*           m_psoUi;
 };
 
 #endif /* RMDLUi_hpp */
