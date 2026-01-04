@@ -128,6 +128,7 @@
 - (void)createView
 {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    _mtkView.preferredFramesPerSecond = 120;
     _mtkView = [[MTKView alloc] initWithFrame:_window.contentLayoutRect device:device];
     _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float;

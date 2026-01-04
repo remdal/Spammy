@@ -145,4 +145,19 @@ struct VertexRectangle
     simd::float4 color;
 };
 
+#pragma mark PNJ
+
+struct VertexPNJ
+{
+    simd::float3 position;
+    simd::float3 normal;
+    simd::float2 texCoord;
+    simd::float3 tangent;
+    simd::float3 bitangent;
+    simd::float4 boneWeights;
+    simd::uint4 boneIndices;
+};
+
+
+
 #endif /* RMDLMAINRENDERER_SHARED_H */
