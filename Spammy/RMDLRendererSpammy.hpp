@@ -211,7 +211,7 @@ private:
     PhaseAudio*                             pAudioEngine;
     std::unique_ptr<PhaseAudio> _pAudioEngine;
     RMDLCameraUniforms                  m_cameraUniforms;
-    bool DoTheImportThing(const std::string& pFile);
+    bool DoTheImportThing(const std::string& resourcePath);
     RMDLBlender blender;
     sky::RMDLSkybox skybox;
     snow::RMDLSnow snow;
