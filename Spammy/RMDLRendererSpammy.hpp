@@ -35,6 +35,7 @@
 #include "VoronoiVoxel4D.hpp"
 #include "Utils/NonCopyable.h"
 #include "RMDLPerlinXVoronoiMap.hpp"
+#include "RMDLColors.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -219,6 +220,9 @@ private:
     MetalUIManager ui;
     TerrainGenerator map;
     MTL::Texture* m_terrainTexture;
+    VibrantColorRenderer    colorsFlash;
+    MTL::TextureDescriptor*             m_depthTextureDescriptor;
+    MTL::Texture*                       m_depthTexture;
 };
 
 //class GameCoordinator

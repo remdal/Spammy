@@ -104,7 +104,8 @@ skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 snow(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
-map(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary)
+map(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
+colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
 {
     m_viewportSize.x = (float)width;
     m_viewportSize.x = (float)height;
@@ -233,6 +234,7 @@ void GameCoordinator::draw(MTK::View* view)
     ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);
     ui.endFrame(renderCommandEncoder);
 
+//    colorsFlash.renderPostProcess(renderCommandEncoder);
     
 
     renderCommandEncoder->endEncoding();
@@ -244,6 +246,11 @@ void GameCoordinator::draw(MTK::View* view)
 void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
 {
     setViewportWindow(width, height);
+
+    m_depthTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
+    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);
+    m_depthTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
+    m_depthTexture = m_device->newTexture(m_depthTextureDescriptor);
 }
 
 void GameCoordinator::setViewportWindow(NS::UInteger width, NS::UInteger height)

@@ -8,6 +8,12 @@
 #include <metal_stdlib>
 using namespace metal;
 
+struct VertexIn
+{
+    float2 position [[attribute(0)]];
+    float2 texCoord [[attribute(1)]];
+};
+
 struct VertexOut
 {
     float4 position [[position]];
@@ -30,6 +36,14 @@ vertex VertexOut vertexShader(uint vid [[vertex_id]])
     VertexOut out;
     out.position = float4(positions[vid], 0, 1);
     out.texCoord = texCoords[vid];
+    return out;
+}
+
+vertex VertexOut postProcessVertex(VertexIn in [[stage_in]])
+{
+    VertexOut out;
+    out.position = float4(in.position, 0.0, 1.0);
+    out.texCoord = in.texCoord;
     return out;
 }
 
@@ -74,9 +88,10 @@ float3 ACESFilm(float3 x)
 fragment float4 postProcessFragment(VertexOut in [[stage_in]],
                                     texture2d<float> hdrTexture [[texture(0)]],
                                     texture2d<float> bloomTexture [[texture(1)]],
-                                    constant ColorGradingUniforms& uniforms [[buffer(0)]])
+                                    constant ColorGradingUniforms& uniforms [[buffer(0)]],
+                                    sampler texSampler [[sampler(0)]])
 {
-    constexpr sampler texSampler(mag_filter::linear, min_filter::linear);
+//    constexpr sampler texSampler(mag_filter::linear, min_filter::linear);
     
     // Échantillonner la texture HDR
     float3 hdrColor = hdrTexture.sample(texSampler, in.texCoord).rgb;
@@ -107,9 +122,10 @@ fragment float4 postProcessFragment(VertexOut in [[stage_in]],
 
 // Shader simple pour extraire les zones lumineuses (bloom)
 fragment float4 bloomExtractFragment(VertexOut in [[stage_in]],
-                                     texture2d<float> sourceTexture [[texture(0)]])
+                                     texture2d<float> sourceTexture [[texture(0)]],
+                                     sampler texSampler [[sampler(0)]])
 {
-    constexpr sampler texSampler(mag_filter::linear, min_filter::linear);
+//    constexpr sampler texSampler(mag_filter::linear, min_filter::linear);
     float3 color = sourceTexture.sample(texSampler, in.texCoord).rgb;
     
     // Extraire seulement les couleurs très lumineuses
