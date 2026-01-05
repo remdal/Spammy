@@ -34,7 +34,6 @@
 #include "RMDLUi.hpp"
 #include "VoronoiVoxel4D.hpp"
 #include "Utils/NonCopyable.h"
-#include "RMDLPerlinXVoronoiMap.hpp"
 #include "RMDLColors.hpp"
 
 #define kMaxBuffersInFlight 3
@@ -53,12 +52,65 @@ struct TriangleData
     VertexData vertex2;
 };
 
-struct UIConfig
+class GameCoordinator : NonCopyable
 {
-    NS::UInteger                            canvasWidth;
-    NS::UInteger                            canvasHeight;
-//    FontAtlas                               fontAtlas;
-    NS::SharedPtr<MTL::RenderPipelineState> uiPso;
+public:
+    GameCoordinator(MTL::Device* device, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath);
+    ~GameCoordinator();
+    
+    void setViewSize(int width, int height);
+    void setViewportWindow(NS::UInteger width, NS::UInteger height);
+    void makeArgumentTable();
+    void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
+
+    void handleMouseMove(float x, float y);
+    void handleMouseDown(bool rightClick);
+    void handleMouseUp();
+    void handleScroll(float deltaY);
+    void handleKeyPress(int key);
+
+    void playSoundTestY();
+    void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
+    void loadPngAndFont(const std::string& resourcePath);
+    void moveCamera(simd::float3 translation);
+    void rotateCamera(float deltaYaw, float deltaPitch);
+    void draw(MTK::View* view);
+    void resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height);
+
+private:
+    MTL::Device*                m_device;
+    MTL::CommandQueue*          m_commandQueue;
+    MTL::RenderPipelineState*   m_renderPipelineState;
+    MTL::Buffer* vertexBuffer;
+    MTL::Buffer* indexBuffer;
+    MTL::Buffer* transformBuffer;
+    MTL::Buffer*                m_viewportSizeBuffer;
+    MTL::Library*               m_shaderLibrary;
+    MTL::Viewport               m_viewport;
+
+    simd::float2 cursorPos;
+    simd_uint2                          m_viewportSize;
+    float                       _rotationAngle;
+
+    uint64_t                            m_frame;
+    RMDLCamera                          m_camera;
+    RMDLCamera                          m_cameraPNJ;
+    MTL::PixelFormat                    m_pixelFormat;
+    MTL::PixelFormat                    m_depthPixelFormat;
+    MTL::DepthStencilState*             m_depthStencilState;
+    PhaseAudio*                             pAudioEngine;
+    std::unique_ptr<PhaseAudio> _pAudioEngine;
+    RMDLCameraUniforms                  m_cameraUniforms;
+    bool DoTheImportThing(const std::string& resourcePath);
+    RMDLBlender blender;
+    sky::RMDLSkybox skybox;
+    snow::RMDLSnow snow;
+    VoxelWorld world;
+    MetalUIManager ui;
+    MTL::Texture* m_terrainTexture;
+    VibrantColorRenderer    colorsFlash;
+    MTL::TextureDescriptor*             m_depthTextureDescriptor;
+    MTL::Texture*                       m_depthTexture;
 };
 
 struct UIRenderData
@@ -156,73 +208,6 @@ private:
     uint64_t                            _currentFrameIndex;
     simd_uint2                          _pViewportSize;
     dispatch_semaphore_t                _semaphore;
-};
-
-//inline MTL::Texture* RMDLRendererSpammy::
-
-
-    
-
-class GameCoordinator : NonCopyable
-{
-public:
-    GameCoordinator(MTL::Device* device, MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, const std::string& resourcePath);
-    ~GameCoordinator();
-    
-    void setViewSize(int width, int height);
-    void setViewportWindow(NS::UInteger width, NS::UInteger height);
-    void makeArgumentTable();
-    void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
-
-    void handleMouseMove(float x, float y);
-    void handleMouseDown(bool rightClick);
-    void handleMouseUp();
-    void handleScroll(float deltaY);
-    void handleKeyPress(int key);
-
-    void playSoundTestY();
-    void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
-    void loadPngAndFont(const std::string& resourcePath);
-    void moveCamera(simd::float3 translation);
-    void rotateCamera(float deltaYaw, float deltaPitch);
-    void draw(MTK::View* view);
-    void resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height);
-
-private:
-    MTL::Device*                m_device;
-    MTL::CommandQueue*          m_commandQueue;
-    MTL::RenderPipelineState*   m_renderPipelineState;
-    MTL::Buffer* vertexBuffer;
-    MTL::Buffer* indexBuffer;
-    MTL::Buffer* transformBuffer;
-    MTL::Buffer*                m_viewportSizeBuffer;
-    MTL::Library*               m_shaderLibrary;
-    MTL::Viewport               m_viewport;
-
-    simd::float2 cursorPos;
-    simd_uint2                          m_viewportSize;
-    float                       _rotationAngle;
-
-    uint64_t                            m_frame;
-    RMDLCamera                          m_camera;
-    RMDLCamera                          m_cameraPNJ;
-    MTL::PixelFormat                    m_pixelFormat;
-    MTL::PixelFormat                    m_depthPixelFormat;
-    MTL::DepthStencilState*             m_depthStencilState;
-    PhaseAudio*                             pAudioEngine;
-    std::unique_ptr<PhaseAudio> _pAudioEngine;
-    RMDLCameraUniforms                  m_cameraUniforms;
-    bool DoTheImportThing(const std::string& resourcePath);
-    RMDLBlender blender;
-    sky::RMDLSkybox skybox;
-    snow::RMDLSnow snow;
-    VoxelWorld world;
-    MetalUIManager ui;
-    TerrainGenerator map;
-    MTL::Texture* m_terrainTexture;
-    VibrantColorRenderer    colorsFlash;
-    MTL::TextureDescriptor*             m_depthTextureDescriptor;
-    MTL::Texture*                       m_depthTexture;
 };
 
 //class GameCoordinator

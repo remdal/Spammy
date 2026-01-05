@@ -7,6 +7,262 @@
 
 #include "VoronoiVoxel4D.hpp"
 
+BiomeGenerator::BiomeGenerator(uint32_t seed) : seed(seed)
+{
+    generateBiomeMap();
+}
+
+void BiomeGenerator::generateBiomeMap()
+{
+    std::mt19937 rng(seed);
+    std::uniform_real_distribution<float> posDist(-500.0f, 500.0f);
+    std::uniform_real_distribution<float> radiusDist(80.0f, 200.0f);
+    
+    // Biome principal occupe 60% du monde
+    regions.push_back({
+        {0.0f, 0.0f},
+        400.0f, // 250
+        BiomeType::PERLIN_VORONOI_MIXED,
+        1.0f
+    });
+    
+    for (int i = 0; i < 2; ++i) // 4
+    {
+        regions.push_back({
+            {posDist(rng), posDist(rng)},
+            radiusDist(rng) * 0.5f,
+            BiomeType::VOLCANO_ACTIVE,
+            0.8f
+        });
+    }
+    
+    regions.push_back({
+        {posDist(rng), posDist(rng)},
+        radiusDist(rng),
+        BiomeType::VORONOI_4D_VOID,
+        1.0f
+    });
+    
+    for (int i = 0; i < 3; ++i) {
+        regions.push_back({
+            {posDist(rng), posDist(rng)},
+            radiusDist(rng) * 0.7f,
+            BiomeType::SNOW_PARTICLES,
+            0.9f
+        });
+    }
+    
+    regions.push_back({
+        {posDist(rng), posDist(rng)},
+        100.0f,
+        BiomeType::CHAOS,
+        1.0f
+    });
+}
+
+BiomeType BiomeGenerator::getBiomeAt(float worldX, float worldZ)
+{
+    simd::float2 pos = {worldX, worldZ};
+    
+    // Trouve le biome le plus proche
+    float minDist = 10000.0f;
+    BiomeType closestBiome = BiomeType::PERLIN_VORONOI_MIXED;
+    
+    for (const auto& region : regions) {
+        simd::float2 diff = pos - region.center;
+        float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+        
+        if (dist < region.radius && dist < minDist) {
+            minDist = dist;
+            closestBiome = region.type;
+        }
+    }
+    return closestBiome;
+}
+
+float BiomeGenerator::getBiomeBlend(float worldX, float worldZ, BiomeType type)
+{
+    simd::float2 pos = {worldX, worldZ};
+    
+    for (const auto& region : regions) {
+        if (region.type == type) {
+            simd::float2 diff = pos - region.center;
+            float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+            
+            // Transition douce aux bordures
+            float blend = 1.0f - (dist / region.radius);
+            return fmaxf(0.0f, fminf(1.0f, blend)) * region.intensity;
+        }
+    }
+    return 0.0f;
+}
+
+float BiomeGenerator::perlinNoise3D(float x, float y, float z)
+{
+    int xi = (int)floorf(x) & 255;
+    int yi = (int)floorf(y) & 255;
+    int zi = (int)floorf(z) & 255;
+    
+    float xf = x - floorf(x);
+    float yf = y - floorf(y);
+    float zf = z - floorf(z);
+    
+    float u = xf * xf * (3.0f - 2.0f * xf);
+    float v = yf * yf * (3.0f - 2.0f * yf);
+    float w = zf * zf * (3.0f - 2.0f * zf);
+    
+    auto hash = [](int x, int y, int z) -> float {
+        int n = x + y * 57 + z * 997;
+        n = (n << 13) ^ n;
+        return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
+    };
+
+    float a = hash(xi, yi, zi);
+    float b = hash(xi + 1, yi, zi);
+    float c = hash(xi, yi + 1, zi);
+    float d = hash(xi + 1, yi + 1, zi);
+    float e = hash(xi, yi, zi + 1);
+    float f = hash(xi + 1, yi, zi + 1);
+    float g = hash(xi, yi + 1, zi + 1);
+    float h = hash(xi + 1, yi + 1, zi + 1);
+    
+    float x1 = a + u * (b - a);
+    float x2 = c + u * (d - c);
+    float y1 = x1 + v * (x2 - x1);
+    
+    float x3 = e + u * (f - e);
+    float x4 = g + u * (h - g);
+    float y2 = x3 + v * (x4 - x3);
+    
+    return y1 + w * (y2 - y1);
+}
+
+float BiomeGenerator::voronoiNoise3D(float x, float y, float z)
+{
+    int xi = (int)floorf(x);
+    int yi = (int)floorf(y);
+    int zi = (int)floorf(z);
+    
+    float minDist = 10000.0f;
+    
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dz = -1; dz <= 1; ++dz) {
+                int cellX = xi + dx;
+                int cellY = yi + dy;
+                int cellZ = zi + dz;
+                
+                // Point aléatoire dans la cellule
+                uint32_t h = hash(cellX, cellY, cellZ);
+                float px = cellX + (h % 1000) / 1000.0f;
+                float py = cellY + ((h / 1000) % 1000) / 1000.0f;
+                float pz = cellZ + ((h / 1000000) % 1000) / 1000.0f;
+                
+                float dx2 = x - px;
+                float dy2 = y - py;
+                float dz2 = z - pz;
+                float dist = sqrtf(dx2*dx2 + dy2*dy2 + dz2*dz2);
+                
+                minDist = fminf(minDist, dist);
+            }
+        }
+    }
+    return minDist;
+}
+
+BlockType BiomeGenerator::generatePerlinVoronoi(int x, int y, int z, float blend)
+{
+    float perlin = 0.0f;
+    perlin += perlinNoise3D(x * 0.01f, y * 0.01f, z * 0.01f) * 1.0f;
+    perlin += perlinNoise3D(x * 0.02f, y * 0.02f, z * 0.02f) * 0.5f;
+    perlin += perlinNoise3D(x * 0.04f, y * 0.04f, z * 0.04f) * 0.25f;
+
+    float voronoi = voronoiNoise3D(x * 0.05f, y * 0.05f, z * 0.05f);
+
+    float mixed = perlin * 0.6f + (1.0f - voronoi) * 0.4f;
+    mixed *= blend;
+
+    float baseHeight = 50.0f + perlin * 30.0f;
+    
+    if (y < baseHeight + mixed * 20.0f) {
+        // Couches géologiques
+        if (y < baseHeight - 10) return BlockType::STONE;
+        if (y < baseHeight - 5) return BlockType::METAL;
+        if (y < baseHeight - 2) return BlockType::STONE;
+        
+        // Surface
+        if (voronoi < 0.3f) return BlockType::ORGANIC;
+        return BlockType::CRYSTAL_GREEN;
+    }
+    
+    return BlockType::AIR;
+}
+
+BlockType BiomeGenerator::generateVolcano(int x, int y, int z, float distToCenter)
+{
+    float coneHeight = 80.0f;
+    float coneRadius = 60.0f;
+    
+    float heightFactor = (coneHeight - y) / coneHeight;
+    float radiusAtHeight = coneRadius * heightFactor;
+    
+    float dist2D = distToCenter;
+
+    bool inCrater = (y > 70.0f && y < 85.0f && dist2D < 15.0f);
+    
+    if (inCrater) {
+        float lavaLevel = 75.0f + sinf(x * 0.1f + z * 0.1f) * 2.0f;
+        if (y < lavaLevel) {
+            return BlockType::CRYSTAL_RED;
+        }
+        return BlockType::AIR;
+    }
+    
+    if (dist2D < radiusAtHeight && y < coneHeight) {
+        // Couches de roche volcanique
+        float noise = perlinNoise3D(x * 0.1f, y * 0.1f, z * 0.1f);
+        
+        if (noise > 0.3f) return BlockType::STONE;
+        if (noise > 0.0f) return BlockType::METAL;  // Roche sombre
+        return BlockType::CRYSTAL_RED;  // Veines de magma
+    }
+    
+    return BlockType::AIR;
+}
+
+BlockType BiomeGenerator::generateWTF(int x, int y, int z, float blend)
+{
+    float gravityNoise = perlinNoise3D(x * 0.05f, 0, z * 0.05f);
+    
+    // Plateformes flottantes aléatoires
+    float platformNoise = voronoiNoise3D(x * 0.02f, y * 0.1f, z * 0.02f);
+    
+    if (platformNoise < 0.2f) {
+        // Matériaux changeants
+        uint32_t h = hash(x / 5, y / 5, z / 5);
+        BlockType types[] = {
+            BlockType::CRYSTAL_RED,
+            BlockType::CRYSTAL_BLUE,
+            BlockType::CRYSTAL_GREEN,
+            BlockType::GLOWING,
+            BlockType::ORGANIC
+        };
+        return types[h % 5];
+    }
+    
+    // Structures impossibles
+    if (gravityNoise > 0.5f && y > 60.0f) {
+        float spiralAngle = atan2f(z, x) + y * 0.1f;
+        float spiralDist = sqrtf(x*x + z*z);
+        
+        if (fabs(spiralDist - 30.0f - sinf(spiralAngle) * 10.0f) < 3.0f) {
+            return BlockType::GLOWING;  // Spirale lumineuse
+        }
+    }
+    
+    return BlockType::AIR;
+}
+
 VoronoiVoxel4D::VoronoiVoxel4D(uint32_t seed)
     : rng(seed), timeOffset(0.0f)
 {
@@ -224,6 +480,63 @@ BlockType VoronoiVoxel4D::getBlockAtPosition(int worldX, int worldY, int worldZ,
     return BlockType::AIR;
 }
 
+BlockType VoxelWorld::getBlockAtPositionBiomed(int worldX, int worldY, int worldZ, float time)
+{
+    if (!biomeGen) {
+        return voronoiGen.getBlockAtPosition(worldX, worldY, worldZ, time);
+    }
+    
+    BiomeType biome = biomeGen->getBiomeAt(worldX, worldZ);
+    float blend = biomeGen->getBiomeBlend(worldX, worldZ, biome);
+    
+    switch (biome) {
+        case BiomeType::PERLIN_VORONOI_MIXED:
+            return biomeGen->generatePerlinVoronoi(worldX, worldY, worldZ, blend);
+            
+        case BiomeType::VOLCANO_ACTIVE: {
+            simd::float2 center = {0, 0};
+            float dist = sqrtf(worldX*worldX + worldZ*worldZ);
+            return biomeGen->generateVolcano(worldX, worldY, worldZ, dist);
+        }
+//        case BiomeType::VOLCANO_ACTIVE:
+//        {
+////            const auto& regions = biomeGen->getRegions();
+//            float minDist = 10000.0f;
+//            simd::float2 volcanoCenter = {0, 0};
+//            for (const auto& region : regions)
+//            {
+//                if (region.type == BiomeType::VOLCANO_ACTIVE)
+//                {
+//                    simd::float2 pos = {(float)worldX, (float)worldZ};
+//                    simd::float2 diff = pos - region.center;
+//                    float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+//                    if (dist < minDist)
+//                    {
+//                        minDist = dist;
+//                        volcanoCenter = region.center;
+//                    }
+//                }
+//            }
+//            float dx = worldX - volcanoCenter.x;
+//            float dz = worldZ - volcanoCenter.y;
+//            float distToCenter = sqrtf(dx*dx + dz*dz);
+//            return biomeGen->generateVolcano(worldX, worldY, worldZ, distToCenter);
+//        }
+            
+        case BiomeType::VORONOI_4D_VOID:
+            return voronoiGen.getBlockAtPosition(worldX, worldY, worldZ, time);  // Votre système actuel
+            
+        case BiomeType::SNOW_PARTICLES:
+            // Terrain de base + flag pour particules de neige
+            return biomeGen->generatePerlinVoronoi(worldX, worldY, worldZ, blend);
+            
+        case BiomeType::CHAOS:
+            return biomeGen->generateWTF(worldX, worldY, worldZ, blend);
+    }
+    
+    return BlockType::AIR;
+}
+
 
 Chunk::Chunk(int x, int z) : chunkX(x), chunkZ(z), vertexBuffer(nullptr), indexBuffer(nullptr), indexCount(0), needsRebuild(true)
 {
@@ -380,7 +693,24 @@ VoxelWorld::~VoxelWorld()
     _pPipelineState->release();
     _pDevice->release();
 }
-
+//void VoxelWorld::generateTerrainBiomed(int chunkX, int chunkZ)
+//{
+//    Chunk* chunk = getChunk(chunkX, chunkZ);
+//    
+//    for (int x = 0; x < CHUNK_SIZE; ++x) {
+//        for (int z = 0; z < CHUNK_SIZE; ++z) {
+//            int worldX = chunkX * CHUNK_SIZE + x;
+//            int worldZ = chunkZ * CHUNK_SIZE + z;
+//            
+//            for (int y = 0; y < CHUNK_HEIGHT; ++y) {
+//                BlockType type = voronoiGen.getBlockAtPositionBiomed(
+//                    worldX, y, worldZ, currentTime
+//                );
+//                chunk->setBlock(x, y, z, type);
+//            }
+//        }
+//    }
+//}
 void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ)
 {
     chunkX = worldX >> 5; // Division par 32
@@ -429,9 +759,14 @@ void VoxelWorld::generateTerrainVoronoi(int chunkX, int chunkZ)
 
             for (int y = 0; y < CHUNK_HEIGHT; ++y)
             {
-                BlockType type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
+//                BlockType type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
+                BlockType type;
+                if (biomeGen) {
+                    type = getBlockAtPositionBiomed(worldX, y, worldZ, currentTime);
+                } else {
+                    type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
+                }
 
-                // Ajoute du vide en bas et en haut
                 if (y < 5 || y > 100)
                     type = BlockType::AIR;
 

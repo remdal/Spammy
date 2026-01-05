@@ -104,7 +104,6 @@ skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 snow(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
-map(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
 colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
 {
     m_viewportSize.x = (float)width;
@@ -117,17 +116,13 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 3.0f, 1.0f, 0.1f, 100.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 30.0f, 5.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 3.0f, 1.0f, 0.1f, 150.0f);
 //    m_cameraPNJ.initPerspectiveWithPosition(<#simd::float3 position#>, <#simd::float3 direction#>, <#simd::float3 up#>, <#float viewAngle#>, <#float aspectRatio#>, <#float nearPlane#>, <#float farPlane#>)
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
-//    map.generate(m_commandQueue, 80.0f, 6, 0.5f, 2.0f, 89, 60, width, height);
-//    map.renderToTexture(m_commandQueue, m_terrainTexture, TerrainGenerator::RenderMode::Heightmap, width, height);
-
-    auto heightMap = map.getHeightMap(width, height);
-    TerrainBlocks block = map.getBlock(128, 128, width, height);
+    world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
 }
 
 GameCoordinator::~GameCoordinator()
@@ -222,7 +217,7 @@ void GameCoordinator::draw(MTK::View* view)
 //    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
-    float dt = 3.016f;
+    float dt = 0.016f;
     world.update(dt, m_camera.position());
     world.updateTime(dt);
     m_cameraUniforms.position = m_camera.position();
@@ -235,6 +230,7 @@ void GameCoordinator::draw(MTK::View* view)
     ui.endFrame(renderCommandEncoder);
 
 //    colorsFlash.renderPostProcess(renderCommandEncoder);
+    
     
 
     renderCommandEncoder->endEncoding();

@@ -19,12 +19,13 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <memory>
 
 #include "RMDLUtils.hpp"
 #include "RMDLMainRenderer_shared.h"
 
-static constexpr int CHUNK_SIZE = 32;
-static constexpr int CHUNK_HEIGHT = 128;
+static constexpr int CHUNK_SIZE = 64;
+static constexpr int CHUNK_HEIGHT = 64;
 static constexpr float VOXEL_SIZE = 1.0f;
 
 enum class BlockType : uint8_t {
@@ -69,6 +70,62 @@ struct VoronoiSite4D
 // Hash pour positions cohérentes
 uint32_t hash(int x, int y, int z);
 
+enum class BiomeType {
+    PERLIN_VORONOI_MIXED,
+    VOLCANO_ACTIVE,
+    VORONOI_4D_VOID,
+    SNOW_PARTICLES,
+    CHAOS // Physics & Obj WTF
+};
+
+struct BiomeRegion
+{
+    simd::float2 center;
+    float radius;
+    BiomeType type;
+    float intensity; // 0-1 pour transition
+};
+
+struct SnowFlake {
+    simd::float3 position;
+    simd::float3 velocity;
+    float size;
+    float rotation;
+    float lifetime;
+};
+
+class EnhancedSnowSystem {
+public:
+    void update(float dt, BiomeType currentBiome);
+    void spawnFlakesInBiome(simd::float3 center, float radius);
+    
+private:
+    std::vector<SnowFlake> flakes;
+    MTL::Buffer* particleBuffer;
+};
+
+class BiomeGenerator
+{
+public:
+    BiomeGenerator(uint32_t seed);
+
+    BiomeType getBiomeAt(float worldX, float worldZ);
+    float getBiomeBlend(float worldX, float worldZ, BiomeType type);
+
+    BlockType generatePerlinVoronoi(int x, int y, int z, float blend);
+    BlockType generateVolcano(int x, int y, int z, float distToCenter);
+    BlockType generateVoronoi4D(int x, int y, int z, float time);
+    BlockType generateWTF(int x, int y, int z, float blend);
+
+private:
+    std::vector<BiomeRegion> regions;
+    uint32_t seed;
+
+    void generateBiomeMap();
+    float perlinNoise3D(float x, float y, float z);
+    float voronoiNoise3D(float x, float y, float z);
+};
+
 class VoronoiVoxel4D
 {
 public:
@@ -94,6 +151,7 @@ public:
     
     void setTimeOffset(float t) { timeOffset = t; }
     float getTimeOffset() const { return timeOffset; }
+
 private:
     std::vector<VoronoiSite4D>  sites;
     std::mt19937                rng;
@@ -164,19 +222,25 @@ public:
     MTL::Device*                _pDevice;
     MTL::DepthStencilState*     _pDepthStencilState;
     MTL::RenderPipelineState*   _pPipelineState;
+
+    void setBiomeGenerator(std::unique_ptr<BiomeGenerator> gen) { biomeGen = std::move(gen); }
+
+    BlockType getBlockAtPositionBiomed(int worldX, int worldY, int worldZ, float time);
     
 private:
     std::unordered_map<uint64_t, Chunk*> chunks;
     VoronoiVoxel4D voronoiGen;
     float currentTime;
     
-    const int RENDER_DISTANCE = 2; // Plus de chunks avec M2 Pro (default 12)
+    const int RENDER_DISTANCE = 2; // default 12
     
     uint64_t chunkKey(int x, int z) const {
         return ((uint64_t)(x) << 32) | ((uint64_t)(z) & 0xFFFFFFFF);
     }
     
     void worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ);
+
+    std::unique_ptr<BiomeGenerator> biomeGen;
 };
 
 #endif /* VoronoiVoxel4D_hpp */
