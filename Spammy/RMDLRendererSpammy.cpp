@@ -92,6 +92,11 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
     ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData));
 }
 
+float fade(float t)
+{
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); // 1,7 - > 9.03992
+}
+
 GameCoordinator::GameCoordinator(MTL::Device* device,
                                  MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat,
                                  NS::UInteger width, NS::UInteger height,
@@ -123,6 +128,8 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
+    
+    printf("%f\n%f\n%f\n", fade(0.1), fade(1.1), fade(2.7));
 }
 
 GameCoordinator::~GameCoordinator()
@@ -218,12 +225,13 @@ void GameCoordinator::draw(MTK::View* view)
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
     float dt = 0.016f;
-    world.update(dt, m_camera.position());
+    world.update(dt, m_camera.position(), m_device);
     world.updateTime(dt);
     m_cameraUniforms.position = m_camera.position();
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    dt += 0.016f;
     
     ui.beginFrame(m_viewport.width, m_viewport.height);
     ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);

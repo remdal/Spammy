@@ -681,17 +681,16 @@ void Chunk::rebuildMesh(MTL::Device* device)
 
 
 VoxelWorld::VoxelWorld(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary)
-    : _pDevice(pDevice->retain()), voronoiGen(89), currentTime(0.0f)
+: voronoiGen(89), currentTime(0.0f)
 {
-    createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
+    createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat, pDevice);
 }
 
 VoxelWorld::~VoxelWorld()
 {
     for (auto& [key, chunk] : chunks)
         delete chunk;
-    _pPipelineState->release();
-    _pDevice->release();
+    m_renderPipelineState->release();
 }
 //void VoxelWorld::generateTerrainBiomed(int chunkX, int chunkZ)
 //{
@@ -805,18 +804,18 @@ void VoxelWorld::removeBlock(int worldX, int worldY, int worldZ)
     setBlock(worldX, worldY, worldZ, BlockType::AIR);
 }
 
-void VoxelWorld::createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
+void VoxelWorld::createPipeline(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Device* device)
 {
     NS::Error* error = nullptr;
 
-    NS::SharedPtr<MTL::Function> pVertexFunction = NS::TransferPtr(pShaderLibrary->newFunction(NS::String::string("voxel_vertex", NS::UTF8StringEncoding)));
-    NS::SharedPtr<MTL::Function> pFragmentFunction = NS::TransferPtr(pShaderLibrary->newFunction(NS::String::string("voxel_fragment", NS::UTF8StringEncoding)));
+    NS::SharedPtr<MTL::Function> pVertexFunction = NS::TransferPtr(shaderLibrary->newFunction(MTLSTR("voxel_vertex")));
+    NS::SharedPtr<MTL::Function> pFragmentFunction = NS::TransferPtr(shaderLibrary->newFunction(MTLSTR("voxel_fragment")));
 
     NS::SharedPtr<MTL::RenderPipelineDescriptor> pRenderDescriptor = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
     pRenderDescriptor->setVertexFunction(pVertexFunction.get());
     pRenderDescriptor->setFragmentFunction(pFragmentFunction.get());
-    pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
-    pRenderDescriptor->setDepthAttachmentPixelFormat(pDepthPixelFormat);
+    pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+    pRenderDescriptor->setDepthAttachmentPixelFormat(depthPixelFormat);
     
     NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
     pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
@@ -835,16 +834,16 @@ void VoxelWorld::createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat p
     pVertexDesc->layouts()->object(0)->setStepRate(1);
     pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
 
-    NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-    pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
-    pDepthStencilDesc->setDepthWriteEnabled(true);
+    NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
+    depthStencilDescriptor->setDepthWriteEnabled(true);
 
     pRenderDescriptor->setVertexDescriptor(pVertexDesc.get());
-    _pPipelineState = _pDevice->newRenderPipelineState(pRenderDescriptor.get(), &error);
-    _pDepthStencilState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
+    m_renderPipelineState = device->newRenderPipelineState(pRenderDescriptor.get(), &error);
+    m_depthStencilState = device->newDepthStencilState(depthStencilDescriptor.get());
 }
 
-void VoxelWorld::update(float dt, simd::float3 cameraPos)
+void VoxelWorld::update(float dt, simd::float3 cameraPos, MTL::Device* device)
 {
     int camChunkX = (int)floorf(cameraPos.x / CHUNK_SIZE);
     int camChunkZ = (int)floorf(cameraPos.z / CHUNK_SIZE);
@@ -858,7 +857,7 @@ void VoxelWorld::update(float dt, simd::float3 cameraPos)
             Chunk* chunk = getChunk(chunkX, chunkZ);
 
             if (chunk->needsRebuild)
-                chunk->rebuildMesh(_pDevice);
+                chunk->rebuildMesh(device);
         }
     }
     for (auto it = chunks.begin(); it != chunks.end();)
@@ -877,19 +876,17 @@ void VoxelWorld::update(float dt, simd::float3 cameraPos)
     }
 }
 
-void VoxelWorld::render(MTL::RenderCommandEncoder* pEncoder, simd::float4x4 viewProjectionMatrix)
+void VoxelWorld::render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float4x4 viewProjectionMatrix)
 {
-    pEncoder->setRenderPipelineState(_pPipelineState);
-    pEncoder->setDepthStencilState(_pDepthStencilState);
-    pEncoder->setCullMode(MTL::CullModeBack);
-
+    renderCommandEncoder->setRenderPipelineState(m_renderPipelineState);
+    renderCommandEncoder->setDepthStencilState(m_depthStencilState);
+    renderCommandEncoder->setCullMode(MTL::CullModeBack);
     for (auto& [key, chunk] : chunks)
     {
         if (chunk->indexCount == 0)
             continue;
-
-        pEncoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
-        pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, chunk->indexCount, MTL::IndexTypeUInt32, chunk->indexBuffer, 0);
+        renderCommandEncoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
+        renderCommandEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, chunk->indexCount, MTL::IndexTypeUInt32, chunk->indexBuffer, 0);
     }
 }
 
@@ -911,7 +908,6 @@ bool VoxelWorld::raycast(simd::float3 origin, simd::float3 direction, float maxD
             adjacentBlock = { (int)floorf(prevPos.x), (int)floorf(prevPos.y), (int)floorf(prevPos.z) };
             return true;
         }
-
         prevPos = pos;
         pos += step;
     }

@@ -67,7 +67,6 @@ struct VoronoiSite4D
     float influence;
 };
 
-// Hash pour positions cohérentes
 uint32_t hash(int x, int y, int z);
 
 enum class BiomeType {
@@ -203,25 +202,22 @@ public:
                  simd::int3& hitBlock,
                  simd::int3& adjacentBlock);
 
-    void createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
+    void createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Device* device);
     
-    void update(float dt, simd::float3 cameraPos);
+    void update(float dt, simd::float3 cameraPos, MTL::Device* device);
     void render(MTL::RenderCommandEncoder* encoder,
                 simd::float4x4 viewProjectionMatrix);
     
-    // Génération Voronoi 4D
     void generateTerrainVoronoi(int chunkX, int chunkZ);
     
-    // Anime la 4ème dimension
     void updateTime(float dt)
     {
-        currentTime += dt * 0.1f; // Vitesse d'évolution
+        currentTime += dt * 0.1f;
         voronoiGen.setTimeOffset(currentTime);
     }
-    
-    MTL::Device*                _pDevice;
-    MTL::DepthStencilState*     _pDepthStencilState;
-    MTL::RenderPipelineState*   _pPipelineState;
+
+    MTL::DepthStencilState*     m_depthStencilState;
+    MTL::RenderPipelineState*   m_renderPipelineState;
 
     void setBiomeGenerator(std::unique_ptr<BiomeGenerator> gen) { biomeGen = std::move(gen); }
 
@@ -232,7 +228,7 @@ private:
     VoronoiVoxel4D voronoiGen;
     float currentTime;
     
-    const int RENDER_DISTANCE = 2; // default 12
+    const int RENDER_DISTANCE = 3; // default 12
     
     uint64_t chunkKey(int x, int z) const {
         return ((uint64_t)(x) << 32) | ((uint64_t)(z) & 0xFFFFFFFF);

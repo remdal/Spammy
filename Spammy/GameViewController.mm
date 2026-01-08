@@ -177,9 +177,8 @@
 }
 
 @end
-//
-//@implementation TerraGameWindow
-//
+
+
 //- (void)keyDown:(NSEvent *)event {
 //    NSString *chars = [event charactersIgnoringModifiers];
 //    if (chars.length == 0) { return; }
@@ -226,73 +225,15 @@
 //    }
 //}
 //
-//@end
-//
-//@implementation TerraGameAppDelegate {
-//    TerraGameWindow* _window;
-//    std::unique_ptr<GameCoordinator> _pGameRenderer;
-//}
-//
-//- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-//    return YES;
-//}
-//
-//- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-//    [self createWindow];
-//    [self createView];
-//}
-//
-//- (void)applicationWillTerminate:(NSNotification *)notification {
-//    _pGameRenderer.reset();
-//}
-//
-//- (void)createWindow {
-//    NSWindowStyleMask mask = NSWindowStyleMaskClosable | NSWindowStyleMaskTitled |
-//                             NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
-//    NSRect contentRect = NSMakeRect(0, 0, 1280, 720);
-//    NSScreen* screen = [NSScreen mainScreen];
-//    contentRect.origin.x = (screen.frame.size.width / 2) - (contentRect.size.width / 2);
-//    contentRect.origin.y = (screen.frame.size.height / 2) - (contentRect.size.height / 2);
-//    
-//    _window = [[TerraGameWindow alloc] initWithContentRect:contentRect
-//                                                 styleMask:mask
-//                                                   backing:NSBackingStoreBuffered
-//                                                     defer:NO
-//                                                    screen:screen];
 //    _window.releasedWhenClosed = NO;
 //    _window.minSize = NSMakeSize(640, 360);
 //    _window.gameCoordinator = self;
 //    _window.title = @"TerraBlock - Constructeur de Véhicules";
 //    [_window makeKeyAndOrderFront:nil];
 //    [_window setIsVisible:YES];
-//    [_window makeMainWindow];
-//}
-//
-//- (void)createView {
-//    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-//    _mtkView = [[MTKView alloc] initWithFrame:_window.contentLayoutRect device:device];
 //    _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-//    _mtkView.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
-//    _mtkView.depthStencilPixelFormat = MTLPixelFormatInvalid;
 //    _mtkView.framebufferOnly = YES;
-//    _mtkView.paused = NO;
-//    _mtkView.delegate = self;
 //    _mtkView.enableSetNeedsDisplay = NO;
-//    
-//    NSScreen *screen = _window.screen ?: [NSScreen mainScreen];
-//    CGFloat scale = screen.backingScaleFactor ?: 1.0;
-//    CGSize sizePts = _mtkView.bounds.size;
-//    _mtkView.drawableSize = CGSizeMake(sizePts.width * scale, sizePts.height * scale);
-//    _window.contentView = _mtkView;
-//
-//    MTL::Device* _pDevice = (__bridge MTL::Device *)device;
-//    MTL::PixelFormat pixelFormat = MTL::PixelFormatBGRA8Unorm;
-//    NS::UInteger w = (NS::UInteger)_mtkView.drawableSize.width;
-//    NS::UInteger h = (NS::UInteger)_mtkView.drawableSize.height;
-//    
-//    _pGameRenderer = std::make_unique<GameCoordinator>(_pDevice, pixelFormat, w, h);
-//}
-//
 //- (void)handleKeyPress:(unichar)character {
 //    _pGameRenderer->handleKeyPress(character);
 //}
@@ -325,13 +266,3 @@
 //- (void)handleScroll:(NSEvent*)event {
 //    _pGameRenderer->handleScroll([event deltaY]);
 //}
-//
-//- (void)drawInMTKView:(nonnull MTKView *)view {
-//    _pGameRenderer->draw((__bridge MTK::View *)view);
-//}
-//
-//- (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
-//    _pGameRenderer->setViewSize(size.width, size.height);
-//}
-//
-//@end

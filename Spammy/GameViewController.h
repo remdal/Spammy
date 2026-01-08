@@ -29,15 +29,3 @@
 - (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch;
 
 @end
-
-//#import <Cocoa/Cocoa.h>
-//#import <MetalKit/MetalKit.h>
-//
-//@interface TerraGameWindow : NSWindow
-//@property (strong) id gameCoordinator;
-//@end
-//
-//@interface TerraGameAppDelegate : NSObject <NSApplicationDelegate, MTKViewDelegate>
-//@property (strong) MTKView* mtkView;
-//@end
-
