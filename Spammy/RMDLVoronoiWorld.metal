@@ -211,7 +211,8 @@ uint generatePerlinVoronoi_GPU(int3 worldPos, float blend)
     return 0;
 }
 
-uint generateVolcano_GPU(int3 worldPos, float distToCenter) {
+uint generateVolcano_GPU(int3 worldPos, float distToCenter)
+{
     const float coneHeight = 50.0;
     const float coneRadius = 40.0;
     
@@ -220,56 +221,55 @@ uint generateVolcano_GPU(int3 worldPos, float distToCenter) {
     
     bool inCrater = (worldPos.y > 45 && worldPos.y < 55 && distToCenter < 12.0);
     
-    if (inCrater) {
+    if (inCrater)
+    {
         float lavaLevel = 48.0 + sin(worldPos.x * 0.2 + worldPos.z * 0.2) * 1.5;
         if (worldPos.y < lavaLevel) return 2;
         return 0;
     }
-    
-    if (distToCenter < radiusAtHeight && worldPos.y < coneHeight && worldPos.y > 5) {
+    if (distToCenter < radiusAtHeight && worldPos.y < coneHeight && worldPos.y > 5)
+    {
         float noise = perlinNoise3D_GPU(float3(worldPos) * 0.1);
         
         if (noise > 0.4) return 1;
         if (noise > 0.1) return 6;
         return 2;
     }
-    
-    if (worldPos.y < 15 && distToCenter < coneRadius * 1.5) {
+    if (worldPos.y < 15 && distToCenter < coneRadius * 1.5)
         return 1;
-    }
-    
     return 0;
 }
 
-uint generateWTF_GPU(int3 worldPos, float blend) {
+uint generateWTF_GPU(int3 worldPos, float blend)
+{
     float3 p = float3(worldPos);
     
     float gravityNoise = perlinNoise3D_GPU(float3(p.x, 0, p.z) * 0.03);
     float platformNoise = voronoiNoise3D_GPU(float3(p.x, p.y, p.z) * float3(0.02, 0.08, 0.02));
     
-    if (platformNoise < 0.15) {
+    if (platformNoise < 0.15)
+    {
         uint h = hash_gpu(worldPos.x / 5, worldPos.y / 5, worldPos.z / 5);
         uint types[6] = {2, 3, 4, 7, 5, 6};
         return types[h % 6];
     }
     
-    if (gravityNoise > 0.4 && worldPos.y > 25 && worldPos.y < 50) {
+    if (gravityNoise > 0.4 && worldPos.y > 25 && worldPos.y < 50)
+    {
         float spiralAngle = atan2(p.z, p.x) + worldPos.y * 0.15;
         float spiralDist = length(float2(p.x, p.z));
         float targetRadius = 20.0 + sin(spiralAngle * 3.0) * 8.0;
         
-        if (abs(spiralDist - targetRadius) < 3.0) {
+        if (abs(spiralDist - targetRadius) < 3.0)
             return 7;
-        }
     }
     
-    if (worldPos.y < 20) {
+    if (worldPos.y < 20)
+    {
         float baseNoise = perlinNoise3D_GPU(p * 0.05);
-        if (baseNoise > 0.2) {
+        if (baseNoise > 0.2)
             return (baseNoise > 0.5) ? 6 : 1;
-        }
     }
-    
     return 0;
 }
 

@@ -25,7 +25,7 @@
 #include "RMDLMainRenderer_shared.h"
 
 static constexpr int CHUNK_SIZE = 64;
-static constexpr int CHUNK_HEIGHT = 64;
+static constexpr int CHUNK_HEIGHT = 128;
 static constexpr float VOXEL_SIZE = 1.0f;
 
 enum class BlockType : uint8_t {
@@ -59,7 +59,6 @@ struct VoxelVertex
     simd::float3 normal;
 };
 
-// Point Voronoi dans l'espace 4D
 struct VoronoiSite4D
 {
     simd::float4 position;
@@ -74,7 +73,7 @@ enum class BiomeType {
     VOLCANO_ACTIVE,
     VORONOI_4D_VOID,
     SNOW_PARTICLES,
-    CHAOS // Physics & Obj WTF
+    CHAOS
 };
 
 struct BiomeRegion
@@ -85,7 +84,8 @@ struct BiomeRegion
     float intensity; // 0-1 pour transition
 };
 
-struct SnowFlake {
+struct SnowFlake
+{
     simd::float3 position;
     simd::float3 velocity;
     float size;
@@ -93,14 +93,15 @@ struct SnowFlake {
     float lifetime;
 };
 
-class EnhancedSnowSystem {
+class EnhancedSnowSystem
+{
 public:
     void update(float dt, BiomeType currentBiome);
     void spawnFlakesInBiome(simd::float3 center, float radius);
     
 private:
-    std::vector<SnowFlake> flakes;
-    MTL::Buffer* particleBuffer;
+    std::vector<SnowFlake>  flakes;
+    MTL::Buffer*            particleBuffer;
 };
 
 class BiomeGenerator
