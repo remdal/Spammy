@@ -104,6 +104,7 @@ GameCoordinator::GameCoordinator(MTL::Device* device,
 : m_device(device->retain()), m_shaderLibrary(m_device->newDefaultLibrary()),
 m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat),
 _rotationAngle(0.0f), m_frame(0),
+m_editMode(false), m_buildMode(false),
 blender(m_device, layerPixelFormat, m_depthPixelFormat, resourcePath, m_shaderLibrary),
 skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 snow(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
@@ -121,7 +122,7 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 30.0f, 5.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 3.0f, 1.0f, 0.1f, 150.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 60.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 150.0f);
 //    m_cameraPNJ.initPerspectiveWithPosition(<#simd::float3 position#>, <#simd::float3 direction#>, <#simd::float3 up#>, <#float viewAngle#>, <#float aspectRatio#>, <#float nearPlane#>, <#float farPlane#>)
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -130,6 +131,34 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
     
     printf("%f\n%f\n%f\n", fade(0.1), fade(1.1), fade(2.7));
+    
+    m_voxelGrid = std::make_unique<RMDLGrid>(m_device, layerPixelFormat, depthPixelFormat, width, height, m_shaderLibrary);
+    // 2. Terrain System
+    m_terrainSystem = std::make_unique<TerrainSystem>(
+        m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary);
+    m_terrainSystem->initialize(89); // Votre seed
+    m_terrainSystem->setHeightScale(1.0f);
+    m_terrainSystem->setRenderDistance(500.0f);
+    
+    // 3. Physics System
+    m_physicsSystem = std::make_unique<PhysicsSystem>(m_device, m_shaderLibrary);
+    m_physicsSystem->setGravity({0.0f, -20.0f, 0.0f});
+    m_physicsSystem->setTerrainSystem(m_terrainSystem.get());
+    m_physicsSystem->setVoxelGrid(m_voxelGrid.get());
+    
+    // 4. Inventory System
+    m_inventorySystem = std::make_unique<InventorySystem>(
+        m_device, m_shaderLibrary, (float)width, (float)height);
+    
+    // Position du joueur au spawn
+    auto& player = m_physicsSystem->getPlayer();
+    player.entity.position = {0.0f, 70.0f, 0.0f};
+    
+    // Donner quelques items de départ
+    m_inventorySystem->addItem(ItemType::CommandBlock, 1);
+    m_inventorySystem->addItem(ItemType::SolidBlock, 64);
+    m_inventorySystem->addItem(ItemType::MetalBlock, 32);
+    m_inventorySystem->addItem(ItemType::EngineBlock, 4);
 }
 
 GameCoordinator::~GameCoordinator()
@@ -137,7 +166,7 @@ GameCoordinator::~GameCoordinator()
     m_shaderLibrary->release();
     
 
-    vertexBuffer->release();
+    if (vertexBuffer) vertexBuffer->release();
     indexBuffer->release();
     transformBuffer->release();
 
@@ -196,7 +225,7 @@ void GameCoordinator::handleKeyPress(int key)
 
 void GameCoordinator::draw(MTK::View* view)
 {
-    NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
+    NS::AutoreleasePool* autoreleasePool = NS::AutoreleasePool::alloc()->init();
 
     MTL::CommandBuffer* commandBuffer = m_commandQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
@@ -214,13 +243,13 @@ void GameCoordinator::draw(MTK::View* view)
         simd::float4{ cosf(_rotationAngle), 0.0f, sinf(_rotationAngle), 0.0f },
         simd::float4{ 0.0f, 1.0f, 0.0f, 0.0f },
         simd::float4{ -sinf(_rotationAngle), 0.0f, cosf(_rotationAngle), 0.0f },
-        simd::float4{ 0.0f, 0.0f, 0.0f, 1.0f }
+        simd::float4{ 0.0f, 60.0f, 5.0f, 1.0f }
     };
     m_cameraUniforms = m_camera.uniforms();
     blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
-    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
+//    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
@@ -230,21 +259,77 @@ void GameCoordinator::draw(MTK::View* view)
     m_cameraUniforms.position = m_camera.position();
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
-    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+//    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     dt += 0.016f;
     
     ui.beginFrame(m_viewport.width, m_viewport.height);
     ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);
-    ui.endFrame(renderCommandEncoder);
+//    ui.endFrame(renderCommandEncoder);
 
 //    colorsFlash.renderPostProcess(renderCommandEncoder);
     
+    m_terrainSystem->update(dt, m_camera.position());
+      
+    // Update physics
+//    m_physicsSystem->update(dt);
+
+    // Update camera from player physics
+    auto& player = m_physicsSystem->getPlayer();
+//    m_camera.setPosition(player.entity.position + simd::float3{0, 1.6f, 0});
+
+    // Update voxels
+    m_voxelGrid->updateChunks(m_camera.position());
+
+    // Update inventory UI
+    m_inventorySystem->updateUI(dt);
+
+    // === RENDER PHASE ===
+//    m_cameraUniforms = m_camera.uniforms();
+
+    // 1. Render Terrain (opaque)
+    m_terrainSystem->render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+
+    // 2. Render Voxels
+    m_voxelGrid->renderChunks(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+
+    // 3. Edit mode grid
+    if (m_editMode) {
+      m_voxelGrid->setEditMode(true);
+      m_voxelGrid->renderGridEdges(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    }
+
+    // 4. Vehicle grid in build mode
+    if (m_buildMode) {
+      auto& vehicle = m_physicsSystem->getVehicle();
+      m_inventorySystem->renderVehicleGrid(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, vehicle.entity.position);
+    }
+    
+    
+    printf("Pos: %.1f %.1f %.1f | Voxels: %zu | Chunks: %zu ",
+            player.entity.position.x,
+            player.entity.position.y,
+            player.entity.position.z,
+            m_voxelGrid->getActiveVoxelCount(),
+            m_terrainSystem->getChunkCount());
+    printf("Camera pos: %.1f %.1f %.1f\n", m_camera.position().x, m_camera.position().y, m_camera.position().z);
+    printf("Chunks loaded: %zu\n", m_terrainSystem->getChunkCount());
+    BiomeType testBiome = m_terrainSystem->getBiomeAt(0, 0);
+    printf("Biome at (0,0): %d\n", (int)testBiome);
+    
+    if (m_editMode) ui.drawText("EDIT MODE", 10, 30, 0.25);
+    if (m_buildMode) ui.drawText("BUILD MODE", 10, 50, 0.25);
+    
+    ui.endFrame(renderCommandEncoder);
+    
+    // Render inventory UI (avec alpha blending)
+    m_inventorySystem->renderUI(renderCommandEncoder,
+        {(float)m_viewport.width, (float)m_viewport.height});
     
 
     renderCommandEncoder->endEncoding();
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
-    pool->release();
+    autoreleasePool->release();
 }
 
 void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
@@ -267,8 +352,23 @@ void GameCoordinator::setViewportWindow(NS::UInteger width, NS::UInteger height)
     m_viewport.zfar    = 1.0;
     m_viewportSize.x = (float)width;
     m_viewportSize.y = (float)height;
-    ft_memcpy(m_viewportSizeBuffer->contents(), &m_viewportSize, sizeof(m_viewportSize));
+    memcpy(m_viewportSizeBuffer->contents(), &m_viewportSize, sizeof(m_viewportSize));
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -37,8 +37,7 @@ void drawRectangle(RectangleUIData* rectangleData)
 }
 
 MetalUIManager::MetalUIManager(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger height, MTL::Library* shaderLibrary)
-    : m_maxVertices(10000)
-    , m_maxIndices(30000)
+    : m_maxVertices(10000), m_maxIndices(30000)
 {
     m_vertices.reserve(m_maxVertices);
     m_indices.reserve(m_maxIndices);

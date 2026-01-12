@@ -20,13 +20,23 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
+#include <atomic>
+#include <future>
+#include <cstdint>
+#include <array>
 
 #include "RMDLUtils.hpp"
 #include "RMDLMainRenderer_shared.h"
 
-static constexpr int CHUNK_SIZE = 64;
+static constexpr int CHUNK_SIZE = 16;
 static constexpr int CHUNK_HEIGHT = 128;
-static constexpr float VOXEL_SIZE = 1.0f;
+static constexpr float VOXELSIZE = 0.99f;
+static constexpr int RENDER_DISTANCE = 12;
+static constexpr int WORLD_SEED = 89;
 
 enum class BlockType : uint8_t {
     AIR = 0,
@@ -37,19 +47,60 @@ enum class BlockType : uint8_t {
     ORGANIC,
     METAL,
     GLOWING,
-    VOID_MATTER
+    VOID_MATTER,
+    Grass,
+    Dirt,
+    Stone,
+    Sand,
+    Water,
+    VolcanicRock,
+    Obsidian,
+    MoonRock,
+    Ice,
+    Snow,
+    Wood,
+    Leaves,
+    GrassDetailed,      // Avec normal/roughness
+    StoneDetailed,
+    SandDetailed,
+    COUNT
+};
+
+struct BlockMeta
+{
+    uint8_t orientation : 3;
+    uint8_t state : 5;
 };
 
 const simd::float4 BLOCK_COLORS[] = {
-    {0.0f, 0.0f, 0.0f, 0.0f},      // AIR
-    {0.4f, 0.4f, 0.45f, 1.0f},     // STONE
-    {0.9f, 0.2f, 0.2f, 1.0f},      // CRYSTAL_RED
-    {0.2f, 0.4f, 0.9f, 1.0f},      // CRYSTAL_BLUE
-    {0.2f, 0.9f, 0.4f, 1.0f},      // CRYSTAL_GREEN
-    {0.6f, 0.5f, 0.3f, 1.0f},      // ORGANIC
-    {0.7f, 0.7f, 0.8f, 1.0f},      // METAL
-    {1.0f, 0.9f, 0.5f, 1.0f},      // GLOWING
-    {0.1f, 0.05f, 0.15f, 1.0f}     // VOID_MATTER
+    {0.0f, 0.0f, 0.0f, 0.0f},
+    {0.4f, 0.4f, 0.45f, 1.0f},
+    {0.9f, 0.2f, 0.2f, 1.0f},
+    {0.2f, 0.4f, 0.9f, 1.0f},
+    {0.2f, 0.9f, 0.4f, 1.0f},
+    {0.6f, 0.5f, 0.3f, 1.0f},
+    {0.7f, 0.7f, 0.8f, 1.0f},
+    {1.0f, 0.9f, 0.5f, 1.0f},
+    {0.1f, 0.05f, 0.15f, 1.0f}
+};
+
+struct TerrainGenerationTask
+{
+    int chunkX;
+    int chunkZ;
+    float currentTime;
+    std::promise<bool> completion;
+    
+    TerrainGenerationTask(int x, int z, float time)
+        : chunkX(x), chunkZ(z), currentTime(time) {}
+};
+
+struct GeneratedChunkData
+{
+    int chunkX;
+    int chunkZ;
+    std::vector<uint8_t> blockData; // CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE
+    bool isReady;
 };
 
 struct VoxelVertex
@@ -68,7 +119,7 @@ struct VoronoiSite4D
 
 uint32_t hash(int x, int y, int z);
 
-enum class BiomeType {
+enum class BiomeTypes {
     PERLIN_VORONOI_MIXED,
     VOLCANO_ACTIVE,
     VORONOI_4D_VOID,
@@ -80,7 +131,7 @@ struct BiomeRegion
 {
     simd::float2 center;
     float radius;
-    BiomeType type;
+    BiomeTypes type;
     float intensity; // 0-1 pour transition
 };
 
@@ -96,7 +147,7 @@ struct SnowFlake
 class EnhancedSnowSystem
 {
 public:
-    void update(float dt, BiomeType currentBiome);
+    void update(float dt, BiomeTypes currentBiome);
     void spawnFlakesInBiome(simd::float3 center, float radius);
     
 private:
@@ -109,8 +160,8 @@ class BiomeGenerator
 public:
     BiomeGenerator(uint32_t seed);
 
-    BiomeType getBiomeAt(float worldX, float worldZ);
-    float getBiomeBlend(float worldX, float worldZ, BiomeType type);
+    BiomeTypes getBiomeAt(float worldX, float worldZ);
+    float getBiomeBlend(float worldX, float worldZ, BiomeTypes type);
 
     BlockType generatePerlinVoronoi(int x, int y, int z, float blend);
     BlockType generateVolcano(int x, int y, int z, float distToCenter);
@@ -229,8 +280,6 @@ private:
     VoronoiVoxel4D voronoiGen;
     float currentTime;
     
-    const int RENDER_DISTANCE = 3; // default 12
-    
     uint64_t chunkKey(int x, int z) const {
         return ((uint64_t)(x) << 32) | ((uint64_t)(z) & 0xFFFFFFFF);
     }
@@ -241,3 +290,165 @@ private:
 };
 
 #endif /* VoronoiVoxel4D_hpp */
+
+//struct VoxelBlock {
+//    BlockType type;
+//    BlockMeta meta;
+//    
+//    VoxelBlock() : type(BlockType::Air), meta{0, 0} {}
+//    explicit VoxelBlock(BlockType t) : type(t), meta{0, 0} {}
+//    
+//    bool isSolid() const { return type != BlockType::Air && type != BlockType::Water; }
+//    bool isTransparent() const { return type == BlockType::Air || type == BlockType::Water; }
+//};
+//
+//// Coordonnées chunk (monde divisé en chunks)
+//struct ChunkCoord {
+//    int32_t x, z;
+//    
+//    bool operator==(const ChunkCoord& other) const {
+//        return x == other.x && z == other.z;
+//    }
+//    
+//    struct Hash {
+//        size_t operator()(const ChunkCoord& coord) const {
+//            return std::hash<int64_t>()((int64_t(coord.x) << 32) | uint32_t(coord.z));
+//        }
+//    };
+//};
+//
+//// Position bloc dans le monde
+//struct BlockPos {
+//    int32_t x, y, z;
+//    
+//    ChunkCoord toChunkCoord() const {
+//        return {x >> 5, z >> 5};  // Division par 32
+//    }
+//    
+//    simd::int3 toLocalPos() const {
+//        return {x & 31, y, z & 31};  // Modulo 32
+//    }
+//};
+//
+//// Biomes disponibles
+//enum class BiomeType : uint8_t {
+//    Plains,         // Plaines centrales plates
+//    Forest,
+//    Desert,
+//    Ocean,
+//    Volcanic,       // Volcan avec lave
+//    Moon,           // Surface lunaire
+//    Surreal,        // Biome étrange
+//    IceSheet,
+//    COUNT
+//};
+//
+//// Paramètres génération par biome
+//struct BiomeParams {
+//    float baseHeight;       // Hauteur de base (0-1)
+//    float heightVariation;  // Variation terrain
+//    float temperature;      // -1 à 1
+//    float humidity;         // 0 à 1
+//    float roughness;        // Pour normal maps
+//    BlockType surfaceBlock;
+//    BlockType underBlock;
+//    
+//    static BiomeParams forType(BiomeType type);
+//};
+//
+//// Données chunk en mémoire (optimisé pour cache)
+//struct ChunkData {
+//    ChunkCoord coord;
+//    std::array<VoxelBlock, CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE> blocks;
+//    BiomeType dominantBiome;
+//    bool isDirty = true;        // Nécessite re-mesh
+//    bool isGenerated = false;   // Terrain généré
+//    uint32_t lastAccess = 0;    // Pour LRU cache
+//    
+//    VoxelBlock& getBlock(int x, int y, int z) {
+//        return blocks[x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE];
+//    }
+//    
+//    const VoxelBlock& getBlock(int x, int y, int z) const {
+//        return blocks[x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE];
+//    }
+//};
+//
+//// Vertex pour rendu (PBR complet)
+//struct VoxelVertex {
+//    simd::float3 position;
+//    simd::float3 normal;
+//    simd::float2 texCoord;
+//    simd::float3 tangent;
+//    simd::float3 bitangent;
+//    uint32_t blockType;  // Pour texture array
+//    float ao;            // Ambient occlusion pré-calculé
+//};
+//
+//// Uniforms pour shaders
+//struct VoxelUniforms {
+//    simd::float4x4 modelViewProjection;
+//    simd::float4x4 modelMatrix;
+//    simd::float4x4 normalMatrix;
+//    simd::float3 cameraPosition;
+//    float time;
+//    simd::float3 sunDirection;
+//    float _pad0;
+//    simd::float3 sunColor;
+//    float sunIntensity;
+//};
+//
+//// Propriétés matériau PBR par type de bloc
+//struct BlockMaterial {
+//    simd::float3 albedo;
+//    float metallic;
+//    float roughness;
+//    float ao;
+//    simd::float2 texScale;  // Échelle texture
+//    uint32_t hasNormalMap : 1;
+//    uint32_t hasRoughnessMap : 1;
+//    uint32_t hasAOMap : 1;
+//    uint32_t reserved : 29;
+//    
+//    static BlockMaterial forBlockType(BlockType type);
+//};
+//
+//inline BiomeParams BiomeParams::forType(BiomeType type) {
+//    switch(type) {
+//        case BiomeType::Plains:
+//            return {0.4f, 0.05f, 0.6f, 0.5f, 0.3f, BlockType::Grass, BlockType::Dirt};
+//        case BiomeType::Forest:
+//            return {0.45f, 0.15f, 0.5f, 0.7f, 0.4f, BlockType::Grass, BlockType::Dirt};
+//        case BiomeType::Desert:
+//            return {0.35f, 0.2f, 0.9f, 0.1f, 0.2f, BlockType::Sand, BlockType::Sand};
+//        case BiomeType::Ocean:
+//            return {0.15f, 0.1f, 0.5f, 1.0f, 0.1f, BlockType::Sand, BlockType::Stone};
+//        case BiomeType::Volcanic:
+//            return {0.5f, 0.3f, 1.0f, 0.0f, 0.8f, BlockType::VolcanicRock, BlockType::Obsidian};
+//        case BiomeType::Moon:
+//            return {0.4f, 0.25f, -1.0f, 0.0f, 0.6f, BlockType::MoonRock, BlockType::MoonRock};
+//        case BiomeType::Surreal:
+//            return {0.6f, 0.4f, 0.0f, 0.5f, 0.9f, BlockType::Stone, BlockType::Dirt};
+//        case BiomeType::IceSheet:
+//            return {0.42f, 0.08f, -0.8f, 0.9f, 0.2f, BlockType::Ice, BlockType::Snow};
+//        default:
+//            return {0.5f, 0.1f, 0.5f, 0.5f, 0.5f, BlockType::Grass, BlockType::Dirt};
+//    }
+//}
+//
+//inline BlockMaterial BlockMaterial::forBlockType(BlockType type) {
+//    switch(type) {
+//        case BlockType::GrassDetailed:
+//            return {{0.3f, 0.6f, 0.2f}, 0.0f, 0.8f, 1.0f, {1.0f, 1.0f}, 1, 1, 1, 0};
+//        case BlockType::StoneDetailed:
+//            return {{0.5f, 0.5f, 0.5f}, 0.0f, 0.9f, 1.0f, {1.0f, 1.0f}, 1, 1, 1, 0};
+//        case BlockType::Sand:
+//            return {{0.9f, 0.8f, 0.6f}, 0.0f, 0.7f, 1.0f, {2.0f, 2.0f}, 1, 1, 0, 0};
+//        case BlockType::Water:
+//            return {{0.1f, 0.3f, 0.6f}, 0.0f, 0.1f, 1.0f, {1.0f, 1.0f}, 0, 0, 0, 0};
+//        default:
+//            return {{0.8f, 0.8f, 0.8f}, 0.0f, 0.5f, 1.0f, {1.0f, 1.0f}, 0, 0, 0, 0};
+//    }
+//}
+//
+//#endif

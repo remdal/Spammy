@@ -281,8 +281,7 @@ kernel void generateChunkTerrain(device uint8_t* outputBlocks [[buffer(0)]],
     if (gid.x >= CHUNK_SIZE || gid.y >= CHUNK_HEIGHT || gid.z >= CHUNK_SIZE)
         return;
 
-    int3 worldPos = int3(params.chunkX * CHUNK_SIZE + int(gid.x),
-                         int(gid.y),
+    int3 worldPos = int3(params.chunkX * CHUNK_SIZE + int(gid.x), int(gid.y),
                          params.chunkZ * CHUNK_SIZE + int(gid.z));
 
     float2 pos2D = float2(worldPos.x, worldPos.z);

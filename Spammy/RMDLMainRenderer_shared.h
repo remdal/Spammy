@@ -27,6 +27,7 @@ struct RMDLCameraUniforms
     simd::float4x4      invViewMatrix;
     simd::float4        frustumPlanes[6];
     simd::float3        position;
+    float               padding;
 };
 
 struct RMDLUniforms

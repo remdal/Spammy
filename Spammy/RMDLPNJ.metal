@@ -9,6 +9,7 @@
 using namespace metal;
 
 #include "RMDLMainRenderer_shared.h"
+#import "Helpers.metal"
 
 struct Vertex
 {
@@ -92,40 +93,6 @@ struct LightUniforms
     float ambientIntensity;
 };
 
-constant float PI = 3.14159265359;
-
-float DistributionGGX(float3 N, float3 H, float roughness)
-{
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-    return a2 / max(denom, 0.0001);
-}
-
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
-    return NdotV / (NdotV * (1.0 - k) + k);
-}
-
-float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
-{
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-    return ggx1 * ggx2;
-}
-
-float3 fresnelSchlick(float cosTheta, float3 F0)
-{
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-}
-
 fragment float4 fragment_main_pnj(VertexOut in [[stage_in]],
                                   constant MaterialUniforms& material [[buffer(0)]],
                                   constant LightUniforms& light [[buffer(1)]],
@@ -156,8 +123,8 @@ fragment float4 fragment_main_pnj(VertexOut in [[stage_in]],
     float3 F0 = mix(float3(0.04), albedo, metallic);
 
     // Cook-Torrance BRDF
-    float NDF = DistributionGGX(N, H, roughness);
-    float G = GeometrySmith(N, V, L, roughness);
+    float NDF = distributionGGX(N, H, roughness);
+    float G = geometrySmith(N, V, L, roughness);
     float3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
     
     float3 numerator = NDF * G * F;
@@ -170,7 +137,7 @@ fragment float4 fragment_main_pnj(VertexOut in [[stage_in]],
     float NdotL = max(dot(N, L), 0.0);
     float3 radiance = light.color * light.intensity;
     
-    float3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
+    float3 Lo = (kD * albedo / M_PI_F + specular) * radiance * NdotL; //PI
     
     // Ambient lighting with AO
     float3 ambient = light.ambientColor * light.ambientIntensity * albedo * ao;

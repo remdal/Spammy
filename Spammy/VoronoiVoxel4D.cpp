@@ -22,8 +22,8 @@ void BiomeGenerator::generateBiomeMap()
     regions.push_back({
         {0.0f, 0.0f},
         400.0f, // 250
-        BiomeType::PERLIN_VORONOI_MIXED,
-        1.0f
+        BiomeTypes::PERLIN_VORONOI_MIXED,
+        0.1f
     });
     
     for (int i = 0; i < 2; ++i) // 4
@@ -31,7 +31,7 @@ void BiomeGenerator::generateBiomeMap()
         regions.push_back({
             {posDist(rng), posDist(rng)},
             radiusDist(rng) * 0.5f,
-            BiomeType::VOLCANO_ACTIVE,
+            BiomeTypes::VOLCANO_ACTIVE,
             0.8f
         });
     }
@@ -39,7 +39,7 @@ void BiomeGenerator::generateBiomeMap()
     regions.push_back({
         {posDist(rng), posDist(rng)},
         radiusDist(rng),
-        BiomeType::VORONOI_4D_VOID,
+        BiomeTypes::VORONOI_4D_VOID,
         1.0f
     });
     
@@ -47,26 +47,26 @@ void BiomeGenerator::generateBiomeMap()
         regions.push_back({
             {posDist(rng), posDist(rng)},
             radiusDist(rng) * 0.7f,
-            BiomeType::SNOW_PARTICLES,
-            0.9f
+            BiomeTypes::SNOW_PARTICLES,
+            0.1f
         });
     }
     
     regions.push_back({
         {posDist(rng), posDist(rng)},
         100.0f,
-        BiomeType::CHAOS,
+        BiomeTypes::CHAOS,
         1.0f
     });
 }
 
-BiomeType BiomeGenerator::getBiomeAt(float worldX, float worldZ)
+BiomeTypes BiomeGenerator::getBiomeAt(float worldX, float worldZ)
 {
     simd::float2 pos = {worldX, worldZ};
     
     // Trouve le biome le plus proche
     float minDist = 10000.0f;
-    BiomeType closestBiome = BiomeType::PERLIN_VORONOI_MIXED;
+    BiomeTypes closestBiome = BiomeTypes::PERLIN_VORONOI_MIXED;
     
     for (const auto& region : regions) {
         simd::float2 diff = pos - region.center;
@@ -80,7 +80,7 @@ BiomeType BiomeGenerator::getBiomeAt(float worldX, float worldZ)
     return closestBiome;
 }
 
-float BiomeGenerator::getBiomeBlend(float worldX, float worldZ, BiomeType type)
+float BiomeGenerator::getBiomeBlend(float worldX, float worldZ, BiomeTypes type)
 {
     simd::float2 pos = {worldX, worldZ};
     
@@ -338,28 +338,30 @@ void VoronoiVoxel4D::generateSitesForRegion2(int chunkX, int chunkZ, float time)
         
         // Biome basé sur hauteur Y + noise 3D
         float heightFactor = site.position.y / CHUNK_HEIGHT;
-        float noise3D = sinf(site.position.x * 0.08f) *
-                       cosf(site.position.y * 0.05f) *
-                       sinf(site.position.z * 0.08f);
+        float noise3D = sinf(site.position.x * 0.08f) * cosf(site.position.y * 0.05f) * sinf(site.position.z * 0.08f);
         
-        // Classification organique des zones
-        if (heightFactor > 0.75f) {
-            // Ciel : cristaux flottants
+        if (heightFactor > 0.75f)
             site.blockType = (noise3D > 0) ? BlockType::CRYSTAL_BLUE : BlockType::GLOWING;
-        } else if (heightFactor > 0.5f) {
-            // Surface : végétation alien
-            if (noise3D > 0.4f) site.blockType = BlockType::ORGANIC;
-            else if (noise3D > 0.0f) site.blockType = BlockType::CRYSTAL_GREEN;
-            else site.blockType = BlockType::STONE;
-        } else if (heightFactor > 0.25f) {
-            // Sous-sol : minerais
-            if (noise3D > 0.5f) site.blockType = BlockType::CRYSTAL_RED;
-            else if (noise3D > 0.0f) site.blockType = BlockType::METAL;
-            else site.blockType = BlockType::STONE;
-        } else {
-            // Profondeurs : matière sombre
-            site.blockType = (noise3D > 0) ? BlockType::VOID_MATTER : BlockType::STONE;
+        else if (heightFactor > 0.5f)
+        {
+            if (noise3D > 0.4f)
+                site.blockType = BlockType::ORGANIC;
+            else if (noise3D > 0.0f)
+                site.blockType = BlockType::CRYSTAL_GREEN;
+            else
+                site.blockType = BlockType::STONE;
         }
+        else if (heightFactor > 0.25f)
+        {
+            if (noise3D > 0.5f)
+                site.blockType = BlockType::CRYSTAL_RED;
+            else if (noise3D > 0.0f)
+                site.blockType = BlockType::METAL;
+            else
+                site.blockType = BlockType::STONE;
+        }
+        else
+            site.blockType = (noise3D > 0) ? BlockType::VOID_MATTER : BlockType::STONE;
         
         site.influence = distInfluence(localRng);
         sites.push_back(site);
@@ -486,14 +488,14 @@ BlockType VoxelWorld::getBlockAtPositionBiomed(int worldX, int worldY, int world
         return voronoiGen.getBlockAtPosition(worldX, worldY, worldZ, time);
     }
     
-    BiomeType biome = biomeGen->getBiomeAt(worldX, worldZ);
+    BiomeTypes biome = biomeGen->getBiomeAt(worldX, worldZ);
     float blend = biomeGen->getBiomeBlend(worldX, worldZ, biome);
     
     switch (biome) {
-        case BiomeType::PERLIN_VORONOI_MIXED:
+        case BiomeTypes::PERLIN_VORONOI_MIXED:
             return biomeGen->generatePerlinVoronoi(worldX, worldY, worldZ, blend);
             
-        case BiomeType::VOLCANO_ACTIVE: {
+        case BiomeTypes::VOLCANO_ACTIVE: {
             simd::float2 center = {0, 0};
             float dist = sqrtf(worldX*worldX + worldZ*worldZ);
             return biomeGen->generateVolcano(worldX, worldY, worldZ, dist);
@@ -523,14 +525,14 @@ BlockType VoxelWorld::getBlockAtPositionBiomed(int worldX, int worldY, int world
 //            return biomeGen->generateVolcano(worldX, worldY, worldZ, distToCenter);
 //        }
             
-        case BiomeType::VORONOI_4D_VOID:
+        case BiomeTypes::VORONOI_4D_VOID:
             return voronoiGen.getBlockAtPosition(worldX, worldY, worldZ, time);  // Votre système actuel
             
-        case BiomeType::SNOW_PARTICLES:
+        case BiomeTypes::SNOW_PARTICLES:
             // Terrain de base + flag pour particules de neige
             return biomeGen->generatePerlinVoronoi(worldX, worldY, worldZ, blend);
             
-        case BiomeType::CHAOS:
+        case BiomeTypes::CHAOS:
             return biomeGen->generateWTF(worldX, worldY, worldZ, blend);
     }
     
@@ -607,7 +609,7 @@ void Chunk::addCubeFace(std::vector<VoxelVertex>& vertices, std::vector<uint32_t
     for (int i = 0; i < 4; ++i)
     {
         VoxelVertex v;
-        v.position = pos + faceVertices[face][i] * VOXEL_SIZE;
+        v.position = pos + faceVertices[face][i] * VOXELSIZE;
         v.color = shadedColor;
         v.normal = normals[face];
         vertices.push_back(v);
@@ -700,7 +702,7 @@ VoxelWorld::~VoxelWorld()
 //        for (int z = 0; z < CHUNK_SIZE; ++z) {
 //            int worldX = chunkX * CHUNK_SIZE + x;
 //            int worldZ = chunkZ * CHUNK_SIZE + z;
-//            
+//            y
 //            for (int y = 0; y < CHUNK_HEIGHT; ++y) {
 //                BlockType type = voronoiGen.getBlockAtPositionBiomed(
 //                    worldX, y, worldZ, currentTime
@@ -710,6 +712,23 @@ VoxelWorld::~VoxelWorld()
 //        }
 //    }
 //}
+
+inline int floordiv(int a, int b)
+{
+    int r = a / b;
+    if ((a ^ b) < 0 && a % b)
+        --r;
+    return r;
+}
+
+inline int floormod(int a, int b)
+{
+    int m = a % b;
+    if (m < 0)
+        m += b;
+    return m;
+}
+
 void VoxelWorld::worldToChunk(int worldX, int worldZ, int& chunkX, int& chunkZ, int& localX, int& localZ)
 {
     chunkX = worldX >> 5; // Division par 32
@@ -760,11 +779,10 @@ void VoxelWorld::generateTerrainVoronoi(int chunkX, int chunkZ)
             {
 //                BlockType type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
                 BlockType type;
-                if (biomeGen) {
+                if (biomeGen)
                     type = getBlockAtPositionBiomed(worldX, y, worldZ, currentTime);
-                } else {
+                else
                     type = voronoiGen.getBlockAtPosition(worldX, y, worldZ, currentTime);
-                }
 
                 if (y < 5 || y > 100)
                     type = BlockType::AIR;
