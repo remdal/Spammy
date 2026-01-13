@@ -9,7 +9,7 @@
 using namespace metal;
 
 #include "RMDLMainRenderer_shared.h" // RMDLCameraUniforms
-#import "Helpers.metal" // PBR functions
+#import "Helpers.metal" // PBR functions & Noises
 
 // STRUCTURES COMMUNES
 
@@ -308,16 +308,18 @@ kernel void hydraulicErosion(texture2d<float, access::read> heightmapIn [[textur
 // VERTEX SHADERS
 
 vertex VertexOut terrainVertex(TerrainVertex in [[stage_in]],
-                               constant TerrainUniforms& uniforms [[buffer(1)]]
-)
+                               constant TerrainUniforms& uniforms [[buffer(1)]])
 {
     VertexOut out;
-    
-    float4 worldPos = uniforms.modelMatrix * float4(in.position, 1.0);
+
+    float4 worldPos = float4(in.position, 1.0); // uniforms.modelMatrix * 
     out.position = uniforms.viewProjectionMatrix * worldPos;
-    out.worldPosition = worldPos.xyz;
-    out.normal = (uniforms.modelMatrix * float4(in.normal, 0.0)).xyz;
-    out.tangent = (uniforms.modelMatrix * float4(in.tangent, 0.0)).xyz;
+    out.worldPosition = in.position;
+//    out.worldPosition = worldPos.xyz;
+//    out.normal = (uniforms.modelMatrix * float4(in.normal, 0.0)).xyz;
+    out.normal = in.normal;
+//    out.tangent = (uniforms.modelMatrix * float4(in.tangent, 0.0)).xyz;
+    out.tangent = in.tangent;
     out.texCoord = in.texCoord;
     out.color = in.color;
     out.height = in.height;
@@ -390,14 +392,14 @@ fragment float4 terrainFragment(VertexOut in [[stage_in]],
                                 sampler textureSampler [[sampler(0)]])
 {
     // Sample material textures based on biome
-    int biomeIndex = int(in.biomeId);
+//    int biomeIndex = int(in.biomeId);
     float2 texCoord = in.texCoord * 10.0; // Tiling
 
-    float4 albedo = albedoArray.sample(textureSampler, texCoord, biomeIndex);
-    float3 normalMap = normalMapArray.sample(textureSampler, texCoord, biomeIndex).rgb * 2.0 - 1.0;
-    float roughness = roughnessArray.sample(textureSampler, texCoord, biomeIndex).r;
-    float metallic = metallicArray.sample(textureSampler, texCoord, biomeIndex).r;
-    float ao = aoArray.sample(textureSampler, texCoord, biomeIndex).r;
+    float4 albedo = albedoArray.sample(textureSampler, texCoord, in.biomeId);
+    float3 normalMap = normalMapArray.sample(textureSampler, texCoord, in.biomeId).rgb * 2.0 - 1.0;
+    float roughness = roughnessArray.sample(textureSampler, texCoord, in.biomeId).r;
+    float metallic = metallicArray.sample(textureSampler, texCoord, in.biomeId).r;
+    float ao = aoArray.sample(textureSampler, texCoord, in.biomeId).r;
     
     // Blend with biome color
     albedo.rgb = mix(albedo.rgb, in.color.rgb, 0.3);

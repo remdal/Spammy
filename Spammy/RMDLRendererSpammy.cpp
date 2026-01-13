@@ -122,7 +122,7 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPos = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 60.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 150.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 250.0f);
 //    m_cameraPNJ.initPerspectiveWithPosition(<#simd::float3 position#>, <#simd::float3 direction#>, <#simd::float3 up#>, <#float viewAngle#>, <#float aspectRatio#>, <#float nearPlane#>, <#float farPlane#>)
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -134,9 +134,8 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     
     m_voxelGrid = std::make_unique<RMDLGrid>(m_device, layerPixelFormat, depthPixelFormat, width, height, m_shaderLibrary);
     // 2. Terrain System
-    m_terrainSystem = std::make_unique<TerrainSystem>(
-        m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary);
-    m_terrainSystem->initialize(89); // Votre seed
+    m_terrainSystem = std::make_unique<TerrainSystem>(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary);
+    m_terrainSystem->initialize(89); // seed
     m_terrainSystem->setHeightScale(1.0f);
     m_terrainSystem->setRenderDistance(500.0f);
     
@@ -147,8 +146,7 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     m_physicsSystem->setVoxelGrid(m_voxelGrid.get());
     
     // 4. Inventory System
-    m_inventorySystem = std::make_unique<InventorySystem>(
-        m_device, m_shaderLibrary, (float)width, (float)height);
+    m_inventorySystem = std::make_unique<InventorySystem>(m_device, m_shaderLibrary, (float)width, (float)height);
     
     // Position du joueur au spawn
     auto& player = m_physicsSystem->getPlayer();
@@ -249,7 +247,7 @@ void GameCoordinator::draw(MTK::View* view)
     blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
-//    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
+    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
 
@@ -263,7 +261,7 @@ void GameCoordinator::draw(MTK::View* view)
     dt += 0.016f;
     
     ui.beginFrame(m_viewport.width, m_viewport.height);
-    ui.drawText("Hello 89 ! Make sense", 50, 50, 0.5);
+    ui.drawText("Hello 89 ! Make sense", 550, 50, 0.5);
 //    ui.endFrame(renderCommandEncoder);
 
 //    colorsFlash.renderPostProcess(renderCommandEncoder);
@@ -305,19 +303,19 @@ void GameCoordinator::draw(MTK::View* view)
     }
     
     
-    printf("Pos: %.1f %.1f %.1f | Voxels: %zu | Chunks: %zu ",
-            player.entity.position.x,
-            player.entity.position.y,
-            player.entity.position.z,
-            m_voxelGrid->getActiveVoxelCount(),
-            m_terrainSystem->getChunkCount());
-    printf("Camera pos: %.1f %.1f %.1f\n", m_camera.position().x, m_camera.position().y, m_camera.position().z);
-    printf("Chunks loaded: %zu\n", m_terrainSystem->getChunkCount());
-    BiomeType testBiome = m_terrainSystem->getBiomeAt(0, 0);
-    printf("Biome at (0,0): %d\n", (int)testBiome);
-    
-    if (m_editMode) ui.drawText("EDIT MODE", 10, 30, 0.25);
-    if (m_buildMode) ui.drawText("BUILD MODE", 10, 50, 0.25);
+//    printf("Pos: %.1f %.1f %.1f | Voxels: %zu | Chunks: %zu ",
+//            player.entity.position.x,
+//            player.entity.position.y,
+//            player.entity.position.z,
+//            m_voxelGrid->getActiveVoxelCount(),
+//            m_terrainSystem->getChunkCount());
+//    printf("Camera pos: %.1f %.1f %.1f\n", m_camera.position().x, m_camera.position().y, m_camera.position().z);
+//    printf("Chunks loaded: %zu\n", m_terrainSystem->getChunkCount());
+//    BiomeType testBiome = m_terrainSystem->getBiomeAt(0, 0);
+//    printf("Biome at (0,0): %d\n", (int)testBiome);
+//    
+//    if (m_editMode) ui.drawText("EDIT MODE", 10, 30, 0.25);
+//    if (m_buildMode) ui.drawText("BUILD MODE", 10, 50, 0.25);
     
     ui.endFrame(renderCommandEncoder);
     

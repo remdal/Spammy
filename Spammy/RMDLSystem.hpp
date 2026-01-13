@@ -19,13 +19,13 @@
 #include <cmath>
 #include <algorithm>
 
-// Forward declarations
 class BiomeGen;
 
 // Terrain chunk for streaming
-struct TerrainChunk {
-    static constexpr int CHUNK_SIZE = 64;
-    static constexpr int VERTEX_RESOLUTION = 128; // Vertices per chunk side
+struct TerrainChunk
+{
+    static constexpr int CHUNK_SIZE = 8;
+    static constexpr int VERTEX_RESOLUTION = 16; // Vertices per chunk side
     
     simd::int2 chunkCoord;
     float lodLevel;
@@ -45,8 +45,8 @@ struct TerrainChunk {
                      indexCount(0) {}
 };
 
-// Vertex structure for terrain
-struct TerrainVertex {
+struct TerrainVertex
+{
     simd::float3 position;
     simd::float3 normal;
     simd::float3 tangent;
@@ -56,8 +56,8 @@ struct TerrainVertex {
     float biomeId;           // Which biome this vertex belongs to
 };
 
-// Uniforms for terrain rendering
-struct TerrainUniforms {
+struct TerrainUniforms
+{
     simd::float4x4 modelMatrix;
     simd::float4x4 viewProjectionMatrix;
     simd::float3 cameraPosition;
@@ -69,7 +69,6 @@ struct TerrainUniforms {
     float heightScale;
 };
 
-// Biome types
 enum class BiomeType : uint32_t {
     SpawnCrater = 0,        // Starting area - relatively flat crater
     VoronoiPlains = 1,      // Standard Voronoi cells
@@ -87,7 +86,8 @@ enum class BiomeType : uint32_t {
 };
 
 // Biome parameters
-struct BiomeParams {
+struct BiomeParams
+{
     BiomeType type;
     simd::float2 center;     // Voronoi center point
     float radius;
@@ -97,7 +97,8 @@ struct BiomeParams {
     float transitionWidth;
 };
 
-class TerrainSystem {
+class TerrainSystem
+{
 public:
     TerrainSystem(MTL::Device* device,
                   MTL::PixelFormat colorFormat,

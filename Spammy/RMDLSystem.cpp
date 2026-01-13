@@ -17,10 +17,14 @@ BiomeGen::BiomeGen(uint32_t seed)
 BiomeType BiomeGen::determineBiomeType(float distanceFromSpawn, float randomValue)
 {
     // Nearby spawn: gentler biomes
-    if (distanceFromSpawn < 200.0f) {
-        if (randomValue < 0.6f) return BiomeType::VoronoiPlains;
-        else if (randomValue < 0.9f) return BiomeType::VoronoiTerrace;
-        else return BiomeType::VoronoiEroded;
+    if (distanceFromSpawn < 10.0f) // 1000
+    {
+        if (randomValue < 0.6f)
+            return BiomeType::VoronoiPlains;
+        else if (randomValue < 0.9f)
+            return BiomeType::VoronoiTerrace;
+        else
+            return BiomeType::VoronoiEroded;
     }
     
     // Mid-range: more variety
@@ -182,7 +186,7 @@ TerrainSystem::TerrainSystem(MTL::Device* device,
     , m_library(library->retain())
     , m_seed(89)
     , m_heightScale(1.0f)
-    , m_maxRenderDistance(500.0f)
+    , m_maxRenderDistance(100.0f)
     , m_lodEnabled(true)
     , m_wireframe(false)
     , m_time(0.0f)
@@ -335,8 +339,7 @@ void TerrainSystem::createPipelines(MTL::PixelFormat colorFormat, MTL::PixelForm
 
 void TerrainSystem::createTextures()
 {
-    MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(
-        MTL::PixelFormatRGBA16Float, 2048, 2048, false);
+    MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(MTL::PixelFormatRGBA16Float, 2048, 2048, false);
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     texDesc->setStorageMode(MTL::StorageModePrivate);
     
@@ -344,11 +347,10 @@ void TerrainSystem::createTextures()
     m_normalTexture = m_device->newTexture(texDesc);
     m_biomeTexture = m_device->newTexture(texDesc);
     m_voronoiTexture = m_device->newTexture(texDesc);
-    
+
     // TODO: Create texture arrays for materials
     // For now, create placeholder textures
-    MTL::TextureDescriptor* arrayDesc = MTL::TextureDescriptor::texture2DDescriptor(
-        MTL::PixelFormatRGBA16Float, 512, 512, false);
+    MTL::TextureDescriptor* arrayDesc = MTL::TextureDescriptor::texture2DDescriptor(MTL::PixelFormatRGBA16Float, 512, 512, false);
     arrayDesc->setTextureType(MTL::TextureType2DArray);
     arrayDesc->setArrayLength((int)BiomeType::COUNT);
     arrayDesc->setUsage(MTL::TextureUsageShaderRead);
@@ -382,8 +384,10 @@ void TerrainSystem::initialize(uint32_t seed)
     generateChunkMesh(getOrCreateChunk(0, 0));
 }
 
-void TerrainSystem::generateHeightmapGPU() {
-    if (!m_voronoiGeneratorPipeline) return;
+void TerrainSystem::generateHeightmapGPU()
+{
+    if (!m_voronoiGeneratorPipeline)
+        return;
     
     MTL::CommandQueue* queue = m_device->newCommandQueue();
     MTL::CommandBuffer* cmd = queue->commandBuffer();
@@ -480,7 +484,8 @@ void TerrainSystem::applyErosionGPU(int iterations) {
     generateNormalsGPU();
 }
 
-void TerrainSystem::update(float deltaTime, const simd::float3& cameraPosition) {
+void TerrainSystem::update(float deltaTime, const simd::float3& cameraPosition)
+{
     m_time += deltaTime;
     
     // Update chunks (streaming, LOD)
@@ -509,7 +514,7 @@ void TerrainSystem::render(MTL::RenderCommandEncoder* encoder,
     encoder->setDepthStencilState(m_depthStencilState);
     
     m_uniforms.viewProjectionMatrix = viewProjection;
-    m_uniforms.modelMatrix = math::makeIdentity();
+//    m_uniforms.modelMatrix = math::makeIdentity();
     memcpy(m_uniformsBuffer->contents(), &m_uniforms, sizeof(TerrainUniforms));
     
     encoder->setVertexBuffer(m_uniformsBuffer, 0, 1);
@@ -523,8 +528,10 @@ void TerrainSystem::render(MTL::RenderCommandEncoder* encoder,
     encoder->setFragmentTexture(m_aoArray, 4);
     
     // Render all visible chunks
-    for (const auto& chunk : m_chunks) {
-        if (!chunk->visible || chunk->indexCount == 0) continue;
+    for (const auto& chunk : m_chunks)
+    {
+        if (!chunk->visible || chunk->indexCount == 0)
+            continue;
         
         encoder->setVertexBuffer(chunk->vertexBuffer, 0, 0);
         encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
@@ -590,8 +597,21 @@ void TerrainSystem::generateChunkMesh(TerrainChunk* chunk) {
             };
             
             // Normal and tangent would be calculated or read from texture
-            vertex.normal = {0, 1, 0};
-            vertex.tangent = {1, 0, 0};
+//            vertex.normal = {0, 1, 0};
+//            vertex.tangent = {1, 0, 0};
+            // Calculer la normale à partir des voisins
+            float hL = sampleHeightmap(vertex.position.x - vertexSpacing, vertex.position.z);
+            float hR = sampleHeightmap(vertex.position.x + vertexSpacing, vertex.position.z);
+            float hD = sampleHeightmap(vertex.position.x, vertex.position.z - vertexSpacing);
+            float hU = sampleHeightmap(vertex.position.x, vertex.position.z + vertexSpacing);
+
+            simd::float3 normal;
+            normal.x = (hL - hR) / (2.0f * vertexSpacing);
+            normal.y = 1.0f;
+            normal.z = (hD - hU) / (2.0f * vertexSpacing);
+            vertex.normal = simd::normalize(normal);
+
+            vertex.tangent = simd::normalize(simd::float3{1, normal.x, 0}); // Tangent le long de X
             
             // Biome color
             vertex.biomeId = (float)m_biomeGenerator->getBiomeAt({vertex.position.x, vertex.position.z});
@@ -719,7 +739,8 @@ BiomeType TerrainSystem::getBiomeAt(float x, float z) const {
     return m_biomeGenerator->getBiomeAt({x, z});
 }
 
-void TerrainSystem::streamChunks(const simd::float3& cameraPosition) {
+void TerrainSystem::streamChunks(const simd::float3& cameraPosition)
+{
     // Load chunks around camera
     int cameraChunkX = (int)floorf(cameraPosition.x / TerrainChunk::CHUNK_SIZE);
     int cameraChunkZ = (int)floorf(cameraPosition.z / TerrainChunk::CHUNK_SIZE);
@@ -732,8 +753,10 @@ void TerrainSystem::streamChunks(const simd::float3& cameraPosition) {
             int chunkZ = cameraChunkZ + z;
             
             TerrainChunk* chunk = getOrCreateChunk(chunkX, chunkZ);
-            if (chunk->needsUpdate) {
+            if (chunk->needsUpdate)
+            {
                 generateChunkMesh(chunk);
+                chunk->needsUpdate = false;
             }
         }
     }

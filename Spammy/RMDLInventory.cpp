@@ -205,7 +205,7 @@ void InventorySystem::createRenderPipelines() {
     if (uiVertFunc && uiFragFunc) {
         uiDesc->setVertexFunction(uiVertFunc);
         uiDesc->setFragmentFunction(uiFragFunc);
-        uiDesc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+        uiDesc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA16Float);
         
         // Enable alpha blending
         auto colorAttachment = uiDesc->colorAttachments()->object(0);
@@ -235,7 +235,7 @@ void InventorySystem::createRenderPipelines() {
     if (gridVertFunc && gridFragFunc) {
         gridDesc->setVertexFunction(gridVertFunc);
         gridDesc->setFragmentFunction(gridFragFunc);
-        gridDesc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+        gridDesc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA32Float);
         gridDesc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
         
         NS::Error* error = nullptr;
@@ -261,8 +261,7 @@ void InventorySystem::loadTextures() {
     // TODO: Load actual textures
     // For now, create placeholder textures
     
-    MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(
-        MTL::PixelFormatRGBA8Unorm, 512, 512, false);
+    MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(MTL::PixelFormatRGBA32Float, 512, 512, false);
     texDesc->setUsage(MTL::TextureUsageShaderRead);
     
     m_itemIconAtlas = m_device->newTexture(texDesc);
