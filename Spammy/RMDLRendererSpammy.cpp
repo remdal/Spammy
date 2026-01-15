@@ -104,13 +104,13 @@ GameCoordinator::GameCoordinator(MTL::Device* device,
 : m_device(device->retain()), m_shaderLibrary(m_device->newDefaultLibrary()),
 m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat),
 _rotationAngle(0.0f), m_frame(0),
-m_editMode(false), m_buildMode(false),
+m_editMode(false), m_buildMode(true),
 blender(m_device, layerPixelFormat, m_depthPixelFormat, resourcePath, m_shaderLibrary),
 skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
-snow(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
-colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
+colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+vertexBuffer(nullptr)
 {
     m_viewportSize.x = (float)width;
     m_viewportSize.x = (float)height;
@@ -132,31 +132,16 @@ colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     
     printf("%f\n%f\n%f\n", fade(0.1), fade(1.1), fade(2.7));
     
-    m_voxelGrid = std::make_unique<RMDLGrid>(m_device, layerPixelFormat, depthPixelFormat, width, height, m_shaderLibrary);
-    // 2. Terrain System
-    m_terrainSystem = std::make_unique<TerrainSystem>(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary);
-    m_terrainSystem->initialize(89); // seed
-    m_terrainSystem->setHeightScale(1.0f);
-    m_terrainSystem->setRenderDistance(500.0f);
+    // Dans init()
+    uint64_t seed = 12345;
+    _renderSystem = std::make_unique<RenderSystem>(m_device, layerPixelFormat, depthPixelFormat, width, height, resourcePath);
+//    _terrainManager = std::make_unique<TerrainManager>(m_device, seed);
+    _physicsSystem = std::make_unique<PhysicsSystem>(_terrainManager.get());
     
-    // 3. Physics System
-    m_physicsSystem = std::make_unique<PhysicsSystem>(m_device, m_shaderLibrary);
-    m_physicsSystem->setGravity({0.0f, -20.0f, 0.0f});
-    m_physicsSystem->setTerrainSystem(m_terrainSystem.get());
-    m_physicsSystem->setVoxelGrid(m_voxelGrid.get());
-    
-    // 4. Inventory System
-    m_inventorySystem = std::make_unique<InventorySystem>(m_device, m_shaderLibrary, (float)width, (float)height);
-    
-    // Position du joueur au spawn
-    auto& player = m_physicsSystem->getPlayer();
-    player.entity.position = {0.0f, 70.0f, 0.0f};
-    
-    // Donner quelques items de départ
-    m_inventorySystem->addItem(ItemType::CommandBlock, 1);
-    m_inventorySystem->addItem(ItemType::SolidBlock, 64);
-    m_inventorySystem->addItem(ItemType::MetalBlock, 32);
-    m_inventorySystem->addItem(ItemType::EngineBlock, 4);
+    NS::Date* date = NS::Date::dateWithTimeIntervalSinceNow(0);
+    m_uniforms.frameTime = 0.f;
+    makeTexture(layerPixelFormat, depthPixelFormat);
+
 }
 
 GameCoordinator::~GameCoordinator()
@@ -202,6 +187,101 @@ void GameCoordinator::handleScroll(float deltaY)
 {
 }
 
+void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat)
+{
+    static const NS::UInteger width = 1024;
+    MTL::TextureDescriptor* shadow = MTL::TextureDescriptor::texture2DDescriptor(depthPixelFormat, width, width, false);
+    shadow->setTextureType(MTL::TextureType2DArray);
+    shadow->setArrayLength(3);
+    shadow->setStorageMode(MTL::StorageModePrivate);
+    shadow->setUsage(MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
+    m_shadow = m_device->newTexture(shadow);
+    m_shadow->setLabel(MTLSTR("ShadowMap"));
+
+    NS::SharedPtr<MTL::DepthStencilDescriptor> depthStateDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+    depthStateDesc->setDepthWriteEnabled(true);
+
+    _shadowPassDesc->depthAttachment()->setTexture(m_shadow);
+    _shadowPassDesc->depthAttachment()->setClearDepth(1.f);
+    _shadowPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+    _shadowPassDesc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
+
+    _shadowDepthState = m_device->newDepthStencilState(depthStateDesc.get());
+
+    _gBufferPassDesc->init();
+    _gBufferPassDesc->depthAttachment()->setClearDepth(1.0f);
+    _gBufferPassDesc->depthAttachment()->setLevel(0);
+    _gBufferPassDesc->depthAttachment()->setSlice(0);
+    _gBufferPassDesc->depthAttachment()->setTexture(m_shadow);
+    _gBufferPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+    _gBufferPassDesc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
+
+    _gBufferPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionDontCare);
+    _gBufferPassDesc->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+    _gBufferPassDesc->colorAttachments()->object(1)->setLoadAction(MTL::LoadActionDontCare);
+    _gBufferPassDesc->colorAttachments()->object(1)->setStoreAction(MTL::StoreActionStore);
+
+    depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+    depthStateDesc->setDepthWriteEnabled(true);
+
+    _gBufferDepthState = m_device->newDepthStencilState(depthStateDesc.get());
+
+    _gBufferWithLoadPassDesc = _gBufferPassDesc;
+    _gBufferWithLoadPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionLoad );
+    _gBufferWithLoadPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+    _gBufferWithLoadPassDesc->colorAttachments()->object(1)->setLoadAction(MTL::LoadActionLoad);
+
+    _lightingPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionDontCare);
+    _lightingPassDesc->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+
+    depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionAlways);
+    depthStateDesc->setDepthWriteEnabled(false);
+    _lightingDepthState = m_device->newDepthStencilState(depthStateDesc.get());
+    
+    NS::SharedPtr<MTL::RenderPipelineDescriptor> pRenderPipDesc = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
+    pRenderPipDesc->setLabel(MTLSTR("Lighting"));
+    
+    NS::SharedPtr<MTL::Function> vertexFunction = NS::TransferPtr(m_shaderLibrary->newFunction(MTLSTR("LightingVs")));
+    NS::SharedPtr<MTL::Function> fragmentFunction = NS::TransferPtr(m_shaderLibrary->newFunction(MTLSTR("LightingPs")));
+
+    pRenderPipDesc->setVertexFunction(vertexFunction.get());
+    pRenderPipDesc->setFragmentFunction(fragmentFunction.get());
+    
+//        pRenderPipDesc->setRasterSampleCount(1);
+    pRenderPipDesc->colorAttachments()->object(0)->setPixelFormat(layerPixelFormat);
+
+    NS::Error* error = nullptr;
+    NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
+    pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat4);
+    pVertexDesc->attributes()->object(0)->setOffset(0);
+    pVertexDesc->attributes()->object(0)->setBufferIndex(0);
+    
+    pVertexDesc->layouts()->object(0)->setStride(sizeof(MTL::VertexFormatFloat4));
+    pVertexDesc->layouts()->object(0)->setStepRate(1);
+    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+
+//        NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+//        depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
+//        depthStencilDescriptor->setDepthWriteEnabled(true);
+
+    pRenderPipDesc->setVertexDescriptor(pVertexDesc.get());
+    m_lightingPpl = m_device->newRenderPipelineState(pRenderPipDesc.get(), &error);
+//        m_depthStencilState = m_device->newDepthStencilState(depthStencilDescriptor.get());
+    
+    simd::float4 initialMouseWorldPos = simd::float4{ 0.f, 0.f, 0.f, 0.f };
+    m_mouseBuffer = m_device->newBuffer(&initialMouseWorldPos, sizeof(initialMouseWorldPos), MTL::ResourceStorageModeManaged);
+    // Store 1 byte buffer for the 3D mouse position after depth read and resolve
+    MTL::ComputePipelineDescriptor *pPipStateDesc = MTL::ComputePipelineDescriptor::alloc()->init();
+    pPipStateDesc->setThreadGroupSizeIsMultipleOfThreadExecutionWidth(true);
+
+    NS::SharedPtr<MTL::Function> computeFunction = NS::TransferPtr(m_shaderLibrary->newFunction(MTLSTR("mousePositionUpdate")));
+    m_mousePositionComputeKnl = m_device->newComputePipelineState(computeFunction.get(), 0, nullptr, &error);
+    
+    
+
+}
+
 void GameCoordinator::loadGameSounds(const std::string &resourcePath, PhaseAudio *pAudioEngine)
 {
 //    pAudioEngine->loadMonoSound(resourcesPath, "Test.mp3");
@@ -219,6 +299,19 @@ void GameCoordinator::handleKeyPress(int key)
     if (key == 15) // R
     {
     }
+}
+
+void GameCoordinator::updateUniforms()
+{
+    m_cameraUniforms = m_camera.uniforms();
+    
+    m_uniforms.cameraUniforms = m_camera.uniforms();
+    m_uniforms.mouseState = simd::float3{ cursorPos.x, cursorPos.y, float(1.0f) };
+    m_uniforms.invScreenSize = simd::float2{ 1.0f / m_gBuffer0->width(), 1.0f / m_gBuffer1->width() };
+    m_uniforms.projectionYScale = 1.73205066;
+    m_uniforms.brushSize = 10.0f;
+
+    
 }
 
 void GameCoordinator::draw(MTK::View* view)
@@ -243,7 +336,9 @@ void GameCoordinator::draw(MTK::View* view)
         simd::float4{ -sinf(_rotationAngle), 0.0f, cosf(_rotationAngle), 0.0f },
         simd::float4{ 0.0f, 60.0f, 5.0f, 1.0f }
     };
-    m_cameraUniforms = m_camera.uniforms();
+    
+    updateUniforms();
+    
     blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
@@ -257,72 +352,19 @@ void GameCoordinator::draw(MTK::View* view)
     m_cameraUniforms.position = m_camera.position();
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
-//    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     dt += 0.016f;
     
     ui.beginFrame(m_viewport.width, m_viewport.height);
     ui.drawText("Hello 89 ! Make sense", 550, 50, 0.5);
-//    ui.endFrame(renderCommandEncoder);
-
 //    colorsFlash.renderPostProcess(renderCommandEncoder);
     
-    m_terrainSystem->update(dt, m_camera.position());
-      
-    // Update physics
-//    m_physicsSystem->update(dt);
+//    m_terrainSystem->update(dt, m_camera.position());
 
-    // Update camera from player physics
-    auto& player = m_physicsSystem->getPlayer();
-//    m_camera.setPosition(player.entity.position + simd::float3{0, 1.6f, 0});
+//    m_terrainSystem->render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 
-    // Update voxels
-    m_voxelGrid->updateChunks(m_camera.position());
 
-    // Update inventory UI
-    m_inventorySystem->updateUI(dt);
-
-    // === RENDER PHASE ===
-//    m_cameraUniforms = m_camera.uniforms();
-
-    // 1. Render Terrain (opaque)
-    m_terrainSystem->render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
-
-    // 2. Render Voxels
-    m_voxelGrid->renderChunks(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
-
-    // 3. Edit mode grid
-    if (m_editMode) {
-      m_voxelGrid->setEditMode(true);
-      m_voxelGrid->renderGridEdges(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
-    }
-
-    // 4. Vehicle grid in build mode
-    if (m_buildMode) {
-      auto& vehicle = m_physicsSystem->getVehicle();
-      m_inventorySystem->renderVehicleGrid(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, vehicle.entity.position);
-    }
-    
-    
-//    printf("Pos: %.1f %.1f %.1f | Voxels: %zu | Chunks: %zu ",
-//            player.entity.position.x,
-//            player.entity.position.y,
-//            player.entity.position.z,
-//            m_voxelGrid->getActiveVoxelCount(),
-//            m_terrainSystem->getChunkCount());
-//    printf("Camera pos: %.1f %.1f %.1f\n", m_camera.position().x, m_camera.position().y, m_camera.position().z);
-//    printf("Chunks loaded: %zu\n", m_terrainSystem->getChunkCount());
-//    BiomeType testBiome = m_terrainSystem->getBiomeAt(0, 0);
-//    printf("Biome at (0,0): %d\n", (int)testBiome);
-//    
-//    if (m_editMode) ui.drawText("EDIT MODE", 10, 30, 0.25);
-//    if (m_buildMode) ui.drawText("BUILD MODE", 10, 50, 0.25);
-    
     ui.endFrame(renderCommandEncoder);
-    
-    // Render inventory UI (avec alpha blending)
-    m_inventorySystem->renderUI(renderCommandEncoder,
-        {(float)m_viewport.width, (float)m_viewport.height});
-    
 
     renderCommandEncoder->endEncoding();
     commandBuffer->presentDrawable(view->currentDrawable());

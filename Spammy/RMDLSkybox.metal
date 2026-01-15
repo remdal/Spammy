@@ -73,7 +73,7 @@ float perlinNoise2D(float2 p)
     return mix(v0, v1, u.y);
 }
 
-float perlinNoise3D(float3 p)
+float perlinNoise3DD(float3 p)
 {
     float3 i = floor(p);
     float3 f = fract(p);
@@ -206,9 +206,9 @@ float3 perlinFBMColor3D(float3 pos)
     float3 p = pos * SCALE;
 
     // Domain warping (distortion)
-    float3 q = float3(perlinNoise3D(p + float3(DISTORTION, 0.0, 0.0)),
-                      perlinNoise3D(p + float3(0.0, DISTORTION, 0.0)),
-                      perlinNoise3D(p + float3(0.0, 0.0, DISTORTION)));
+    float3 q = float3(perlinNoise3DD(p + float3(DISTORTION, 0.0, 0.0)),
+                      perlinNoise3DD(p + float3(0.0, DISTORTION, 0.0)),
+                      perlinNoise3DD(p + float3(0.0, 0.0, DISTORTION)));
     p += q / 0.05;
 
     // Accumulation RGB FBM

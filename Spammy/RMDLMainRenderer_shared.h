@@ -10,6 +10,8 @@
 
 #include <simd/simd.h>
 
+#define GAME_TIME 1.1f
+
 typedef struct
 {
     simd_float2 position;
