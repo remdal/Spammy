@@ -99,13 +99,17 @@ private:
     MTL::Texture*                        m_shadow;
     MTL::Texture*                        m_depth;
     MTL::Buffer*                        m_mouseBuffer;
+    MTL::Buffer*                        m_textureBuffer;
     MTL::ComputePipelineState*          m_mousePositionComputeKnl;
     MTL::RenderPipelineState*          m_lightingPpl;
-    MTL::RenderPassDescriptor*         _gBufferPassDesc;
-    MTL::RenderPassDescriptor*         _shadowPassDesc;
-    MTL::RenderPassDescriptor*         _lightingPassDesc;
-    MTL::RenderPassDescriptor*         _gBufferWithLoadPassDesc;
+    NS::SharedPtr<MTL::RenderPassDescriptor>        _gBufferPassDesc;
+    NS::SharedPtr<MTL::RenderPassDescriptor>         _shadowPassDesc;
+    NS::SharedPtr<MTL::RenderPassDescriptor>         _lightingPassDesc;
+    NS::SharedPtr<MTL::RenderPassDescriptor>         _gBufferWithLoadPassDesc;
+    
+    MTL::Buffer*                            m_gpuUniforms[kMaxBuffersInFlight];
 
+    
     MTL::DepthStencilState*             _shadowDepthState;
     MTL::DepthStencilState*             _gBufferDepthState;
     MTL::DepthStencilState*             _lightingDepthState;
@@ -114,6 +118,7 @@ private:
     uint64_t                            m_frame;
     RMDLCamera                          m_camera;
     RMDLCamera                          m_cameraPNJ;
+    RMDLCamera                          m_cameraShadow;
     MTL::PixelFormat                    m_pixelFormat;
     MTL::PixelFormat                    m_depthPixelFormat;
     MTL::DepthStencilState*             m_depthStencilState;

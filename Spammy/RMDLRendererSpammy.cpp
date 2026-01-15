@@ -141,7 +141,10 @@ vertexBuffer(nullptr)
     NS::Date* date = NS::Date::dateWithTimeIntervalSinceNow(0);
     m_uniforms.frameTime = 0.f;
     makeTexture(layerPixelFormat, depthPixelFormat);
-
+    for (int i = 0; i < kMaxFramesInFlight; i++)
+    {
+        m_gpuUniforms[i] = m_device->newBuffer(sizeof(m_uniforms), MTL::ResourceStorageModeShared);
+    }
 }
 
 GameCoordinator::~GameCoordinator()
@@ -202,6 +205,7 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
     depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
     depthStateDesc->setDepthWriteEnabled(true);
 
+    _shadowPassDesc = NS::TransferPtr(MTL::RenderPassDescriptor::alloc()->init());
     _shadowPassDesc->depthAttachment()->setTexture(m_shadow);
     _shadowPassDesc->depthAttachment()->setClearDepth(1.f);
     _shadowPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
@@ -209,7 +213,7 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
 
     _shadowDepthState = m_device->newDepthStencilState(depthStateDesc.get());
 
-    _gBufferPassDesc->init();
+    _gBufferPassDesc = NS::TransferPtr(MTL::RenderPassDescriptor::alloc()->init());
     _gBufferPassDesc->depthAttachment()->setClearDepth(1.0f);
     _gBufferPassDesc->depthAttachment()->setLevel(0);
     _gBufferPassDesc->depthAttachment()->setSlice(0);
@@ -227,13 +231,15 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
 
     _gBufferDepthState = m_device->newDepthStencilState(depthStateDesc.get());
 
-    _gBufferWithLoadPassDesc = _gBufferPassDesc;
-    _gBufferWithLoadPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionLoad );
+    _gBufferWithLoadPassDesc = NS::TransferPtr(MTL::RenderPassDescriptor::alloc()->init());
+    _gBufferWithLoadPassDesc->depthAttachment()->setLoadAction(MTL::LoadActionLoad);
     _gBufferWithLoadPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
     _gBufferWithLoadPassDesc->colorAttachments()->object(1)->setLoadAction(MTL::LoadActionLoad);
 
-    _lightingPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionDontCare);
+    _lightingPassDesc = NS::TransferPtr(MTL::RenderPassDescriptor::alloc()->init());
+    _lightingPassDesc->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
     _lightingPassDesc->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+    _lightingPassDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
 
     depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionAlways);
     depthStateDesc->setDepthWriteEnabled(false);
@@ -248,37 +254,38 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
     pRenderPipDesc->setVertexFunction(vertexFunction.get());
     pRenderPipDesc->setFragmentFunction(fragmentFunction.get());
     
-//        pRenderPipDesc->setRasterSampleCount(1);
+//    pRenderPipDesc->setRasterSampleCount(1);
     pRenderPipDesc->colorAttachments()->object(0)->setPixelFormat(layerPixelFormat);
+//    pRenderPipDesc->setSampleCount(1);
 
     NS::Error* error = nullptr;
-    NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-    pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat4);
-    pVertexDesc->attributes()->object(0)->setOffset(0);
-    pVertexDesc->attributes()->object(0)->setBufferIndex(0);
-    
-    pVertexDesc->layouts()->object(0)->setStride(sizeof(MTL::VertexFormatFloat4));
-    pVertexDesc->layouts()->object(0)->setStepRate(1);
-    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+//    NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
+//    pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat4);
+//    pVertexDesc->attributes()->object(0)->setOffset(0);
+//    pVertexDesc->attributes()->object(0)->setBufferIndex(0);
+//    
+//    pVertexDesc->layouts()->object(0)->setStride(sizeof(16));
+//    pVertexDesc->layouts()->object(0)->setStepRate(1);
+//    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
 
 //        NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
 //        depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
 //        depthStencilDescriptor->setDepthWriteEnabled(true);
 
-    pRenderPipDesc->setVertexDescriptor(pVertexDesc.get());
+//    pRenderPipDesc->setVertexDescriptor(pVertexDesc.get());
     m_lightingPpl = m_device->newRenderPipelineState(pRenderPipDesc.get(), &error);
 //        m_depthStencilState = m_device->newDepthStencilState(depthStencilDescriptor.get());
     
     simd::float4 initialMouseWorldPos = simd::float4{ 0.f, 0.f, 0.f, 0.f };
     m_mouseBuffer = m_device->newBuffer(&initialMouseWorldPos, sizeof(initialMouseWorldPos), MTL::ResourceStorageModeManaged);
     // Store 1 byte buffer for the 3D mouse position after depth read and resolve
-    MTL::ComputePipelineDescriptor *pPipStateDesc = MTL::ComputePipelineDescriptor::alloc()->init();
+    NS::SharedPtr<MTL::ComputePipelineDescriptor> pPipStateDesc = NS::TransferPtr(MTL::ComputePipelineDescriptor::alloc()->init());
     pPipStateDesc->setThreadGroupSizeIsMultipleOfThreadExecutionWidth(true);
 
     NS::SharedPtr<MTL::Function> computeFunction = NS::TransferPtr(m_shaderLibrary->newFunction(MTLSTR("mousePositionUpdate")));
     m_mousePositionComputeKnl = m_device->newComputePipelineState(computeFunction.get(), 0, nullptr, &error);
     
-    
+    m_textureBuffer = m_device->newBuffer(sizeof(uint), MTL::ResourceStorageModeManaged);
 
 }
 
@@ -307,11 +314,48 @@ void GameCoordinator::updateUniforms()
     
     m_uniforms.cameraUniforms = m_camera.uniforms();
     m_uniforms.mouseState = simd::float3{ cursorPos.x, cursorPos.y, float(1.0f) };
-    m_uniforms.invScreenSize = simd::float2{ 1.0f / m_gBuffer0->width(), 1.0f / m_gBuffer1->width() };
+//    m_uniforms.invScreenSize = simd::float2{ 1.0f / m_gBuffer0->width(), 1.0f / m_gBuffer1->width() };
     m_uniforms.projectionYScale = 1.73205066;
     m_uniforms.brushSize = 10.0f;
 
-    
+    // Set up shadows
+    //  - to cover as much of our frustum with shadow volumes, we create a simplified 1D model along the frustum center axis.
+    //  Our frustum is reduced to a gradient that coincides with our tan(view angle/2). The three shadow volumes are modeled as a three circles
+    //  that are packed under the gradient, so that all space is overlapped at least once. We then project the three circles back to 3D spheres
+    //  and wrap them in 3 shadow volumes (parallel camera volumes) by constructing an oriented box around them
+    {
+//        const float3 sunDirection       = normalize ((float3) {1,-0.7,0.5});
+
+        // Extend view angle to the angle of the corners of the frustum to get the cone angle; we use half-angles in the math
+        float tan_half_angle = tanf(m_camera.viewAngle() * .5f) * sqrtf(2.0);
+        float half_angle = atanf(tan_half_angle);
+        float sine_half_angle = sinf(half_angle);
+
+        // Define three bounding spheres that cover/fill the view cone. These can be optimized by angle, etc., for nice coverage without over spending shadow map space
+        float cascade_sizes[3] = {400.0f, 1600.0f, 6400.0f };
+
+        // Now the centers of the cone in distance to camera can be calulated
+        float cascade_distances[3];
+        cascade_distances[0] = 2 * cascade_sizes[0] * (1.0f - sine_half_angle * sine_half_angle);
+        cascade_distances[1] = sqrtf(cascade_sizes[1]*cascade_sizes[1] - cascade_distances[0]*cascade_distances[0]*tan_half_angle*tan_half_angle) + cascade_distances[0];
+        cascade_distances[2] = sqrtf(cascade_sizes[2]*cascade_sizes[2] - cascade_distances[1]*cascade_distances[1]*tan_half_angle*tan_half_angle) + cascade_distances[1];
+
+        for (uint c = 0; c < 3; c++)
+        {
+            // Center of sun cascade back-plane
+            simd::float3 center = m_camera.position() + m_camera.direction() * cascade_distances[c];
+            float size = cascade_sizes[c];
+
+            // Stepsize is some multiple of the texel size
+            float stepsize = size/64.0f;
+            m_cameraShadow.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 250.0f);
+//          initParallelWithPosition:center-sunDirection*size direction:sunDirection up:(float3){ 0, 1, 0} width:size*2.0f height:size*2.0f nearPlane:0.0f farPlane:size*2];
+//            m_cameraShadow.position -= simd::fract(simd::dot(center, m_cameraShadow.up()) / stepsize) * m_cameraShadow.up() * stepsize;
+//            shadow_cam.position -= fract(dot(center, shadow_cam.right) /stepsize) * shadow_cam.right * stepsize;
+
+//            _uniforms_cpu.shadowCameraUniforms[c] = shadow_cam.uniforms;
+        }
+    }
 }
 
 void GameCoordinator::draw(MTK::View* view)
@@ -320,7 +364,11 @@ void GameCoordinator::draw(MTK::View* view)
 
     MTL::CommandBuffer* commandBuffer = m_commandQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
+    m_frame += 1;
+    const uint32_t frameIndex = m_frame % kMaxFramesInFlight;
 //    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
+    
+    
     
     MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(passDesc);
     renderCommandEncoder->setViewport(m_viewport);
@@ -352,6 +400,7 @@ void GameCoordinator::draw(MTK::View* view)
     m_cameraUniforms.position = m_camera.position();
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
+    
     world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     dt += 0.016f;
     
@@ -366,7 +415,35 @@ void GameCoordinator::draw(MTK::View* view)
 
     ui.endFrame(renderCommandEncoder);
 
+
+    _lightingPassDesc->colorAttachments()->object(0)->setTexture(passDesc->colorAttachments()->object(0)->texture());
     renderCommandEncoder->endEncoding();
+    renderCommandEncoder = commandBuffer->renderCommandEncoder(_lightingPassDesc.get());
+    renderCommandEncoder->setRenderPipelineState(m_lightingPpl);
+    renderCommandEncoder->setDepthStencilState(_lightingDepthState);
+    renderCommandEncoder->setFragmentTexture(m_gBuffer0, 0);
+    renderCommandEncoder->setFragmentTexture(m_gBuffer1, 1);
+    renderCommandEncoder->setFragmentTexture(m_depth, 2);
+    renderCommandEncoder->setFragmentTexture(m_shadow, 3);
+    renderCommandEncoder->setFragmentBuffer(m_gpuUniforms[frameIndex], 0, 0);
+    renderCommandEncoder->setFragmentBuffer(m_mouseBuffer, 0, 1);
+    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, 3UL); // NS::UInt
+    
+    
+    
+    
+    renderCommandEncoder->endEncoding();
+    
+    uint* ptr = reinterpret_cast<uint*>(m_textureBuffer->contents());
+    m_textureBuffer->didModifyRange(NS::Range::Make(0, sizeof(uint)));
+    MTL::ComputeCommandEncoder* computeCommandEncoder = commandBuffer->computeCommandEncoder();
+    computeCommandEncoder->setComputePipelineState(m_mousePositionComputeKnl);
+    computeCommandEncoder->setTexture(m_depth, 0);
+    computeCommandEncoder->setBuffer(m_gpuUniforms[frameIndex], 0, 0);
+    computeCommandEncoder->setBuffer(m_mouseBuffer, 0, 1);
+    computeCommandEncoder->dispatchThreadgroups({ 1, 1, 1 }, { 64, 1, 1 });
+    computeCommandEncoder->endEncoding();
+
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
     autoreleasePool->release();
@@ -380,6 +457,17 @@ void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, N
     m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);
     m_depthTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
     m_depthTexture = m_device->newTexture(m_depthTextureDescriptor);
+//
+//    if (m_gBuffer0 != nullptr && m_gBuffer0->width() == width && m_gBuffer0->height() == height)
+//        return;
+    MTL::TextureDescriptor* m_gTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_pixelFormat, width, height, false); // pas de ns shared
+    m_gTextureDescriptor->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageRenderTarget);
+    m_gTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
+    m_gBuffer0 = m_device->newTexture(m_gTextureDescriptor);
+    m_gBuffer1 = m_device->newTexture(m_gTextureDescriptor);
+    m_camera.setAspectRatio(width / height);
+    m_depthTextureDescriptor->setUsage(MTL::TextureUsageShaderRead);
+    m_depth = m_device->newTexture(m_depthTextureDescriptor);
 }
 
 void GameCoordinator::setViewportWindow(NS::UInteger width, NS::UInteger height)

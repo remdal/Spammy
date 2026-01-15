@@ -83,17 +83,45 @@ fragment LightingPsOut LightingPs(LightingVtxOut                   in           
                                   constant RMDLUniforms&           uniforms        [[buffer  (0)]],
                                   constant float4&                 mouseWorldPos   [[buffer  (1)]])
 {
+    LightingPsOut res;
+    
+    // Test : affiche juste la cross en screen space
+    float2 pixelPosCross = in.position.xy;
+    const uint2 pixelPos = uint2(floor(in.position.xy));
+    const float depth = depthBuffer.read(pixelPos);
+    float2 mousePos = uniforms.mouseState.xy;
+    
+    float dist = length(pixelPosCross - mousePos);
+    
+    // Cross pattern
+    float crossSize = 1.0f;
+    float thickness = 2.0;
+    
+    bool onCrossH = abs(pixelPosCross.y - mousePos.y) < thickness && abs(pixelPosCross.x - mousePos.x) < crossSize;
+    bool onCrossV = abs(pixelPosCross.x - mousePos.x) < thickness && abs(pixelPosCross.y - mousePos.y) < crossSize;
+    
+    if (onCrossH || onCrossV) {
+        res.backbuffer = float4(1.0, 0.0, 0.0, 1.0); // Rouge
+    } else {
+        // Garde le contenu précédent (LoadActionLoad)
+        discard_fragment();
+    }
+
+    float3 viewDirection;
+    const float3 worldPosition = GetWorldPositionAndViewDirFromDepth(pixelPos, depth, uniforms, viewDirection);
+    float4 cross = visualizeModificationCross(uniforms, worldPosition, mouseWorldPos);
+    float3 colorr = mix({0.1, 0.0, 0.0}, cross.xyz, cross.w);
+
+    res.backbuffer = float4(colorr, 1);//float4(0.1, 0.0, 0.0, 0.1);
+    return res;
+    
+
     constexpr sampler colorSampler(mip_filter::linear,
                                    mag_filter::linear,
                                    min_filter::linear);
 
-    const uint2 pixelPos = uint2(floor(in.position.xy));
-
-    const float depth = depthBuffer.read(pixelPos);
 
     float3 viewDir;
-    const float3 worldPosition =
-    GetWorldPositionAndViewDirFromDepth(pixelPos, depth, uniforms, viewDir);
 
     if (depth == 1)
     {
@@ -109,14 +137,14 @@ fragment LightingPsOut LightingPs(LightingVtxOut                   in           
 
     BrdfProperties brdfProps = UnpackBrdfProperties(gBuffer0Value, gBuffer1Value);
 
-//    const float shadowAmount = evaluate_shadow(uniforms, worldPosition, depth, shadowMap, perlinMap);
+    const float shadowAmount = 10.4f; // evaluate_shadow(uniforms, worldPosition, depth, shadowMap, perlinMap);
 
     // Sun direction is hardcoded since we use a fixed cubemap
     const float3 sunDirection = float3(-1, 0.7, -0.5);
 
     // How much illumination the current fragment receives
     // - it depends on the normal and whether or not it is shadowed
-    const float nDotL = saturate(dot(sunDirection, brdfProps.normal)) /** shadowAmount*/ * 1.2;
+    const float nDotL = saturate(dot(sunDirection, brdfProps.normal)) * shadowAmount * 1.2;
 
     // For the ambient color, we'll sample the cubemap. Another approach can be considerered however using have an irradiance map
     // - Note: we don't want to sample too close to the horizon, as the texture becomes very white at altitude 0, due to the haze / scattering
@@ -143,9 +171,9 @@ fragment LightingPsOut LightingPs(LightingVtxOut                   in           
     float4 brush = visualizeModificationCross(uniforms, worldPosition, mouseWorldPos);
     color = mix(color, brush.xyz, brush.w);
 
-    LightingPsOut res;
-    res.backbuffer = float4(color, 1);
-    return res;
+    LightingPsOut result;
+    result.backbuffer = float4(color, 1);
+    return result;
 }
 
 kernel void mousePositionUpdate(depth2d<float, access::read> depthBuffer [[texture(0)]],
