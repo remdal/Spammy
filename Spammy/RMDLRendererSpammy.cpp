@@ -111,7 +111,7 @@ world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
 colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 mouseAndCursor(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-grid(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
@@ -400,6 +400,7 @@ void GameCoordinator::draw(MTK::View* view)
     passDesc->depthAttachment()->setTexture(m_depth);
     passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
     passDesc->depthAttachment()->setClearDepth(1.0f);
+    passDesc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
     m_frame += 1;
     const uint32_t frameIndex = m_frame % kMaxFramesInFlight;
 //    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
@@ -438,7 +439,7 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     
     world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
-    grid.setGridCenter({0.0f, 0.0f, 0.0f});
+//    grid.setGridCenter({0.0f, 0.0f, 0.0f});
     grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
     
     
@@ -478,6 +479,7 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->endEncoding();
     
     mouseAndCursor.setInverseViewProjection(m_cameraUniforms.invViewProjectionMatrix);
+    
     mouseAndCursor.pick(commandBuffer, m_depth);
     
 //    uint* ptr = reinterpret_cast<uint*>(m_textureBuffer->contents());
@@ -494,22 +496,22 @@ void GameCoordinator::draw(MTK::View* view)
     commandBuffer->commit();
     commandBuffer->waitUntilCompleted();
     MousePickResult result = mouseAndCursor.getResult();
-    if (result.valid)
-    {
-        // Snap au centre de la cellule la plus proche
-        simd::float3 snappedPos;
-        snappedPos.x = roundf(result.worldPosition.x);
-        snappedPos.y = roundf(result.worldPosition.y);//0.0f;
-        snappedPos.z = roundf(result.worldPosition.z);
-        grid.setGridCenter(snappedPos);
-    }
-    
+    simd::float3 snappedPos;
+    snappedPos.x = roundf(result.worldPosition.x);
+    snappedPos.y = roundf(result.worldPosition.y);//0.0f;
+    snappedPos.z = roundf(result.worldPosition.z);
+    grid.setGridCenter(snappedPos);
+
     if (frameIndex == 2)
     {
         printf("Position monde: (%.2f, %.2f, %.2f)\n", result.worldPosition.x,result.worldPosition.y,result.worldPosition.z);printf("Depth: %.4f\n", result.depth);}else {printf("Aucun objet sous la souris\n");
-//        printf("Texture: %lux%lu, Screen: %.0fx%.0f, Mouse: %.0f,%.0f\n",m_depth->width(), m_depth->height(),m_viewport.width, m_viewport.height,cursorPosition.x, cursorPosition.y);
+        printf("Texture: %lux%lu, Screen: %.0fx%.0f, Mouse: %.0f,%.0f\n",m_depth->width(), m_depth->height(),m_viewport.width, m_viewport.height,cursorPosition.x, cursorPosition.y);
+            printf("DRAW: m_depth=%lux%lu, drawable=%lux%lu\n",
+                   m_depth->width(), m_depth->height(),
+                   view->currentDrawable()->texture()->width(),
+                   view->currentDrawable()->texture()->height());
     }
-    if (m_frame > 2000)
+    if (m_frame > 1000 || m_frame % 1000 == 0)
     {
         printf("%llu\n", m_frame);
     }

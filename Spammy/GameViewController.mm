@@ -173,14 +173,21 @@
 - (void)mouseMoved:(NSEvent *)event
 {
     NSPoint cursorPos = [_mtkView convertPoint:[event locationInWindow] fromView:nil];
-    CGFloat scale = _mtkView.window.screen.backingScaleFactor ?: 1.0;
-    float mouseX = (float)cursorPos.x;
-    float mouseY = (float)(((float)_mtkView.bounds.size.height - (float)cursorPos.y) * (float)scale);
-    if (!isfinite(mouseX) || !isfinite(mouseY))
-    {
-        return;
-    }
+    CGSize drawableSize = _mtkView.drawableSize;
+    CGSize boundsSize = _mtkView.bounds.size;
+    
+    float scaleX = drawableSize.width / boundsSize.width;
+    float scaleY = drawableSize.height / boundsSize.height;
+    
+    float mouseX = (float)cursorPos.x * scaleX;
+    float mouseY = (float)(boundsSize.height - cursorPos.y) * scaleY;
+    
     _pGameCoordinator->setMousePosition(mouseX, mouseY);
+    printf("Mouse: %.0f,%.0f | Bounds: %.0fx%.0f | Drawable: %.0fx%.0f | Scale: %.2f,%.2f\n",
+           mouseX, mouseY,
+           boundsSize.width, boundsSize.height,
+           drawableSize.width, drawableSize.height,
+           scaleX, scaleY);
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view

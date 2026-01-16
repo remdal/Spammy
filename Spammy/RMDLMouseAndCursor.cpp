@@ -34,7 +34,8 @@ kernel void pickDepth(
     int2 pixelCoord = int2(uniforms.mousePos);
     
     if (pixelCoord.x < 0 || pixelCoord.x >= int(uniforms.screenSize.x) ||
-        pixelCoord.y < 0 || pixelCoord.y >= int(uniforms.screenSize.y)) {
+        pixelCoord.y < 0 || pixelCoord.y >= int(uniforms.screenSize.y))
+    {
         result.valid = 0;
         return;
     }
