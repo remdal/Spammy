@@ -110,19 +110,18 @@ skybox(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 world(m_device, layerPixelFormat, m_depthPixelFormat, m_shaderLibrary),
 ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrary),
 colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+mouseAndCursor(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+grid(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr)
 {
-    m_viewportSize.x = (float)width;
-    m_viewportSize.x = (float)height;
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
-    ft_memcpy(m_viewportSizeBuffer->contents(), &m_viewportSize, sizeof(m_viewportSize));
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
     m_commandQueue = m_device->newCommandQueue();
     _pAudioEngine = std::make_unique<PhaseAudio>(resourcePath);
     loadGameSounds(resourcePath, _pAudioEngine.get());
-    cursorPos = simd::make_float2(0, 0);
+    cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 250.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
 //    m_cameraPNJ.initPerspectiveWithPosition(<#simd::float3 position#>, <#simd::float3 direction#>, <#simd::float3 up#>, <#float viewAngle#>, <#float aspectRatio#>, <#float nearPlane#>, <#float farPlane#>)
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -132,11 +131,10 @@ vertexBuffer(nullptr)
     
     printf("%f\n%f\n%f\n", fade(0.1), fade(1.1), fade(2.7));
     
-    // Dans init()
-    uint64_t seed = 12345;
-    _renderSystem = std::make_unique<RenderSystem>(m_device, layerPixelFormat, depthPixelFormat, width, height, resourcePath);
+    uint64_t seed = 89;
+//    _renderSystem = std::make_unique<RenderSystem>(m_device, layerPixelFormat, depthPixelFormat, width, height, resourcePath);
 //    _terrainManager = std::make_unique<TerrainManager>(m_device, seed);
-    _physicsSystem = std::make_unique<PhysicsSystem>(_terrainManager.get());
+//    _physicsSystem = std::make_unique<PhysicsSystem>(_terrainManager.get());
     
     NS::Date* date = NS::Date::dateWithTimeIntervalSinceNow(0);
     m_uniforms.frameTime = 0.f;
@@ -145,6 +143,15 @@ vertexBuffer(nullptr)
     {
         m_gpuUniforms[i] = m_device->newBuffer(sizeof(m_uniforms), MTL::ResourceStorageModeShared);
     }
+    createBuffers();
+    
+    
+    grid.setGridSize(16);           // 16x16 cellules
+    grid.setCellSize(1.0f);         // 1 unité par cellule
+    grid.setEdgeColor({0.3f, 0.8f, 1.0f, 0.8f}); // Bleu cyan
+    grid.setEdgeThickness(0.02f);   // Épaisseur des lignes
+    grid.setFadeDistance(50.0f);    // Distance de fade
+    
 }
 
 GameCoordinator::~GameCoordinator()
@@ -164,6 +171,11 @@ GameCoordinator::~GameCoordinator()
     m_depthStencilState->release();
     m_commandQueue->release();
     m_device->release();
+}
+
+void GameCoordinator::createBuffers()
+{
+    m_mouseBuffer = m_device->newBuffer(sizeof(VertexCursor), MTL::ResourceStorageModeShared);
 }
 
 void GameCoordinator::moveCamera(simd::float3 translation)
@@ -188,6 +200,26 @@ void GameCoordinator::handleMouseUp()
 
 void GameCoordinator::handleScroll(float deltaY)
 {
+}
+
+void GameCoordinator::setMousePosition(float x, float y)
+{
+    cursorPosition = simd::make_float2(x, y);
+    mouseAndCursor.setMousePosition(x, y);
+}
+
+void GameCoordinator::createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor> &outVertices)
+{
+    float x = (mouseX / width) * 2.0f - 1.0f;
+    float y = 1.0f - (mouseY / height) * 2.0f;
+
+    float sX = size / width * 2.0f;
+    float sY = size / height * 2.0f;
+
+    outVertices = {
+        {{x - sX, y}}, {{x + sX, y}},   // ligne horizontale
+        {{x, y - sY}}, {{x, y + sY}}    // ligne verticale
+    };
 }
 
 void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat)
@@ -268,22 +300,23 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
 //    pVertexDesc->layouts()->object(0)->setStepRate(1);
 //    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
 
-//        NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-//        depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
-//        depthStencilDescriptor->setDepthWriteEnabled(true);
+    NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
+    depthStencilDescriptor->setDepthWriteEnabled(true);
 
 //    pRenderPipDesc->setVertexDescriptor(pVertexDesc.get());
+    pRenderPipDesc->setDepthAttachmentPixelFormat(depthPixelFormat);
     m_lightingPpl = m_device->newRenderPipelineState(pRenderPipDesc.get(), &error);
-//        m_depthStencilState = m_device->newDepthStencilState(depthStencilDescriptor.get());
+    m_depthStencilState = m_device->newDepthStencilState(depthStencilDescriptor.get());
     
     simd::float4 initialMouseWorldPos = simd::float4{ 0.f, 0.f, 0.f, 0.f };
-    m_mouseBuffer = m_device->newBuffer(&initialMouseWorldPos, sizeof(initialMouseWorldPos), MTL::ResourceStorageModeManaged);
+//    m_mouseBuffer = m_device->newBuffer(&initialMouseWorldPos, sizeof(initialMouseWorldPos), MTL::ResourceStorageModeManaged);
     // Store 1 byte buffer for the 3D mouse position after depth read and resolve
     NS::SharedPtr<MTL::ComputePipelineDescriptor> pPipStateDesc = NS::TransferPtr(MTL::ComputePipelineDescriptor::alloc()->init());
     pPipStateDesc->setThreadGroupSizeIsMultipleOfThreadExecutionWidth(true);
 
     NS::SharedPtr<MTL::Function> computeFunction = NS::TransferPtr(m_shaderLibrary->newFunction(MTLSTR("mousePositionUpdate")));
-    m_mousePositionComputeKnl = m_device->newComputePipelineState(computeFunction.get(), 0, nullptr, &error);
+    m_mousePositionComputeKernel = m_device->newComputePipelineState(computeFunction.get(), 0, nullptr, &error);
     
     m_textureBuffer = m_device->newBuffer(sizeof(uint), MTL::ResourceStorageModeManaged);
 
@@ -313,8 +346,8 @@ void GameCoordinator::updateUniforms()
     m_cameraUniforms = m_camera.uniforms();
     
     m_uniforms.cameraUniforms = m_camera.uniforms();
-    m_uniforms.mouseState = simd::float3{ cursorPos.x, cursorPos.y, float(1.0f) };
-//    m_uniforms.invScreenSize = simd::float2{ 1.0f / m_gBuffer0->width(), 1.0f / m_gBuffer1->width() };
+    m_uniforms.mouseState = simd::float3{ cursorPosition.x, cursorPosition.y, float(1.0f) };
+    m_uniforms.invScreenSize = simd::float2{ 1.0f / m_depth->width(), 1.0f / m_depth->width() };
     m_uniforms.projectionYScale = 1.73205066;
     m_uniforms.brushSize = 10.0f;
 
@@ -348,7 +381,7 @@ void GameCoordinator::updateUniforms()
 
             // Stepsize is some multiple of the texel size
             float stepsize = size/64.0f;
-            m_cameraShadow.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 250.0f);
+//            m_cameraShadow.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.1f, 250.0f);
 //          initParallelWithPosition:center-sunDirection*size direction:sunDirection up:(float3){ 0, 1, 0} width:size*2.0f height:size*2.0f nearPlane:0.0f farPlane:size*2];
 //            m_cameraShadow.position -= simd::fract(simd::dot(center, m_cameraShadow.up()) / stepsize) * m_cameraShadow.up() * stepsize;
 //            shadow_cam.position -= fract(dot(center, shadow_cam.right) /stepsize) * shadow_cam.right * stepsize;
@@ -364,6 +397,9 @@ void GameCoordinator::draw(MTK::View* view)
 
     MTL::CommandBuffer* commandBuffer = m_commandQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
+    passDesc->depthAttachment()->setTexture(m_depth);
+    passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+    passDesc->depthAttachment()->setClearDepth(1.0f);
     m_frame += 1;
     const uint32_t frameIndex = m_frame % kMaxFramesInFlight;
 //    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
@@ -402,7 +438,14 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
     
     world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    grid.setGridCenter({0.0f, 0.0f, 0.0f});
+    grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+    
+    
+    
     dt += 0.016f;
+    
+    
     
     ui.beginFrame(m_viewport.width, m_viewport.height);
     ui.drawText("Hello 89 ! Make sense", 550, 50, 0.5);
@@ -416,36 +459,60 @@ void GameCoordinator::draw(MTK::View* view)
     ui.endFrame(renderCommandEncoder);
 
 
-    _lightingPassDesc->colorAttachments()->object(0)->setTexture(passDesc->colorAttachments()->object(0)->texture());
+//    _lightingPassDesc->colorAttachments()->object(0)->setTexture(passDesc->colorAttachments()->object(0)->texture());
+//    renderCommandEncoder->endEncoding();
+//    renderCommandEncoder = commandBuffer->renderCommandEncoder(_lightingPassDesc.get());
+//    renderCommandEncoder->setRenderPipelineState(m_lightingPpl);
+//    renderCommandEncoder->setDepthStencilState(_lightingDepthState);
+//    renderCommandEncoder->setFragmentTexture(m_gBuffer0, 0);
+//    renderCommandEncoder->setFragmentTexture(m_gBuffer1, 1);
+//    renderCommandEncoder->setFragmentTexture(m_depth, 2);
+//    renderCommandEncoder->setFragmentTexture(m_shadow, 3);
+//    renderCommandEncoder->setFragmentBuffer(m_gpuUniforms[frameIndex], 0, 0);
+//    renderCommandEncoder->setFragmentBuffer(m_mouseBuffer, 0, 1);
+//    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, 3UL); // NS::UInt
+
+    
+    
+    
     renderCommandEncoder->endEncoding();
-    renderCommandEncoder = commandBuffer->renderCommandEncoder(_lightingPassDesc.get());
-    renderCommandEncoder->setRenderPipelineState(m_lightingPpl);
-    renderCommandEncoder->setDepthStencilState(_lightingDepthState);
-    renderCommandEncoder->setFragmentTexture(m_gBuffer0, 0);
-    renderCommandEncoder->setFragmentTexture(m_gBuffer1, 1);
-    renderCommandEncoder->setFragmentTexture(m_depth, 2);
-    renderCommandEncoder->setFragmentTexture(m_shadow, 3);
-    renderCommandEncoder->setFragmentBuffer(m_gpuUniforms[frameIndex], 0, 0);
-    renderCommandEncoder->setFragmentBuffer(m_mouseBuffer, 0, 1);
-    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, 3UL); // NS::UInt
     
+    mouseAndCursor.setInverseViewProjection(m_cameraUniforms.invViewProjectionMatrix);
+    mouseAndCursor.pick(commandBuffer, m_depth);
     
-    
-    
-    renderCommandEncoder->endEncoding();
-    
-    uint* ptr = reinterpret_cast<uint*>(m_textureBuffer->contents());
-    m_textureBuffer->didModifyRange(NS::Range::Make(0, sizeof(uint)));
-    MTL::ComputeCommandEncoder* computeCommandEncoder = commandBuffer->computeCommandEncoder();
-    computeCommandEncoder->setComputePipelineState(m_mousePositionComputeKnl);
-    computeCommandEncoder->setTexture(m_depth, 0);
-    computeCommandEncoder->setBuffer(m_gpuUniforms[frameIndex], 0, 0);
-    computeCommandEncoder->setBuffer(m_mouseBuffer, 0, 1);
-    computeCommandEncoder->dispatchThreadgroups({ 1, 1, 1 }, { 64, 1, 1 });
-    computeCommandEncoder->endEncoding();
+//    uint* ptr = reinterpret_cast<uint*>(m_textureBuffer->contents());
+//    m_textureBuffer->didModifyRange(NS::Range::Make(0, sizeof(uint)));
+//    MTL::ComputeCommandEncoder* computeCommandEncoder = commandBuffer->computeCommandEncoder();
+//    computeCommandEncoder->setComputePipelineState(m_mousePositionComputeKernel);
+//    computeCommandEncoder->setTexture(m_depth, 0);
+//    computeCommandEncoder->setBuffer(m_gpuUniforms[frameIndex], 0, 0);
+//    computeCommandEncoder->setBuffer(m_mouseBuffer, 0, 1);
+//    computeCommandEncoder->dispatchThreadgroups({ 1, 1, 1 }, { 64, 1, 1 });
+//    computeCommandEncoder->endEncoding();
 
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
+    commandBuffer->waitUntilCompleted();
+    MousePickResult result = mouseAndCursor.getResult();
+    if (result.valid)
+    {
+        // Snap au centre de la cellule la plus proche
+        simd::float3 snappedPos;
+        snappedPos.x = roundf(result.worldPosition.x);
+        snappedPos.y = roundf(result.worldPosition.y);//0.0f;
+        snappedPos.z = roundf(result.worldPosition.z);
+        grid.setGridCenter(snappedPos);
+    }
+    
+    if (frameIndex == 2)
+    {
+        printf("Position monde: (%.2f, %.2f, %.2f)\n", result.worldPosition.x,result.worldPosition.y,result.worldPosition.z);printf("Depth: %.4f\n", result.depth);}else {printf("Aucun objet sous la souris\n");
+//        printf("Texture: %lux%lu, Screen: %.0fx%.0f, Mouse: %.0f,%.0f\n",m_depth->width(), m_depth->height(),m_viewport.width, m_viewport.height,cursorPosition.x, cursorPosition.y);
+    }
+    if (m_frame > 2000)
+    {
+        printf("%llu\n", m_frame);
+    }
     autoreleasePool->release();
 }
 
@@ -454,19 +521,17 @@ void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, N
     setViewportWindow(width, height);
 
     m_depthTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
-    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);
+//    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);
     m_depthTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
-    m_depthTexture = m_device->newTexture(m_depthTextureDescriptor);
-//
-//    if (m_gBuffer0 != nullptr && m_gBuffer0->width() == width && m_gBuffer0->height() == height)
-//        return;
+//    m_depthTexture = m_device->newTexture(m_depthTextureDescriptor);
     MTL::TextureDescriptor* m_gTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_pixelFormat, width, height, false); // pas de ns shared
     m_gTextureDescriptor->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageRenderTarget);
     m_gTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
     m_gBuffer0 = m_device->newTexture(m_gTextureDescriptor);
     m_gBuffer1 = m_device->newTexture(m_gTextureDescriptor);
-    m_camera.setAspectRatio(width / height);
-    m_depthTextureDescriptor->setUsage(MTL::TextureUsageShaderRead);
+//    m_camera.setAspectRatio(width / (float)height);
+    mouseAndCursor.setScreenSize((float)width, (float)height);
+    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
     m_depth = m_device->newTexture(m_depthTextureDescriptor);
 }
 
@@ -474,8 +539,8 @@ void GameCoordinator::setViewportWindow(NS::UInteger width, NS::UInteger height)
 {
     m_viewport.originX = 0.0;
     m_viewport.originY = 0.0;
-    m_viewport.width   = width;
-    m_viewport.height  = height;
+    m_viewport.width   = (double)width;
+    m_viewport.height  = (double)height;
     m_viewport.znear   = 0.0;
     m_viewport.zfar    = 1.0;
     m_viewportSize.x = (float)width;

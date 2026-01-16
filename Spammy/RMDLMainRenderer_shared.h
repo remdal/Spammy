@@ -35,7 +35,7 @@ struct RMDLCameraUniforms
 struct RMDLUniforms
 {
     RMDLCameraUniforms  cameraUniforms;
-    RMDLCameraUniforms  shadowCameraUniforms[3];
+//    RMDLCameraUniforms  shadowCameraUniforms[3];
     simd::float3        mouseState;
     simd::float2        invScreenSize;
     float               projectionYScale;
@@ -159,6 +159,19 @@ struct VertexPNJ
     simd::float3 bitangent;
     simd::float4 boneWeights;
     simd::uint4 boneIndices;
+};
+
+struct GridUniforms
+{
+    simd::float4x4 viewProjectionMatrix;
+    simd::float3 cameraPosition;
+    float gridSize;
+    simd::float3 gridCenter;
+    float cellSize;
+    simd::float4 edgeColor;
+    float edgeThickness;
+    float fadeDistance;
+    float padding[2];
 };
 
 

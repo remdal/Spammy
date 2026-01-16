@@ -84,48 +84,27 @@ fragment LightingPsOut LightingPs(LightingVtxOut                   in           
                                   constant float4&                 mouseWorldPos   [[buffer  (1)]])
 {
     LightingPsOut res;
-    
-    // Test : affiche juste la cross en screen space
-    float2 pixelPosCross = in.position.xy;
+
     const uint2 pixelPos = uint2(floor(in.position.xy));
     const float depth = depthBuffer.read(pixelPos);
     float2 mousePos = uniforms.mouseState.xy;
-    
-    float dist = length(pixelPosCross - mousePos);
-    
-    // Cross pattern
-    float crossSize = 1.0f;
-    float thickness = 2.0;
-    
-    bool onCrossH = abs(pixelPosCross.y - mousePos.y) < thickness && abs(pixelPosCross.x - mousePos.x) < crossSize;
-    bool onCrossV = abs(pixelPosCross.x - mousePos.x) < thickness && abs(pixelPosCross.y - mousePos.y) < crossSize;
-    
-    if (onCrossH || onCrossV) {
-        res.backbuffer = float4(1.0, 0.0, 0.0, 1.0); // Rouge
-    } else {
-        // Garde le contenu précédent (LoadActionLoad)
-        discard_fragment();
-    }
-
-    float3 viewDirection;
+    // Garde le contenu précédent (LoadActionLoad)
+//    discard_fragment();
+    float3 viewDirection; // Aka Out
     const float3 worldPosition = GetWorldPositionAndViewDirFromDepth(pixelPos, depth, uniforms, viewDirection);
     float4 cross = visualizeModificationCross(uniforms, worldPosition, mouseWorldPos);
     float3 colorr = mix({0.1, 0.0, 0.0}, cross.xyz, cross.w);
-
+    
     res.backbuffer = float4(colorr, 1);//float4(0.1, 0.0, 0.0, 0.1);
     return res;
     
-
     constexpr sampler colorSampler(mip_filter::linear,
                                    mag_filter::linear,
                                    min_filter::linear);
 
-
-    float3 viewDir;
-
     if (depth == 1)
     {
-        float3 cubemapColor = cubemap.sample(colorSampler, viewDir, level(0)).xyz;
+        float3 cubemapColor = cubemap.sample(colorSampler, viewDirection, level(0)).xyz;
 
         LightingPsOut res;
         res.backbuffer = float4(cubemapColor, 1);

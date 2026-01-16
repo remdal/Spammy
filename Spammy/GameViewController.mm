@@ -128,8 +128,8 @@
 - (void)createView
 {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    _mtkView.preferredFramesPerSecond = 120;
     _mtkView = [[MTKView alloc] initWithFrame:_window.contentLayoutRect device:device];
+    _mtkView.preferredFramesPerSecond = 120;
     _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     _mtkView.colorPixelFormat = MTLPixelFormatRGBA16Float;
     _mtkView.depthStencilPixelFormat = MTLPixelFormatDepth32Float;
@@ -137,6 +137,10 @@
     _mtkView.paused = NO;
     _mtkView.delegate = self;
     _mtkView.enableSetNeedsDisplay = NO;
+    NSTrackingArea* trackingArea = [[NSTrackingArea alloc] initWithRect:_mtkView.bounds
+                                    options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect)
+                                                                  owner:self userInfo:nil];
+    [_mtkView addTrackingArea:trackingArea];
     NSScreen *screen = _window.screen ?: [NSScreen mainScreen];
     CGFloat scale = screen.backingScaleFactor ?: 1.0;
     CGSize sizePts = _mtkView.bounds.size;
@@ -166,6 +170,19 @@
     _pGameCoordinator->playSoundTestY();
 }
 
+- (void)mouseMoved:(NSEvent *)event
+{
+    NSPoint cursorPos = [_mtkView convertPoint:[event locationInWindow] fromView:nil];
+    CGFloat scale = _mtkView.window.screen.backingScaleFactor ?: 1.0;
+    float mouseX = (float)cursorPos.x;
+    float mouseY = (float)(((float)_mtkView.bounds.size.height - (float)cursorPos.y) * (float)scale);
+    if (!isfinite(mouseX) || !isfinite(mouseY))
+    {
+        return;
+    }
+    _pGameCoordinator->setMousePosition(mouseX, mouseY);
+}
+
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
     _pGameCoordinator->draw((__bridge MTK::View *)view);
@@ -173,7 +190,7 @@
 
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size
 {
-    _pGameCoordinator->resizeMtkViewAndUpdateViewportWindow(size.width, size.height);
+    _pGameCoordinator->resizeMtkViewAndUpdateViewportWindow((NS::UInteger)size.width, (NS::UInteger)size.height);
 }
 
 @end
@@ -266,3 +283,4 @@
 //- (void)handleScroll:(NSEvent*)event {
 //    _pGameRenderer->handleScroll([event deltaY]);
 //}
+

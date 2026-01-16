@@ -37,9 +37,16 @@
 #include "RMDLGrid.hpp"
 #include "RMDLSystem.hpp"
 
+#include "RMDLMouseAndCursor.hpp"
+
 #define kMaxBuffersInFlight 3
 
 static const uint32_t NumLights = 256;
+
+struct VertexCursor
+{
+    vector_float2 cursorPositionCompare;
+};
 
 struct TriangleData
 {
@@ -65,10 +72,15 @@ public:
     void handleScroll(float deltaY);
     void handleKeyPress(int key);
     
+    void setMousePosition(float x, float y);
+    
     void toggleEditMode() { m_editMode = !m_editMode; }
     void toggleBuildMode() { m_buildMode = !m_buildMode; }
     
     void makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat);
+    
+    void createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor>& outVertices);
+    void createBuffers();
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -81,15 +93,19 @@ public:
 private:
     MTL::Device*                m_device;
     MTL::CommandQueue*          m_commandQueue;
-    MTL::RenderPipelineState*   m_renderPipelineState;
-    MTL::Buffer* vertexBuffer;
+    MTL::RenderPipelineState*           m_renderPipelineState;
+    MTL::Buffer*                        m_mouseBuffer;
+    MTL::Buffer*                        vertexBuffer;
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
-    MTL::Buffer*                m_viewportSizeBuffer;
-    MTL::Library*               m_shaderLibrary;
-    MTL::Viewport               m_viewport;
-
-    simd::float2 cursorPos;
+    MTL::Buffer*                        m_viewportSizeBuffer;
+    MTL::Library*                       m_shaderLibrary;
+    MTL::Viewport                       m_viewport;
+    MTL::ComputePipelineState*          m_mousePositionComputeKernel;
+    
+    uint64_t                            m_frame;
+    simd::float2                        cursorPosition;
+    
     simd_uint2                          m_viewportSize;
     float                       _rotationAngle;
 
@@ -98,9 +114,9 @@ private:
     MTL::Texture*                        m_gBuffer1;
     MTL::Texture*                        m_shadow;
     MTL::Texture*                        m_depth;
-    MTL::Buffer*                        m_mouseBuffer;
+
     MTL::Buffer*                        m_textureBuffer;
-    MTL::ComputePipelineState*          m_mousePositionComputeKnl;
+    
     MTL::RenderPipelineState*          m_lightingPpl;
     NS::SharedPtr<MTL::RenderPassDescriptor>        _gBufferPassDesc;
     NS::SharedPtr<MTL::RenderPassDescriptor>         _shadowPassDesc;
@@ -114,8 +130,13 @@ private:
     MTL::DepthStencilState*             _gBufferDepthState;
     MTL::DepthStencilState*             _lightingDepthState;
     MTL::ComputePipelineState*          _pipelineStateDescriptor;
+    
+    
+    MouseDepthPicker    mouseAndCursor;
+    BuildGrid           grid;
+    simd::float3        m_lastValidGridCenter;
 
-    uint64_t                            m_frame;
+    
     RMDLCamera                          m_camera;
     RMDLCamera                          m_cameraPNJ;
     RMDLCamera                          m_cameraShadow;

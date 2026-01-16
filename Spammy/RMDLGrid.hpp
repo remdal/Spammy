@@ -5,19 +5,76 @@
 //  Created by Rémy on 12/01/2026.
 //
 
-//#ifndef RMDLGrid_hpp
-//#define RMDLGrid_hpp
-//
-//#include "Metal/Metal.hpp"
-//
+#ifndef RMDLGrid_hpp
+#define RMDLGrid_hpp
+
+#include "Metal/Metal.hpp"
+
 //#include <cmath>
 //#include <algorithm>
-//#include <simd/simd.h>
+#include <simd/simd.h>
 //#include <vector>
 //#include <string>
 //#include <fstream>
 //#include <memory>
-//
+
+#include "RMDLMainRenderer_shared.h"
+
+class BuildGrid
+{
+public:
+    BuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    ~BuildGrid();
+    
+    void render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewProjectionMatrix, simd::float3 cameraPosition);
+    
+    void setGridCenter(simd::float3 center);
+    void setGridSize(int size);
+    void setCellSize(float size);
+    void setEdgeColor(simd::float4 color);
+    void setEdgeThickness(float thickness);
+    void setFadeDistance(float distance);
+    void setVisible(bool visible);
+    
+    bool isVisible() const { return m_visible; }
+    
+private:
+    void buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    void buildBuffers(MTL::Device* device);
+    void generateGridMesh(MTL::Device* device);
+    
+    MTL::RenderPipelineState*   m_pipelineState;
+    MTL::DepthStencilState*     m_depthStencilState;
+    MTL::Buffer*                m_vertexBuffer;
+    MTL::Buffer*                m_uniformBuffer;
+    
+    GridUniforms                m_uniforms;
+    uint32_t                    m_vertexCount;
+    bool                        m_visible;
+    int                         m_gridSize;
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //static constexpr int GRID_SIZE_X = 128;
 //static constexpr int GRID_SIZE_Y = 128;
 //static constexpr int GRID_SIZE_Z = 128;
@@ -212,6 +269,6 @@
 //    simd::float2 texCoord;
 //    uint32_t blockType;
 //};
-//
-//#endif /* RMDLGrid_hpp */
+
+#endif /* RMDLGrid_hpp */
 

@@ -5,8 +5,203 @@
 //  Created by Rémy on 12/01/2026.
 //
 
-//#include "RMDLGrid.hpp"
-//
+#include "RMDLGrid.hpp"
+
+#include <vector>
+
+BuildGrid::BuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+: m_pipelineState(nullptr),m_depthStencilState(nullptr), m_vertexBuffer(nullptr), m_uniformBuffer(nullptr),
+m_vertexCount(0), m_visible(true), m_gridSize(16)
+{
+    m_uniforms.gridSize = 16.0f;
+    m_uniforms.cellSize = 1.0f;
+    m_uniforms.gridCenter = simd::make_float3(0.0f, 0.0f, 0.0f);
+    m_uniforms.edgeColor = simd::make_float4(0.5f, 0.8f, 1.0f, 0.6f);
+    m_uniforms.edgeThickness = 0.01f;
+    m_uniforms.fadeDistance = 50.0f;
+    
+    buildPipeline(device, pixelFormat, depthPixelFormat, shaderLibrary);
+    buildBuffers(device);
+    generateGridMesh(device);
+}
+
+BuildGrid::~BuildGrid()
+{
+    if (m_pipelineState) m_pipelineState->release();
+    if (m_depthStencilState) m_depthStencilState->release();
+    if (m_vertexBuffer) m_vertexBuffer->release();
+    if (m_uniformBuffer) m_uniformBuffer->release();
+}
+
+void BuildGrid::buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+{
+    NS::Error* error = nullptr;
+    
+    MTL::Function* vertexFunction = shaderLibrary->newFunction(NS::String::string("gridVertexShader", NS::UTF8StringEncoding));
+    MTL::Function* fragmentFunction = shaderLibrary->newFunction(NS::String::string("gridFragmentShader", NS::UTF8StringEncoding));
+    
+    if (!vertexFunction || !fragmentFunction)
+    {
+        printf("BuildGrid: Failed to load shader functions\n");
+        return;
+    }
+    
+    MTL::RenderPipelineDescriptor* pipelineDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+    pipelineDesc->setVertexFunction(vertexFunction);
+    pipelineDesc->setFragmentFunction(fragmentFunction);
+    pipelineDesc->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+    pipelineDesc->colorAttachments()->object(0)->setBlendingEnabled(true);
+    pipelineDesc->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    pipelineDesc->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    pipelineDesc->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+    pipelineDesc->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    pipelineDesc->setDepthAttachmentPixelFormat(depthPixelFormat);
+    
+    MTL::VertexDescriptor* vertexDesc = MTL::VertexDescriptor::alloc()->init();
+    vertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+    vertexDesc->attributes()->object(0)->setOffset(0);
+    vertexDesc->attributes()->object(0)->setBufferIndex(0);
+    vertexDesc->layouts()->object(0)->setStride(sizeof(simd::float3));
+    vertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+    
+    pipelineDesc->setVertexDescriptor(vertexDesc);
+    
+    m_pipelineState = device->newRenderPipelineState(pipelineDesc, &error);
+    
+    if (!m_pipelineState)
+        printf("BuildGrid: Failed to create pipeline: %s\n", error->localizedDescription()->utf8String());
+    
+    MTL::DepthStencilDescriptor* depthDesc = MTL::DepthStencilDescriptor::alloc()->init();
+    depthDesc->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
+    depthDesc->setDepthWriteEnabled(true);
+    m_depthStencilState = device->newDepthStencilState(depthDesc);
+    
+    vertexFunction->release();
+    fragmentFunction->release();
+    pipelineDesc->release();
+    vertexDesc->release();
+    depthDesc->release();
+}
+
+void BuildGrid::buildBuffers(MTL::Device* device)
+{
+    m_uniformBuffer = device->newBuffer(sizeof(GridUniforms), MTL::ResourceStorageModeShared);
+}
+
+void BuildGrid::generateGridMesh(MTL::Device* device)
+{
+    std::vector<simd::float3> vertices;
+    
+    int halfSize = m_gridSize / 2;
+    float cell = m_uniforms.cellSize;
+    float t = m_uniforms.edgeThickness;
+    
+    // Génère une grille horizontale (plan XZ) avec des edges en 3D (mini cubes plats)
+    for (int x = -halfSize; x <= halfSize; x++)
+    {
+        for (int z = -halfSize; z <= halfSize; z++)
+        {
+            float px = x * cell;
+            float pz = z * cell;
+            
+            // Edge horizontale en X (si pas au bord droit)
+            if (x < halfSize)
+            {
+                // Quad pour l'edge X (au sol, y=0)
+                vertices.push_back(simd::make_float3(px, 0, pz - t));
+                vertices.push_back(simd::make_float3(px + cell, 0, pz - t));
+                vertices.push_back(simd::make_float3(px + cell, 0, pz + t));
+                
+                vertices.push_back(simd::make_float3(px, 0, pz - t));
+                vertices.push_back(simd::make_float3(px + cell, 0, pz + t));
+                vertices.push_back(simd::make_float3(px, 0, pz + t));
+            }
+            
+            // Edge horizontale en Z (si pas au bord bas)
+            if (z < halfSize)
+            {
+                vertices.push_back(simd::make_float3(px - t, 0, pz));
+                vertices.push_back(simd::make_float3(px + t, 0, pz));
+                vertices.push_back(simd::make_float3(px + t, 0, pz + cell));
+                
+                vertices.push_back(simd::make_float3(px - t, 0, pz));
+                vertices.push_back(simd::make_float3(px + t, 0, pz + cell));
+                vertices.push_back(simd::make_float3(px - t, 0, pz + cell));
+            }
+            
+            // Petit carré aux intersections
+            vertices.push_back(simd::make_float3(px - t, 0, pz - t));
+            vertices.push_back(simd::make_float3(px + t, 0, pz - t));
+            vertices.push_back(simd::make_float3(px + t, 0, pz + t));
+            
+            vertices.push_back(simd::make_float3(px - t, 0, pz - t));
+            vertices.push_back(simd::make_float3(px + t, 0, pz + t));
+            vertices.push_back(simd::make_float3(px - t, 0, pz + t));
+        }
+    }
+    
+    m_vertexCount = (uint32_t)vertices.size();
+    
+    if (m_vertexBuffer)
+        m_vertexBuffer->release();
+    
+    m_vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(simd::float3), MTL::ResourceStorageModeShared);
+}
+
+void BuildGrid::render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewProjectionMatrix, simd::float3 cameraPosition)
+{
+//    printf("BuildGrid::render - visible=%d, pipeline=%p, vertexCount=%u\n",
+//               m_visible, m_pipelineState, m_vertexCount);
+//    printf("BuildGrid::render - gridCenter=(%.1f, %.1f, %.1f)\n",
+//               m_uniforms.gridCenter.x, m_uniforms.gridCenter.y, m_uniforms.gridCenter.z);
+    m_uniforms.viewProjectionMatrix = viewProjectionMatrix;
+    m_uniforms.cameraPosition = cameraPosition;
+    
+    memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(GridUniforms));
+    
+    encoder->setRenderPipelineState(m_pipelineState);
+    encoder->setDepthStencilState(m_depthStencilState);
+    encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
+    encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
+    encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
+    encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, m_vertexCount);
+}
+
+void BuildGrid::setGridCenter(simd::float3 center)
+{
+    m_uniforms.gridCenter = center;
+}
+
+void BuildGrid::setGridSize(int size)
+{
+    m_gridSize = size;
+    m_uniforms.gridSize = (float)size;
+}
+
+void BuildGrid::setCellSize(float size)
+{
+    m_uniforms.cellSize = size;
+}
+
+void BuildGrid::setEdgeColor(simd::float4 color)
+{
+    m_uniforms.edgeColor = color;
+}
+
+void BuildGrid::setEdgeThickness(float thickness)
+{
+    m_uniforms.edgeThickness = thickness;
+}
+
+void BuildGrid::setFadeDistance(float distance)
+{
+    m_uniforms.fadeDistance = distance;
+}
+
+void BuildGrid::setVisible(bool visible)
+{
+    m_visible = visible;
+}
 //RMDLGrid::RMDLGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, NS::UInteger width, NS::UInteger heigth, MTL::Library* shaderLibrary)
 //: m_indexCount(0), m_gridEdgeIndexCount(0), m_editMode(true)
 //{
