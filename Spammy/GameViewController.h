@@ -25,7 +25,10 @@
 - (void)drawInMTKView:(MTKView *)view;
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size;
 
-- (void)moveCameraX:(float)x Y:(float)y Z:(float)z;
 - (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch;
+
+- (void)playSoundTestY;
+- (void)jump;
+- (void)inventory:(BOOL)visible;
 
 @end

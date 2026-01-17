@@ -94,7 +94,7 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
 
 float fade(float t)
 {
-    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); // 1,7 - > 9.03992
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 
 GameCoordinator::GameCoordinator(MTL::Device* device,
@@ -139,7 +139,7 @@ vertexBuffer(nullptr)
     NS::Date* date = NS::Date::dateWithTimeIntervalSinceNow(0);
     m_uniforms.frameTime = 0.f;
     makeTexture(layerPixelFormat, depthPixelFormat);
-    for (int i = 0; i < kMaxFramesInFlight; i++)
+    for (uint8_t i = 0; i < kMaxFramesInFlight; i++)
     {
         m_gpuUniforms[i] = m_device->newBuffer(sizeof(m_uniforms), MTL::ResourceStorageModeShared);
     }
@@ -151,6 +151,7 @@ vertexBuffer(nullptr)
     grid.setEdgeColor({0.3f, 0.8f, 1.0f, 0.8f}); // Bleu cyan
     grid.setEdgeThickness(0.02f);   // Épaisseur des lignes
     grid.setFadeDistance(50.0f);    // Distance de fade
+//    grid.setVisible(false);
     
 }
 
@@ -178,10 +179,41 @@ void GameCoordinator::createBuffers()
     m_mouseBuffer = m_device->newBuffer(sizeof(VertexCursor), MTL::ResourceStorageModeShared);
 }
 
+void GameCoordinator::inventory(bool visible)
+{
+    grid.setVisible(visible);
+}
+
+void GameCoordinator::jump()
+{
+    float _angle = 0;
+    const float scl = 0.2f;
+    _angle += 0.002f;
+    simd::float3 objectPosition = { 0.f, 10.f, 0.f };
+    simd::float4x4 scale = math::makeScale( (simd::float3){ scl, scl, scl } );
+    simd::float4x4 rt = math::makeTranslate( objectPosition );
+    simd::float4x4 rr1 = math::makeYRotate( -_angle );
+    simd::float4x4 rr0 = math::makeXRotate( _angle * 0.5 );
+    simd::float4x4 rtInv = math::makeTranslate( { -objectPosition.x, -objectPosition.y, -objectPosition.z } );
+    simd::float4x4 zrot = math::makeZRotate( _angle * sinf(1.0));
+    simd::float4x4 yrot = math::makeYRotate( _angle * cosf(1.0));
+    simd::float4x4 fullObjectRot = rt * rr1 * rr0 * rtInv;
+    
+    simd::float3 jump = m_camera.position() + objectPosition;
+    simd::float3 jumpback = m_camera.position() - objectPosition;
+    m_camera.setPosition(jump);
+//    m_camera.setPosition(jumpback);
+//    setPosition(math::makeTranslate(jump));
+}
+
 void GameCoordinator::moveCamera(simd::float3 translation)
 {
-    simd::float3 newPosition = m_camera.position() + translation;
-    m_camera.setPosition(newPosition);
+    simd::float3 newPosition;
+//    for (int i = 0; i < 100; i++)
+    
+        newPosition = m_camera.position() + translation;
+        m_camera.setPosition(newPosition);
+    
 }
 
 void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
@@ -206,6 +238,28 @@ void GameCoordinator::setMousePosition(float x, float y)
 {
     cursorPosition = simd::make_float2(x, y);
     mouseAndCursor.setMousePosition(x, y);
+}
+
+void GameCoordinator::update(float dt, const InputState& input)
+{
+    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
+    constexpr float lookSensitivity = 0.003f;
+    
+    // Mouvement caméra (frame-independent)
+    float speed = baseMoveSpeed * input.speedMultiplier * dt;
+    simd::float3 movement = input.moveDirection * speed;
+    
+    // Transformer en espace caméra
+    simd::float3 forward = m_camera.forward();
+    simd::float3 right = m_camera.right();
+    simd::float3 up = {0, 1, 0};
+    
+    simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
+    
+    m_camera.setPosition(worldMove);
+    
+    // Rotation caméra
+    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
 }
 
 void GameCoordinator::createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor> &outVertices)
@@ -501,19 +555,21 @@ void GameCoordinator::draw(MTK::View* view)
     snappedPos.y = roundf(result.worldPosition.y);//0.0f;
     snappedPos.z = roundf(result.worldPosition.z);
     grid.setGridCenter(snappedPos);
-
+    if (result.depth > 0.9)
+    {
+//        printf("%f\n", result.depth);
+        grid.setFadeDistance(150.0f);
+        grid.setEdgeThickness(0.07f);
+    } else {
+        grid.setFadeDistance(50.0f);
+        grid.setEdgeThickness(0.02f);
+    }
     if (frameIndex == 2)
     {
-        printf("Position monde: (%.2f, %.2f, %.2f)\n", result.worldPosition.x,result.worldPosition.y,result.worldPosition.z);printf("Depth: %.4f\n", result.depth);}else {printf("Aucun objet sous la souris\n");
-        printf("Texture: %lux%lu, Screen: %.0fx%.0f, Mouse: %.0f,%.0f\n",m_depth->width(), m_depth->height(),m_viewport.width, m_viewport.height,cursorPosition.x, cursorPosition.y);
-            printf("DRAW: m_depth=%lux%lu, drawable=%lux%lu\n",
-                   m_depth->width(), m_depth->height(),
-                   view->currentDrawable()->texture()->width(),
-                   view->currentDrawable()->texture()->height());
     }
     if (m_frame > 1000 || m_frame % 1000 == 0)
     {
-        printf("%llu\n", m_frame);
+//        printf("%llu\n", m_frame);
     }
     autoreleasePool->release();
 }
@@ -577,27 +633,6 @@ RMDLRendererSpammy::RMDLRendererSpammy(MTL::Device* pDevice, MTL::PixelFormat pi
     _pSharedEvent->setSignaledValue(_currentFrameIndex);
 
     _semaphore = dispatch_semaphore_create( kMaxFramesInFlight );
-
-    NS::Error* pError = nullptr;
-
-    _pViewportSize.x = (float)width;
-    _pViewportSize.x = (float)height;
-    _pViewportSizeBuffer = pDevice->newBuffer(sizeof(_pViewportSize), MTL::ResourceStorageModeShared);
-    ft_memcpy(_pViewportSizeBuffer->contents(), &_pViewportSize, sizeof(_pViewportSize));
-
-    setViewportWindow(width, height);
-
-    loadPngAndFont(resourcePath);
-    _pAudioEngine = std::make_unique<PhaseAudio>(resourcePath);
-    loadSoundMp3(resourcePath, _pAudioEngine.get());
-
-    buildDepthStencilStates(width, height);
-
-    for (uint8_t i = 0; i < kMaxFramesInFlight; i++)
-    {
-    }
-    
-    resizeMtkViewAndUpdateViewportWindow(width, height);
 }
 
 RMDLRendererSpammy::~RMDLRendererSpammy()
@@ -610,13 +645,6 @@ RMDLRendererSpammy::~RMDLRendererSpammy()
     _pResidencySet->release();
     _pArgumentTable->release();
     _pCommandQueue->release();
-}
-
-void RMDLRendererSpammy::setViewportWindow(NS::UInteger width, NS::UInteger height)
-{
-    _pViewportSize.x = (float)width;
-    _pViewportSize.y = (float)height;
-    ft_memcpy(_pViewportSizeBuffer->contents(), &_pViewportSize, sizeof(_pViewportSize));
 }
 
 void RMDLRendererSpammy::loadPngAndFont( const std::string& resourcesPath )
@@ -635,12 +663,6 @@ void RMDLRendererSpammy::loadPngAndFont( const std::string& resourcesPath )
 //    assert(_textureAssets["fontAtlas"]);
 }
 
-void RMDLRendererSpammy::loadSoundMp3( const std::string &resourcesPath, PhaseAudio *pAudioEngine )
-{
-    pAudioEngine->loadStereoSound(resourcesPath, "Test.mp3");
-    pAudioEngine->loadMonoSound(resourcesPath, "Test.m4a");
-}
-
 void RMDLRendererSpammy::makeArgumentTable()
 {
     NS::Error* pError = nullptr;
@@ -648,18 +670,6 @@ void RMDLRendererSpammy::makeArgumentTable()
     NS::SharedPtr<MTL4::ArgumentTableDescriptor> argumentTableDescriptor = NS::TransferPtr( MTL4::ArgumentTableDescriptor::alloc()->init() );
 //    argumentTableDescriptor->setMaxBufferBindCount(2);
     _pArgumentTable = _pDevice->newArgumentTable(argumentTableDescriptor.get(), &pError);
-}
-
-void RMDLRendererSpammy::buildDepthStencilStates( NS::UInteger width, NS::UInteger height )
-{
-    NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-    pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionAlways);
-    pDepthStencilDesc->setDepthWriteEnabled(false);
-    _pDepthStencilState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
-
-    MTL::TextureDescriptor* pTextureDesc = MTL::TextureDescriptor::textureCubeDescriptor(m_depthPixelFormat, 3.3f, false);
-    pTextureDesc->setUsage(MTL::TextureUsageRenderTarget);
-    pTextureDesc->setStorageMode(MTL::StorageModePrivate);
 }
 
 void RMDLRendererSpammy::draw( MTK::View* view )
@@ -678,13 +688,4 @@ void RMDLRendererSpammy::draw( MTK::View* view )
     }
 
     pPool->release();
-}
-
-void RMDLRendererSpammy::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
-{
-    setViewportWindow(width, height);
-    _pDepthTextureDesc = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
-    _pDepthTextureDesc->setUsage(MTL::TextureUsageRenderTarget);
-    _pDepthTextureDesc->setStorageMode(MTL::StorageModePrivate);
-    _pTexture = _pDevice->newTexture(_pDepthTextureDesc);
 }

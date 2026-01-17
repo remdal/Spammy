@@ -11,7 +11,7 @@
 
 BuildGrid::BuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
 : m_pipelineState(nullptr),m_depthStencilState(nullptr), m_vertexBuffer(nullptr), m_uniformBuffer(nullptr),
-m_vertexCount(0), m_visible(true), m_gridSize(16)
+m_vertexCount(0), m_visible(false), m_gridSize(16)
 {
     m_uniforms.gridSize = 16.0f;
     m_uniforms.cellSize = 1.0f;
@@ -150,21 +150,20 @@ void BuildGrid::generateGridMesh(MTL::Device* device)
 
 void BuildGrid::render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewProjectionMatrix, simd::float3 cameraPosition)
 {
-//    printf("BuildGrid::render - visible=%d, pipeline=%p, vertexCount=%u\n",
-//               m_visible, m_pipelineState, m_vertexCount);
-//    printf("BuildGrid::render - gridCenter=(%.1f, %.1f, %.1f)\n",
-//               m_uniforms.gridCenter.x, m_uniforms.gridCenter.y, m_uniforms.gridCenter.z);
-    m_uniforms.viewProjectionMatrix = viewProjectionMatrix;
-    m_uniforms.cameraPosition = cameraPosition;
-    
-    memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(GridUniforms));
-    
-    encoder->setRenderPipelineState(m_pipelineState);
-    encoder->setDepthStencilState(m_depthStencilState);
-    encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
-    encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
-    encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
-    encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, m_vertexCount);
+    if (m_visible)
+    {
+        m_uniforms.viewProjectionMatrix = viewProjectionMatrix;
+        m_uniforms.cameraPosition = cameraPosition;
+        
+        memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(GridUniforms));
+        
+        encoder->setRenderPipelineState(m_pipelineState);
+        encoder->setDepthStencilState(m_depthStencilState);
+        encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
+        encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
+        encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
+        encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, m_vertexCount);
+    }
 }
 
 void BuildGrid::setGridCenter(simd::float3 center)

@@ -55,6 +55,34 @@ struct TriangleData
     VertexData vertex2;
 };
 
+struct InputState
+{
+    // Mouvement (valeurs normalisées -1 à 1)
+    simd::float3 moveDirection {0, 0, 0};
+    simd::float2 lookDelta {0, 0};
+    
+    float speedMultiplier = 2.0f;
+    
+    // Actions ponctuelles (consommées après lecture)
+    bool jump = false;
+    bool interact = false;
+    bool inventory = false;
+    
+    void reset()
+    {
+        moveDirection = {0, 0, 0};
+        lookDelta = {0, 0};
+        speedMultiplier = 1.0f;
+    }
+    
+    void consumeActions()
+    {
+        jump = false;
+        interact = false;
+        inventory = false;
+    }
+};
+
 class GameCoordinator : NonCopyable
 {
 public:
@@ -65,6 +93,8 @@ public:
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
     void makeArgumentTable();
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
+    
+    void update(float deltaTime, const InputState& input);
 
     void handleMouseMove(float x, float y);
     void handleMouseDown(bool rightClick);
@@ -81,6 +111,9 @@ public:
     
     void createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor>& outVertices);
     void createBuffers();
+    
+    void inventory(bool visible);
+    void jump();
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);

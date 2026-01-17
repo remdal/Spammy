@@ -15,48 +15,143 @@
 
 @end
 
+// List the keys in use within this sample
+// The enum value is the NSEvent key code
+using Controls = uint8_t;
+enum : Controls
+{
+    // Keycodes that control translation
+    controlsForward     = 0x0d, // W key
+    controlsBackward    = 0x01, // S key
+    controlsStrafeUp    = 0x31, // Spacebar
+    controlsStrafeDown  = 0x08, // C key
+    controlsStrafeLeft  = 0x00, // A key
+    controlsStrafeRight = 0x02, // D key
+
+    // Keycodes that control rotation
+    controlsRollLeft    = 0x0c, // Q key
+    controlsRollRight   = 0x0e, // E key
+    controlsTurnLeft    = 0x7b, // Left arrow
+    controlsTurnRight   = 0x7c, // Right arrow
+    controlsTurnUp      = 0x7e, // Up arrow
+    controlsTurnDown    = 0x7d, // Down arrow
+
+    // The brush size
+    controlsIncBrush    = 0x1E, // Right bracket
+    controlsDecBrush    = 0x21, // Left bracket
+
+    // Additional virtual keys
+    controlsFast        = 0x80,
+    controlsSlow        = 0x81,
+    
+    // AZERTY
+    inventory           = 0x0f  // R Key
+};
+
 @implementation GameWindow
+{
+    NSMutableSet<NSNumber*>*    _pressedKeys;
+    simd::float2                _mouseDrag;
+    BOOL                        _mouseCaptured;
+}
+
+- (instancetype)initWithContentRect:(NSRect)rect styleMask:(NSWindowStyleMask)mask backing:(NSBackingStoreType)backing defer:(BOOL)flag screen:(NSScreen*)screen
+{
+    self = [super initWithContentRect:rect styleMask:mask backing:backing defer:flag screen:screen];
+    if (self)
+    {
+        _pressedKeys = [NSMutableSet new];
+        _mouseDrag = {0, 0};
+        _mouseCaptured = NO;
+    }
+    return self;
+}
+
+- (BOOL)acceptsFirstResponder { return YES; }
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+
+- (BOOL)canBecomeKeyWindow { return YES; }
+
+- (BOOL)canBecomeMainWindow { return YES; }
 
 - (void)keyDown:(NSEvent *)event
 {
-    NSString *chars = [event charactersIgnoringModifiers];
-    if (chars.length == 0) { return; }
-    unichar character = [chars characterAtIndex:0];
-    float moveSpeed = 1.0f;
-    switch (character)
+    if (!event.ARepeat)
     {
-        case 'w':
-            [self.gameCoordinator moveCameraX : 0 Y : 0 Z : -moveSpeed];
-            break;
-        case 's':
-            [self.gameCoordinator moveCameraX : 0 Y : 0 Z : moveSpeed];
-            break;
-        case 'a':
-            [self.gameCoordinator moveCameraX : -moveSpeed Y : 0 Z : 0];
-            break;
-        case 'd':
-            [self.gameCoordinator moveCameraX : moveSpeed Y : 0 Z : 0];
-            break;
-        case 'q':
-            [self.gameCoordinator moveCameraX : 0 Y : moveSpeed Z : 0];
-            break;
-        case 'e':
-            [self.gameCoordinator moveCameraX : 0 Y : -moveSpeed Z : 0];
-            break;
-        case ' ':
-            [self.gameCoordinator moveCameraX : moveSpeed * moveSpeed Y : 0 Z : 0];
-            break;
-        case 'y':
-            [self.gameCoordinator playSoundTestY];
-            break;
-        default:
-            [super keyDown:event];
-            break;
+        [_pressedKeys addObject:@(event.keyCode)];
+//        [self handleActionKey:event.keyCode pressed:YES];
+        switch (event.keyCode)
+        {
+            case 0x31: [self.gameCoordinator jump]; break; // Espace
+            case inventory: [self.gameCoordinator inventory : true]; break; // R
+        }
+    }
+    NSString* chars = [event charactersIgnoringModifiers];
+    if (chars.length == 0) return;
+    if (chars.length > 0 && [chars characterAtIndex:0] == 'y')
+        [self.gameCoordinator playSoundTestY];
+}
+
+- (void)keyUp:(NSEvent*)event
+{
+    [_pressedKeys removeObject:@(event.keyCode)];
+//    [self handleActionKey:event.keyCode pressed:NO];
+    switch (event.keyCode)
+    {
+        case 0x0F: [self.gameCoordinator inventory : NO]; break;
     }
 }
 
-- (void)mouseDragged:(NSEvent *)event
+- (void)flagsChanged:(NSEvent*)event
 {
+    if (event.modifierFlags & NSEventModifierFlagShift)
+        [_pressedKeys addObject:@(controlsFast)];
+    else
+        [_pressedKeys removeObject:@(controlsFast)];
+
+    if (event.modifierFlags & NSEventModifierFlagControl)
+        [_pressedKeys addObject:@(controlsSlow)];
+    else
+        [_pressedKeys removeObject:@(controlsSlow)];
+}
+
+- (void)handleActionKey:(uint16_t)keyCode pressed:(BOOL)pressed
+{
+    if (!pressed) return;
+}
+
+- (void)mouseUp:(NSEvent *)event
+{
+    [[NSCursor crosshairCursor] set];
+}
+
+- (void)mouseDown:(NSEvent *)event
+{
+    [[NSCursor closedHandCursor] set];
+    if (!_mouseCaptured)
+        [self captureMouse];
+//    else
+//        [self.gameCoordinator triggerPrimaryAction];
+}
+
+- (void)rightMouseDown:(NSEvent*)event
+{
+//    [self.gameCoordinator triggerSecondaryAction];
+}
+
+- (void)mouseMoved:(NSEvent*)event
+{
+    if (_mouseCaptured)
+    {
+        _mouseDrag.x += event.deltaX;
+        _mouseDrag.y += event.deltaY;
+    }
+}
+
+- (void)mouseDragged:(NSEvent*)event
+{
+    [self mouseMoved:event];
     float sensitivity = 0.009f;
 
     float deltaX = [event deltaX] * sensitivity;
@@ -65,17 +160,55 @@
     [self.gameCoordinator rotateCameraYaw : deltaX Pitch : deltaY];
 }
 
-- (void)mouseDown:(NSEvent *)event
+- (void)captureMouse
 {
-    [super mouseDown : event];
+    _mouseCaptured = YES;
+    CGAssociateMouseAndMouseCursorPosition(YES);
+    [NSCursor hide];
+}
+
+- (void)releaseMouse
+{
+    _mouseCaptured = NO;
+    CGAssociateMouseAndMouseCursorPosition(NO);
+    [NSCursor unhide];
+}
+
+- (void)cancelOperation:(id)sender
+{
+    [self releaseMouse];
+}
+
+- (InputState)pollInputState
+{
+    InputState state;
+    
+    if ([_pressedKeys containsObject:@(0x06)]) state.moveDirection.z -= 1; // Z
+    if ([_pressedKeys containsObject:@(0x01)]) state.moveDirection.z += 1; // S
+    if ([_pressedKeys containsObject:@(0x0C)]) state.moveDirection.x -= 1; // Q
+    if ([_pressedKeys containsObject:@(0x02)]) state.moveDirection.x += 1; // D
+    if ([_pressedKeys containsObject:@(0x00)]) state.moveDirection.y += 1; // A (monter)
+    if ([_pressedKeys containsObject:@(0x0E)]) state.moveDirection.y -= 1; // E (descendre)
+    
+    // Normaliser si diagonal
+    float len = simd::length(state.moveDirection);
+    if (len > 1.0f) state.moveDirection /= len;
+    
+    if ([_pressedKeys containsObject:@(0x80)]) state.speedMultiplier = 3.0f;  // Shift
+    if ([_pressedKeys containsObject:@(0x81)]) state.speedMultiplier = 0.2f;  // Ctrl
+    
+    state.lookDelta = _mouseDrag;
+    _mouseDrag = {0, 0};
+    
+    return state;
 }
 
 @end
 
 @implementation RMDLGameApplicationLoupy
 {
-    GameWindow*                        _window;
-    std::unique_ptr< GameCoordinator > _pGameCoordinator;
+    GameWindow*                         _window;
+    std::unique_ptr<GameCoordinator>    _pGameCoordinator;
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
@@ -122,7 +255,6 @@
     [_window makeKeyAndOrderFront:nil];
     [_window setIsVisible:YES];
     [_window makeMainWindow];
-    [_window makeKeyAndOrderFront:_window];
 }
 
 - (void)createView
@@ -137,9 +269,10 @@
     _mtkView.paused = NO;
     _mtkView.delegate = self;
     _mtkView.enableSetNeedsDisplay = NO;
-    NSTrackingArea* trackingArea = [[NSTrackingArea alloc] initWithRect:_mtkView.bounds
-                                    options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect)
-                                                                  owner:self userInfo:nil];
+    NSTrackingArea* trackingArea = [[NSTrackingArea alloc]
+                                    initWithRect:_mtkView.bounds
+                                    options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect | NSTrackingActiveAlways | NSTrackingMouseEnteredAndExited)
+                                    owner:self userInfo:nil];
     [_mtkView addTrackingArea:trackingArea];
     NSScreen *screen = _window.screen ?: [NSScreen mainScreen];
     CGFloat scale = screen.backingScaleFactor ?: 1.0;
@@ -160,14 +293,19 @@
     _pGameCoordinator->moveCamera( simd::float3 {x, y, z} );
 }
 
-- (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch
-{
-    _pGameCoordinator->rotateCamera(yaw, pitch);
-}
-
 - (void)playSoundTestY
 {
     _pGameCoordinator->playSoundTestY();
+}
+
+- (void)inventory:(BOOL)visible
+{
+    _pGameCoordinator->inventory(visible);
+}
+
+- (void)jump
+{
+    _pGameCoordinator->jump();
 }
 
 - (void)mouseMoved:(NSEvent *)event
@@ -182,16 +320,34 @@
     float mouseX = (float)cursorPos.x * scaleX;
     float mouseY = (float)(boundsSize.height - cursorPos.y) * scaleY;
     
+//    mouseX += event.deltaY;
+    
     _pGameCoordinator->setMousePosition(mouseX, mouseY);
-    printf("Mouse: %.0f,%.0f | Bounds: %.0fx%.0f | Drawable: %.0fx%.0f | Scale: %.2f,%.2f\n",
-           mouseX, mouseY,
-           boundsSize.width, boundsSize.height,
-           drawableSize.width, drawableSize.height,
-           scaleX, scaleY);
+}
+
+
+- (void)mouseExited:(NSEvent *)event
+{
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
+    static CFTimeInterval lastTime = CACurrentMediaTime();
+    CFTimeInterval now = CACurrentMediaTime();
+    float dt = (float)(now - lastTime);
+    lastTime = now;
+    dt = fminf(dt, 0.1f);
+    InputState input = [_window pollInputState];
+    constexpr float moveSpeed = 5.0f;
+    constexpr float lookSensitivity = 0.003f;
+    
+    simd::float3 move = input.moveDirection * moveSpeed * input.speedMultiplier * dt;
+    if (simd::length(move) > 0.0001f)
+        _pGameCoordinator->moveCamera(move);
+    
+    if (simd::length(input.lookDelta) > 0.0001f)
+        _pGameCoordinator->rotateCamera(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
+    
     _pGameCoordinator->draw((__bridge MTK::View *)view);
 }
 
@@ -201,93 +357,3 @@
 }
 
 @end
-
-
-//- (void)keyDown:(NSEvent *)event {
-//    NSString *chars = [event charactersIgnoringModifiers];
-//    if (chars.length == 0) { return; }
-//    unichar character = [chars characterAtIndex:0];
-//    
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleKeyPress:)]) {
-//        [self.gameCoordinator handleKeyPress:character];
-//    }
-//}
-//
-//- (void)mouseDragged:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleMouseDrag:)]) {
-//        [self.gameCoordinator handleMouseDrag:event];
-//    }
-//}
-//
-//- (void)mouseDown:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleMouseDown:)]) {
-//        [self.gameCoordinator handleMouseDown:event];
-//    }
-//}
-//
-//- (void)rightMouseDown:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleRightMouseDown:)]) {
-//        [self.gameCoordinator handleRightMouseDown:event];
-//    }
-//}
-//
-//- (void)mouseUp:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleMouseUp:)]) {
-//        [self.gameCoordinator handleMouseUp:event];
-//    }
-//}
-//
-//- (void)rightMouseUp:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleRightMouseUp:)]) {
-//        [self.gameCoordinator handleRightMouseUp:event];
-//    }
-//}
-//
-//- (void)scrollWheel:(NSEvent *)event {
-//    if ([self.gameCoordinator respondsToSelector:@selector(handleScroll:)]) {
-//        [self.gameCoordinator handleScroll:event];
-//    }
-//}
-//
-//    _window.releasedWhenClosed = NO;
-//    _window.minSize = NSMakeSize(640, 360);
-//    _window.gameCoordinator = self;
-//    _window.title = @"TerraBlock - Constructeur de Véhicules";
-//    [_window makeKeyAndOrderFront:nil];
-//    [_window setIsVisible:YES];
-//    _mtkView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-//    _mtkView.framebufferOnly = YES;
-//    _mtkView.enableSetNeedsDisplay = NO;
-//- (void)handleKeyPress:(unichar)character {
-//    _pGameRenderer->handleKeyPress(character);
-//}
-//
-//- (void)handleMouseDrag:(NSEvent*)event {
-//    NSPoint loc = [_mtkView convertPoint:[event locationInWindow] fromView:nil];
-//    _pGameRenderer->handleMouseMove(loc.x, loc.y);
-//}
-//
-//- (void)handleMouseDown:(NSEvent*)event {
-//    NSPoint loc = [_mtkView convertPoint:[event locationInWindow] fromView:nil];
-//    _pGameRenderer->handleMouseMove(loc.x, loc.y);
-//    _pGameRenderer->handleMouseDown(false);
-//}
-//
-//- (void)handleRightMouseDown:(NSEvent*)event {
-//    NSPoint loc = [_mtkView convertPoint:[event locationInWindow] fromView:nil];
-//    _pGameRenderer->handleMouseMove(loc.x, loc.y);
-//    _pGameRenderer->handleMouseDown(true);
-//}
-//
-//- (void)handleMouseUp:(NSEvent*)event {
-//    _pGameRenderer->handleMouseUp();
-//}
-//
-//- (void)handleRightMouseUp:(NSEvent*)event {
-//    _pGameRenderer->handleMouseUp();
-//}
-//
-//- (void)handleScroll:(NSEvent*)event {
-//    _pGameRenderer->handleScroll([event deltaY]);
-//}
-
