@@ -12,6 +12,7 @@
 @interface GameWindow : NSWindow
 
 @property (strong) RMDLGameApplicationLoupy* gameCoordinator;
+- (InputState)pollInputState;
 
 @end
 
@@ -135,12 +136,12 @@ enum : Controls
 //        [self.gameCoordinator triggerPrimaryAction];
 }
 
-- (void)rightMouseDown:(NSEvent*)event
+- (void)rightMouseDown:(NSEvent *)event
 {
 //    [self.gameCoordinator triggerSecondaryAction];
 }
 
-- (void)mouseMoved:(NSEvent*)event
+- (void)mouseMoved:(NSEvent *)event
 {
     if (_mouseCaptured)
     {
@@ -149,7 +150,7 @@ enum : Controls
     }
 }
 
-- (void)mouseDragged:(NSEvent*)event
+- (void)mouseDragged:(NSEvent *)event
 {
     [self mouseMoved:event];
     float sensitivity = 0.009f;
@@ -160,18 +161,22 @@ enum : Controls
     [self.gameCoordinator rotateCameraYaw : deltaX Pitch : deltaY];
 }
 
+//- (void)mouseEntered:(NSEvent *)event
+//{
+//}
+
 - (void)captureMouse
 {
     _mouseCaptured = YES;
     CGAssociateMouseAndMouseCursorPosition(YES);
-    [NSCursor hide];
+//    [NSCursor hide];
 }
 
 - (void)releaseMouse
 {
     _mouseCaptured = NO;
     CGAssociateMouseAndMouseCursorPosition(NO);
-    [NSCursor unhide];
+//    [NSCursor unhide];
 }
 
 - (void)cancelOperation:(id)sender
@@ -183,19 +188,68 @@ enum : Controls
 {
     InputState state;
     
-    if ([_pressedKeys containsObject:@(0x06)]) state.moveDirection.z -= 1; // Z
-    if ([_pressedKeys containsObject:@(0x01)]) state.moveDirection.z += 1; // S
-    if ([_pressedKeys containsObject:@(0x0C)]) state.moveDirection.x -= 1; // Q
-    if ([_pressedKeys containsObject:@(0x02)]) state.moveDirection.x += 1; // D
-    if ([_pressedKeys containsObject:@(0x00)]) state.moveDirection.y += 1; // A (monter)
-    if ([_pressedKeys containsObject:@(0x0E)]) state.moveDirection.y -= 1; // E (descendre)
-    
-    // Normaliser si diagonal
+    if ([_pressedKeys containsObject:@(0x06)]) state.moveDirection.z -= 1;
+    if ([_pressedKeys containsObject:@(0x01)]) state.moveDirection.z += 1;
+    if ([_pressedKeys containsObject:@(0x0C)]) state.moveDirection.x -= 1;
+    if ([_pressedKeys containsObject:@(0x02)]) state.moveDirection.x += 1;
+    if ([_pressedKeys containsObject:@(0x00)]) state.moveDirection.y += 1;
+    if ([_pressedKeys containsObject:@(0x0E)]) state.moveDirection.y -= 1;
+    if ([_pressedKeys containsObject:@(0x00)]) { /* A */ }
+    if ([_pressedKeys containsObject:@(0x06)]) { /* Z */ }
+    if ([_pressedKeys containsObject:@(0x0E)]) { /* E */ }
+    if ([_pressedKeys containsObject:@(0x0F)]) { /* R */ }
+    if ([_pressedKeys containsObject:@(0x11)]) { /* T */ }
+    if ([_pressedKeys containsObject:@(0x10)]) { /* Y */ }
+    if ([_pressedKeys containsObject:@(0x20)]) { /* U */ }
+    if ([_pressedKeys containsObject:@(0x22)]) { /* I */ }
+    if ([_pressedKeys containsObject:@(0x1F)]) { /* O */ }
+    if ([_pressedKeys containsObject:@(0x23)]) { /* P */ }
+    if ([_pressedKeys containsObject:@(0x0C)]) { /* Q */ }
+    if ([_pressedKeys containsObject:@(0x01)]) { /* S */ }
+    if ([_pressedKeys containsObject:@(0x02)]) { /* D */ }
+    if ([_pressedKeys containsObject:@(0x03)]) { /* F */ }
+    if ([_pressedKeys containsObject:@(0x05)]) { /* G */ }
+    if ([_pressedKeys containsObject:@(0x04)]) { /* H */ }
+    if ([_pressedKeys containsObject:@(0x26)]) { /* J */ }
+    if ([_pressedKeys containsObject:@(0x28)]) { /* K */ }
+    if ([_pressedKeys containsObject:@(0x25)]) { /* L */ }
+    if ([_pressedKeys containsObject:@(0x29)]) { /* M */ }
+    if ([_pressedKeys containsObject:@(0x0D)]) { /* W */ }
+    if ([_pressedKeys containsObject:@(0x07)]) { /* X */ }
+    if ([_pressedKeys containsObject:@(0x08)]) { /* C */ }
+    if ([_pressedKeys containsObject:@(0x09)]) { /* V */ }
+    if ([_pressedKeys containsObject:@(0x0B)]) { /* B */ }
+    if ([_pressedKeys containsObject:@(0x2D)]) { /* N */ }
+    if ([_pressedKeys containsObject:@(0x38)]) { /* Shift gch */ }
+    if ([_pressedKeys containsObject:@(0x3C)]) { /* Shift drt */ }
+    if ([_pressedKeys containsObject:@(0x3B)]) { /* Ctrl gauche */ }
+    if ([_pressedKeys containsObject:@(0x3E)]) { /* Ctrl droite */ }
+    if ([_pressedKeys containsObject:@(0x3A)]) { /* Option gch */ }
+    if ([_pressedKeys containsObject:@(0x3D)]) { /* Option drt */ }
+    if ([_pressedKeys containsObject:@(0x37)]) { /* Command gch */ }
+    if ([_pressedKeys containsObject:@(0x36)]) { /* Command drt */ }
+    if ([_pressedKeys containsObject:@(0x31)]) { /*   */ }
+    if ([_pressedKeys containsObject:@(0x7E)]) { /* Haut */ }
+    if ([_pressedKeys containsObject:@(0x7D)]) { /* Bas */ }
+    if ([_pressedKeys containsObject:@(0x7B)]) { /* Gch */ }
+    if ([_pressedKeys containsObject:@(0x7C)]) { /* Drt */ }
+    if ([_pressedKeys containsObject:@(0x30)]) { /* Tab */ }
+    if ([_pressedKeys containsObject:@(0x39)]) { /* Lock */ }
+    // 0x24 Return <- !!
+    // 0x4C Enter (pavé numérique)
+    // 0x35 Escape
+    // 0x33 Delete (←)
+    // 0x75 Forward Delete (→)
+
     float len = simd::length(state.moveDirection);
-    if (len > 1.0f) state.moveDirection /= len;
+    if (len > 1.0f)
+        state.moveDirection /= len;
     
-    if ([_pressedKeys containsObject:@(0x80)]) state.speedMultiplier = 3.0f;  // Shift
-    if ([_pressedKeys containsObject:@(0x81)]) state.speedMultiplier = 0.2f;  // Ctrl
+    // QWERTY
+    if ([_pressedKeys containsObject:@(0x80)])
+        state.speedMultiplier = 3.0f; // Shift
+    if ([_pressedKeys containsObject:@(0x81)])
+        state.speedMultiplier = 0.2f; // Ctrl
     
     state.lookDelta = _mouseDrag;
     _mouseDrag = {0, 0};
@@ -271,7 +325,7 @@ enum : Controls
     _mtkView.enableSetNeedsDisplay = NO;
     NSTrackingArea* trackingArea = [[NSTrackingArea alloc]
                                     initWithRect:_mtkView.bounds
-                                    options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect | NSTrackingActiveAlways | NSTrackingMouseEnteredAndExited)
+                                    options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect | NSTrackingActiveAlways)
                                     owner:self userInfo:nil];
     [_mtkView addTrackingArea:trackingArea];
     NSScreen *screen = _window.screen ?: [NSScreen mainScreen];
@@ -291,6 +345,11 @@ enum : Controls
 - (void)moveCameraX:(float)x Y:(float)y Z:(float)z
 {
     _pGameCoordinator->moveCamera( simd::float3 {x, y, z} );
+}
+
+- (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch
+{
+    _pGameCoordinator->rotateCamera(yaw, pitch);
 }
 
 - (void)playSoundTestY
@@ -323,11 +382,6 @@ enum : Controls
 //    mouseX += event.deltaY;
     
     _pGameCoordinator->setMousePosition(mouseX, mouseY);
-}
-
-
-- (void)mouseExited:(NSEvent *)event
-{
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view

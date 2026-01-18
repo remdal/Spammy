@@ -17,7 +17,7 @@ m_vertexCount(0), m_visible(false), m_gridSize(16)
     m_uniforms.cellSize = 1.0f;
     m_uniforms.gridCenter = simd::make_float3(0.0f, 0.0f, 0.0f);
     m_uniforms.edgeColor = simd::make_float4(0.5f, 0.8f, 1.0f, 0.6f);
-    m_uniforms.edgeThickness = 0.01f;
+    m_uniforms.edgeThickness = 0.11f;
     m_uniforms.fadeDistance = 50.0f;
     
     buildPipeline(device, pixelFormat, depthPixelFormat, shaderLibrary);
@@ -95,19 +95,15 @@ void BuildGrid::generateGridMesh(MTL::Device* device)
     int halfSize = m_gridSize / 2;
     float cell = m_uniforms.cellSize;
     float t = m_uniforms.edgeThickness;
-    
-    // Génère une grille horizontale (plan XZ) avec des edges en 3D (mini cubes plats)
+
     for (int x = -halfSize; x <= halfSize; x++)
     {
         for (int z = -halfSize; z <= halfSize; z++)
         {
             float px = x * cell;
             float pz = z * cell;
-            
-            // Edge horizontale en X (si pas au bord droit)
             if (x < halfSize)
             {
-                // Quad pour l'edge X (au sol, y=0)
                 vertices.push_back(simd::make_float3(px, 0, pz - t));
                 vertices.push_back(simd::make_float3(px + cell, 0, pz - t));
                 vertices.push_back(simd::make_float3(px + cell, 0, pz + t));
@@ -116,8 +112,6 @@ void BuildGrid::generateGridMesh(MTL::Device* device)
                 vertices.push_back(simd::make_float3(px + cell, 0, pz + t));
                 vertices.push_back(simd::make_float3(px, 0, pz + t));
             }
-            
-            // Edge horizontale en Z (si pas au bord bas)
             if (z < halfSize)
             {
                 vertices.push_back(simd::make_float3(px - t, 0, pz));
@@ -128,15 +122,6 @@ void BuildGrid::generateGridMesh(MTL::Device* device)
                 vertices.push_back(simd::make_float3(px + t, 0, pz + cell));
                 vertices.push_back(simd::make_float3(px - t, 0, pz + cell));
             }
-            
-            // Petit carré aux intersections
-            vertices.push_back(simd::make_float3(px - t, 0, pz - t));
-            vertices.push_back(simd::make_float3(px + t, 0, pz - t));
-            vertices.push_back(simd::make_float3(px + t, 0, pz + t));
-            
-            vertices.push_back(simd::make_float3(px - t, 0, pz - t));
-            vertices.push_back(simd::make_float3(px + t, 0, pz + t));
-            vertices.push_back(simd::make_float3(px - t, 0, pz + t));
         }
     }
     

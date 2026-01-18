@@ -199,20 +199,9 @@ private:
     bool m_buildMode;
     simd::float3 m_raycastHitPoint;
     simd::int3 m_selectedVoxel;
+    dispatch_semaphore_t                _semaphore;
     
     void updateUniforms();
-};
-
-struct GameConfig
-{
-    uint8_t                                 enemyRows;
-    uint32_t                                screenWidth;
-    uint32_t                                screenHeight;
-    NS::SharedPtr<MTL::Texture>             playerTexture;
-    NS::SharedPtr<MTL::Texture>             fontAtlasTexture;
-    NS::SharedPtr<MTL::RenderPipelineState> spritePso;
-    float                                   playerSpeed;
-    PhaseAudio*                             pAudioEngine;
 };
 
 class RMDLRendererSpammy : NonCopyable
