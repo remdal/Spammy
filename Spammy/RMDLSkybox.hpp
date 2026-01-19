@@ -13,11 +13,13 @@
 #import <simd/simd.h>
 #include <memory>
 #include <string>
+#include <cmath>
 #include "RMDLMainRenderer_shared.h"
 
 namespace sky {
 
-struct AtmosphereParams {
+struct AtmosphereParams
+{
     simd::float3 sunDirection{0.0f, 0.5f, 0.5f};
     float sunIntensity = 12200.0f;
     // Rayleigh scattering (bleu du ciel)
@@ -70,7 +72,53 @@ inline simd::float3 calculateSunDirection(float timeOfDay)
     float angle = (timeOfDay - 0.25f) * 2.0f * M_PI;
     return simd::normalize(simd::float3{ std::cos(angle), std::sin(angle), 0.0f });
 }
+}
 
+namespace skybox {
+
+class BlackHole
+{
+public:
+    BlackHole(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    ~BlackHole();
+    
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, const simd::float4x4& viewProjectionMatrix,
+                const simd::float4x4& invViewProjectionMatrix, const simd::float3& cameraPosition);
+    
+    void update(float dt);
+    
+    void setPosition(simd::float3 pos) { m_position = pos; }
+    simd::float3 position() const { return m_position; }
+    
+    void setRadius(float r) { m_radius = r; }
+    float radius() const { return m_radius; }
+    
+    void setAccretionDiskRadii(float inner, float outer) { m_diskInner = inner; m_diskOuter = outer; }
+    void setGravitationalStrength(float s) { m_gravStrength = s; }
+    void setRotationSpeed(float s) { m_rotationSpeed = s; }
+    void setVisible(bool v) { m_visible = v; }
+    bool isVisible() const { return m_visible; }
+    
+private:
+    void buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    void buildBuffers(MTL::Device* device);
+    
+    MTL::RenderPipelineState* m_renderPipelineState;
+    MTL::DepthStencilState*   m_depthStencilState;
+    MTL::Buffer*              m_vertexBuffer;
+    MTL::Buffer*              m_indexBuffer;
+    MTL::Buffer*              m_uniformBuffer;
+    
+    simd::float3 m_position      = {0.f, 50.f, -100.f};
+    float        m_radius        = 8.f;
+    float        m_diskInner     = 12.f;
+    float        m_diskOuter     = 40.f;
+    float        m_gravStrength  = 2.5f;
+    float        m_rotationSpeed = 0.3f;
+    float        m_time          = 0.f;
+    bool         m_visible       = true;
+    uint32_t     m_indexCount    = 0;
+};
 }
 
 #endif /* RMDLSkybox_hpp */

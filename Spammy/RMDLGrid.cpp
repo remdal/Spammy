@@ -17,7 +17,7 @@ m_vertexCount(0), m_visible(false), m_gridSize(16)
     m_uniforms.cellSize = 1.0f;
     m_uniforms.gridCenter = simd::make_float3(0.0f, 0.0f, 0.0f);
     m_uniforms.edgeColor = simd::make_float4(0.5f, 0.8f, 1.0f, 0.6f);
-    m_uniforms.edgeThickness = 0.11f;
+    m_uniforms.edgeThickness = 0.01f;
     m_uniforms.fadeDistance = 50.0f;
     
     buildPipeline(device, pixelFormat, depthPixelFormat, shaderLibrary);
@@ -135,20 +135,18 @@ void BuildGrid::generateGridMesh(MTL::Device* device)
 
 void BuildGrid::render(MTL::RenderCommandEncoder* encoder, simd::float4x4 viewProjectionMatrix, simd::float3 cameraPosition)
 {
-    if (m_visible)
-    {
-        m_uniforms.viewProjectionMatrix = viewProjectionMatrix;
-        m_uniforms.cameraPosition = cameraPosition;
-        
-        memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(GridUniforms));
-        
-        encoder->setRenderPipelineState(m_pipelineState);
-        encoder->setDepthStencilState(m_depthStencilState);
-        encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
-        encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
-        encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
-        encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, m_vertexCount);
-    }
+    if (!m_visible) return;
+    m_uniforms.viewProjectionMatrix = viewProjectionMatrix;
+    m_uniforms.cameraPosition = cameraPosition;
+    
+    memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(GridUniforms));
+    
+    encoder->setRenderPipelineState(m_pipelineState);
+    encoder->setDepthStencilState(m_depthStencilState);
+    encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
+    encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
+    encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
+    encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, m_vertexCount);
 }
 
 void BuildGrid::setGridCenter(simd::float3 center)
@@ -725,3 +723,205 @@ void BuildGrid::setVisible(bool visible)
 //    
 //    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_indexCount, MTL::IndexTypeUInt32, m_meshIndexBuffer, 0);
 //}
+
+
+namespace GridCommandant {
+
+VehicleBuildGrid::VehicleBuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+: m_device(device->retain())
+{
+    buildPipeline(device, pixelFormat, depthPixelFormat, shaderLibrary);
+    m_uniformBuffer = device->newBuffer(sizeof(VehicleGridUniforms), MTL::ResourceStorageModeShared);
+    rebuildMesh();
+}
+
+VehicleBuildGrid::~VehicleBuildGrid()
+{
+    m_renderPipelineState->release();
+    m_depthStencilState->release();
+    if (m_vertexBuffer) m_vertexBuffer->release();
+    if (m_indexBuffer) m_indexBuffer->release();
+    m_uniformBuffer->release();
+}
+
+void VehicleBuildGrid::buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+{
+    NS::Error* error = nullptr;
+    
+    NS::SharedPtr<MTL::Function> vertexFunction = NS::TransferPtr(shaderLibrary->newFunction(MTLSTR("vehicleGridVertex")));
+    NS::SharedPtr<MTL::Function> fragmentFunction = NS::TransferPtr(shaderLibrary->newFunction(MTLSTR("vehicleGridFragment")));
+    
+    NS::SharedPtr<MTL::VertexDescriptor> vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
+    // Position
+    vertexDescriptor->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptor->attributes()->object(0)->setOffset(0);
+    vertexDescriptor->attributes()->object(0)->setBufferIndex(0);
+    // Normal
+    vertexDescriptor->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptor->attributes()->object(1)->setOffset(sizeof(simd::float3));
+    vertexDescriptor->attributes()->object(1)->setBufferIndex(0);
+    // UV
+    vertexDescriptor->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
+    vertexDescriptor->attributes()->object(2)->setOffset(sizeof(simd::float3) * 2);
+    vertexDescriptor->attributes()->object(2)->setBufferIndex(0);
+    // Plane index
+    vertexDescriptor->attributes()->object(3)->setFormat(MTL::VertexFormatUChar);
+    vertexDescriptor->attributes()->object(3)->setOffset(sizeof(simd::float3) * 2 + sizeof(simd::float2));
+    vertexDescriptor->attributes()->object(3)->setBufferIndex(0);
+    
+    vertexDescriptor->layouts()->object(0)->setStride(sizeof(GridVertex3D));
+    vertexDescriptor->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+    
+    MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+    renderPipelineDescriptor->setVertexFunction(vertexFunction.get());
+    renderPipelineDescriptor->setFragmentFunction(fragmentFunction.get());
+    renderPipelineDescriptor->setVertexDescriptor(vertexDescriptor.get());
+    renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+    renderPipelineDescriptor->colorAttachments()->object(0)->setBlendingEnabled(true);
+    renderPipelineDescriptor->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    renderPipelineDescriptor->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    renderPipelineDescriptor->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+    renderPipelineDescriptor->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    renderPipelineDescriptor->setDepthAttachmentPixelFormat(depthPixelFormat);
+    
+    m_renderPipelineState = device->newRenderPipelineState(renderPipelineDescriptor, &error);
+
+    NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunctionLess);
+    depthStencilDescriptor->setDepthWriteEnabled(false);
+    m_depthStencilState = device->newDepthStencilState(depthStencilDescriptor.get());
+}
+
+void VehicleBuildGrid::generatePlaneGrid(std::vector<GridVertex3D>& vertices, std::vector<uint32_t>& indices, uint8_t planeIndex, simd::float3 normal, simd::float3 tangent, simd::float3 bitangent)
+{
+    uint32_t baseVertex = (uint32_t)vertices.size();
+    int32_t ext = m_gridExtent;
+    float halfSize = ext * m_cellSize;
+    
+    // Générer les lignes de la grille comme des quads fins
+    // Lignes dans la direction tangent
+    for (int32_t i = -ext; i <= ext; i++)
+    {
+        float offset = i * m_cellSize;
+        simd::float3 lineStart = bitangent * offset - tangent * halfSize;
+        simd::float3 lineEnd = bitangent * offset + tangent * halfSize;
+        
+        // Quad pour la ligne (4 vertices)
+        uint32_t vi = (uint32_t)vertices.size();
+        float t = m_lineThickness * 0.5f;
+        
+        vertices.push_back({lineStart - bitangent * t, normal, {0, 0}, planeIndex, {}});
+        vertices.push_back({lineStart + bitangent * t, normal, {0, 1}, planeIndex, {}});
+        vertices.push_back({lineEnd + bitangent * t, normal, {1, 1}, planeIndex, {}});
+        vertices.push_back({lineEnd - bitangent * t, normal, {1, 0}, planeIndex, {}});
+        
+        indices.insert(indices.end(), {vi, vi+1, vi+2, vi, vi+2, vi+3});
+    }
+    
+    // Lignes dans la direction bitangent
+    for (int32_t i = -ext; i <= ext; i++)
+    {
+        float offset = i * m_cellSize;
+        simd::float3 lineStart = tangent * offset - bitangent * halfSize;
+        simd::float3 lineEnd = tangent * offset + bitangent * halfSize;
+        
+        uint32_t vi = (uint32_t)vertices.size();
+        float t = m_lineThickness * 0.5f;
+        
+        vertices.push_back({lineStart - tangent * t, normal, {0, 0}, planeIndex, {}});
+        vertices.push_back({lineStart + tangent * t, normal, {0, 1}, planeIndex, {}});
+        vertices.push_back({lineEnd + tangent * t, normal, {1, 1}, planeIndex, {}});
+        vertices.push_back({lineEnd - tangent * t, normal, {1, 0}, planeIndex, {}});
+        
+        indices.insert(indices.end(), {vi, vi+1, vi+2, vi, vi+2, vi+3});
+    }
+}
+
+void VehicleBuildGrid::rebuildMesh()
+{
+    std::vector<GridVertex3D> vertices;
+    std::vector<uint32_t> indices;
+    
+    // Plan XY (normal Z) - face avant/arrière
+    if (m_showXY) {
+        generatePlaneGrid(vertices, indices, 0,
+                          {0, 0, 1}, {1, 0, 0}, {0, 1, 0});
+        generatePlaneGrid(vertices, indices, 0,
+                          {0, 0, -1}, {-1, 0, 0}, {0, 1, 0});
+    }
+    
+    // Plan XZ (normal Y) - face haut/bas
+    if (m_showXZ) {
+        generatePlaneGrid(vertices, indices, 1,
+                          {0, 1, 0}, {1, 0, 0}, {0, 0, 1});
+        generatePlaneGrid(vertices, indices, 1,
+                          {0, -1, 0}, {1, 0, 0}, {0, 0, -1});
+    }
+    
+    // Plan YZ (normal X) - face gauche/droite
+    if (m_showYZ)
+    {
+        generatePlaneGrid(vertices, indices, 2, {1, 0, 0}, {0, 0, 1}, {0, 1, 0});
+        generatePlaneGrid(vertices, indices, 2, {-1, 0, 0}, {0, 0, -1}, {0, 1, 0});
+    }
+    
+    m_indexCount = (uint32_t)indices.size();
+    
+    if (m_vertexBuffer) m_vertexBuffer->release();
+    if (m_indexBuffer) m_indexBuffer->release();
+    
+    if (vertices.empty())
+    {
+        m_vertexBuffer = nullptr;
+        m_indexBuffer = nullptr;
+        return;
+    }
+    
+    m_vertexBuffer = m_device->newBuffer(vertices.data(), vertices.size() * sizeof(GridVertex3D), MTL::ResourceStorageModeShared); // VRAM
+    m_indexBuffer = m_device->newBuffer(indices.data(), indices.size() * sizeof(uint32_t), MTL::ResourceStorageModeShared);
+}
+
+void VehicleBuildGrid::update(float delta)
+{
+    m_time += delta;
+}
+
+void VehicleBuildGrid::render(MTL::RenderCommandEncoder* renderCommandEncoder, const simd::float4x4& viewProjectionMatrix, const simd::float3& cameraPosition)
+{
+    if (!m_visible || m_indexCount == 0 || !m_vertexBuffer) return;
+    
+    // Matrice modèle : translation au bloc + rotation du véhicule
+    simd::float4x4 translation = {
+        simd::float4{1, 0, 0, 0},
+        simd::float4{0, 1, 0, 0},
+        simd::float4{0, 0, 1, 0},
+        simd::float4{m_blockPosition.x, m_blockPosition.y, m_blockPosition.z, 1}
+    };
+    simd::float4x4 modelMatrix = translation * m_blockRotation;
+    
+    VehicleGridUniforms uniforms;
+    uniforms.viewProjectionMatrix = viewProjectionMatrix;
+    uniforms.modelMatrix = modelMatrix;
+    uniforms.cameraPosition = cameraPosition;
+    uniforms.time = m_time;
+    uniforms.gridCenter = m_blockPosition;
+    uniforms.cellSize = m_cellSize;
+    uniforms.gridColorXY = m_colorXY;
+    uniforms.gridColorXZ = m_colorXZ;
+    uniforms.gridColorYZ = m_colorYZ;
+    uniforms.lineThickness = m_lineThickness;
+    uniforms.fadeDistance = m_fadeDistance;
+    uniforms.pulseIntensity = m_pulseEnabled ? 0.3f : 0.f;
+    uniforms.gridExtent = m_gridExtent;
+    
+    memcpy(m_uniformBuffer->contents(), &uniforms, sizeof(uniforms));
+    
+    renderCommandEncoder->setRenderPipelineState(m_renderPipelineState);
+    renderCommandEncoder->setDepthStencilState(m_depthStencilState);
+    renderCommandEncoder->setCullMode(MTL::CullModeNone);
+    renderCommandEncoder->setVertexBuffer(m_vertexBuffer, 0, 0);
+    renderCommandEncoder->setVertexBuffer(m_uniformBuffer, 0, 1);
+    renderCommandEncoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
+    renderCommandEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_indexCount, MTL::IndexTypeUInt32, m_indexBuffer, 0);
+}
+}

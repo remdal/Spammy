@@ -13,7 +13,7 @@
 //#include <cmath>
 //#include <algorithm>
 #include <simd/simd.h>
-//#include <vector>
+#include <vector>
 //#include <string>
 //#include <fstream>
 //#include <memory>
@@ -53,6 +53,82 @@ private:
     bool                        m_visible;
     int                         m_gridSize;
 };
+
+namespace GridCommandant {
+
+class VehicleBuildGrid
+{
+public:
+    VehicleBuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    ~VehicleBuildGrid();
+    
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, const simd::float4x4& viewProjectionMatrix, const simd::float3& cameraPosition);
+    
+    void update(float delta);
+    
+    void setBlockPosition(simd::float3 pos) { m_blockPosition = pos; }
+    simd::float3 blockPosition() const { return m_blockPosition; }
+    
+    void setBlockRotation(simd::float4x4 rot) { m_blockRotation = rot; }
+    
+    void setCellSize(float size) { m_cellSize = size; }
+    void setGridExtent(int32_t extent) { m_gridExtent = extent; rebuildMesh(); }
+    void setLineThickness(float t) { m_lineThickness = t; }
+    void setFadeDistance(float d) { m_fadeDistance = d; }
+    
+    void setColorXY(simd::float4 c) { m_colorXY = c; }
+    void setColorXZ(simd::float4 c) { m_colorXZ = c; }
+    void setColorYZ(simd::float4 c) { m_colorYZ = c; }
+    void setAllColors(simd::float4 c) { m_colorXY = m_colorXZ = m_colorYZ = c; }
+
+    void setPlaneXYVisible(bool v) { m_showXY = v; rebuildMesh(); }
+    void setPlaneXZVisible(bool v) { m_showXZ = v; rebuildMesh(); }
+    void setPlaneYZVisible(bool v) { m_showYZ = v; rebuildMesh(); }
+    
+    void setVisible(bool v) { m_visible = v; }
+    bool isVisible() const { return m_visible; }
+
+    void setPulseEnabled(bool e) { m_pulseEnabled = e; }
+    void setPulseSpeed(float s) { m_pulseSpeed = s; }
+
+private:
+    void buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    void rebuildMesh();
+    void generatePlaneGrid(std::vector<GridVertex3D>& vertices,
+                           std::vector<uint32_t>& indices,
+                           uint8_t planeIndex, simd::float3 normal,
+                           simd::float3 tangent, simd::float3 bitangent);
+
+    MTL::Device*                m_device;
+    MTL::RenderPipelineState*   m_renderPipelineState;
+    MTL::DepthStencilState*     m_depthStencilState;
+    MTL::Buffer*                m_vertexBuffer;
+    MTL::Buffer*                m_indexBuffer;
+    MTL::Buffer*                m_uniformBuffer;
+    
+    simd::float3   m_blockPosition  = {0.f, 0.f, 0.f};
+    simd::float4x4 m_blockRotation  = matrix_identity_float4x4;
+    float          m_cellSize       = 1.0f;
+    int32_t        m_gridExtent     = 5; // -5 à +5 = 11 cellules par axe
+    float          m_lineThickness  = 0.03f;
+    float          m_fadeDistance   = 20.f;
+    
+    simd::float4   m_colorXY = {0.2f, 0.6f, 1.0f, 0.6f};
+    simd::float4   m_colorXZ = {0.2f, 1.0f, 0.4f, 0.6f};
+    simd::float4   m_colorYZ = {1.0f, 0.4f, 0.2f, 0.6f};
+    
+    bool m_showXY = true;
+    bool m_showXZ = true;
+    bool m_showYZ = true;
+    bool m_visible = true;
+    
+    bool  m_pulseEnabled = true;
+    float m_pulseSpeed   = 2.0f;
+    float m_time         = 0.f;
+    
+    uint32_t m_indexCount = 0;
+};
+}
 
 
 

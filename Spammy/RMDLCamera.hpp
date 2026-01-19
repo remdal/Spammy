@@ -56,6 +56,29 @@ public:
     simd::float4x4  InvProjectionMatrix();
     simd::float4x4  InvViewMatrix();
     void            rotateOnAxis( simd::float3 inAxis, float inRadians );
+    
+    void rotateYawPitch(float deltaYaw, float deltaPitch);
+    void setYaw(float yaw);
+    void setPitch(float pitch);
+    void setPitchLimits(float minPitch, float maxPitch);
+    float yaw() const { return _yaw; }
+    float pitch() const { return _pitch; }
+    
+    void setOrbitMode(bool enabled);
+    void setOrbitTarget(simd::float3 target);
+    void setOrbitDistance(float distance);
+    void orbit(float deltaYaw, float deltaPitch);
+    void zoom(float delta);
+    bool isOrbitMode() const { return _orbitMode; }
+    simd::float3 orbitTarget() const { return _orbitTarget; }
+    float orbitDistance() const { return _orbitDistance; }
+    
+    void followTarget(simd::float3 target, float distance, float height, float smoothing, float dt);
+    void lookAt(simd::float3 target);
+    
+    void updateOrbitPosition();
+    void updateDirectionFromYawPitch();
+    void rotateOnAxisOrbit(float yawDelta, float pitchDelta);
 private:
     float           _nearPlane;
     float           _farPlane;
@@ -69,6 +92,15 @@ private:
     void            orthogonalizeFromNewForward( simd::float3 newForward );
     bool            _uniformsDirty;
     RMDLCameraUniforms  _uniforms;
+    
+    float _yaw = 0.0f;                  // Rotation horizontale (radians)
+    float _pitch = 0.0f;                // Rotation verticale (radians)
+    float _pitchMin = -M_PI_2 + 0.1f;   // Limite basse (-89°)
+    float _pitchMax = M_PI_2 - 0.1f;    // Limite haute (+89°)
+    
+    simd::float3 _orbitTarget = {0, 0, 0};
+    float _orbitDistance = 10.0f;
+    bool _orbitMode = false;
 };
 
 #endif /* RMDLCAMERA_HPP */

@@ -299,3 +299,163 @@ void RMDLCamera::orthogonalizeFromNewForward( simd::float3 newForward )
     simd::float3 right = simd::normalize(simd::cross(_direction, _up));
     _up = simd::cross(right, _direction);
 }
+
+void RMDLCamera::rotateYawPitch(float deltaYaw, float deltaPitch)
+{
+    _yaw += deltaYaw;
+    _pitch += deltaPitch;
+    
+    // Wrap yaw entre -PI et PI
+    while (_yaw > M_PI) _yaw -= 2.0f * M_PI;
+    while (_yaw < -M_PI) _yaw += 2.0f * M_PI;
+    
+    _pitch = simd::clamp(_pitch, _pitchMin, _pitchMax);
+    
+    if (_orbitMode) {
+        updateOrbitPosition();
+    } else {
+        updateDirectionFromYawPitch();
+    }
+}
+
+void RMDLCamera::setYaw(float yaw)
+{
+    _yaw = yaw;
+    if (_orbitMode) updateOrbitPosition();
+    else updateDirectionFromYawPitch();
+}
+
+void RMDLCamera::setPitch(float pitch)
+{
+    _pitch = simd::clamp(pitch, _pitchMin, _pitchMax);
+    if (_orbitMode) updateOrbitPosition();
+    else updateDirectionFromYawPitch();
+}
+
+void RMDLCamera::setPitchLimits(float minPitch, float maxPitch)
+{
+    _pitchMin = minPitch;
+    _pitchMax = maxPitch;
+    _pitch = simd::clamp(_pitch, _pitchMin, _pitchMax);
+}
+
+void RMDLCamera::updateDirectionFromYawPitch()
+{
+    // Calculer direction depuis yaw/pitch
+    float cosP = cosf(_pitch);
+    _direction = simd::float3{
+        cosP * sinf(_yaw),
+        sinf(_pitch),
+        cosP * cosf(_yaw)
+    };
+    _direction = simd::normalize(_direction);
+    
+    // Recalculer up pour rester orthogonal
+    simd::float3 worldUp = {0, 1, 0};
+    simd::float3 right = simd::normalize(simd::cross(_direction, worldUp));
+    _up = simd::cross(right, _direction);
+    
+    _uniformsDirty = true;
+}
+
+void RMDLCamera::setOrbitMode(bool enabled)
+{
+    _orbitMode = enabled;
+    if (enabled) {
+        // Calculer yaw/pitch depuis position actuelle
+        simd::float3 toTarget = _orbitTarget - _position;
+        _orbitDistance = simd::length(toTarget);
+        if (_orbitDistance > 0.001f) {
+            simd::float3 dir = toTarget / _orbitDistance;
+            _yaw = atan2f(dir.x, dir.z);
+            _pitch = -asinf(simd::clamp(dir.y, -1.0f, 1.0f));
+        }
+    }
+}
+
+void RMDLCamera::setOrbitTarget(simd::float3 target)
+{
+    _orbitTarget = target;
+    if (_orbitMode) updateOrbitPosition();
+}
+
+void RMDLCamera::setOrbitDistance(float distance)
+{
+    _orbitDistance = simd::max(0.1f, distance);
+    if (_orbitMode) updateOrbitPosition();
+}
+
+void RMDLCamera::orbit(float deltaYaw, float deltaPitch)
+{
+    if (!_orbitMode) {
+        setOrbitMode(true);
+    }
+    rotateYawPitch(deltaYaw, deltaPitch);
+}
+
+void RMDLCamera::zoom(float delta)
+{
+    _orbitDistance = simd::max(0.5f, _orbitDistance - delta);
+    if (_orbitMode) updateOrbitPosition();
+}
+
+void RMDLCamera::updateOrbitPosition()
+{
+    // Position sur sphère autour de la cible
+    float cosP = cosf(_pitch);
+    simd::float3 offset = {
+        cosP * sinf(_yaw) * _orbitDistance,
+        sinf(_pitch) * _orbitDistance,
+        cosP * cosf(_yaw) * _orbitDistance
+    };
+    
+    _position = _orbitTarget + offset;
+    _direction = simd::normalize(_orbitTarget - _position);
+    
+    // Recalculer up
+    simd::float3 worldUp = {0, 1, 0};
+    simd::float3 right = simd::normalize(simd::cross(_direction, worldUp));
+    _up = simd::cross(right, _direction);
+    
+    _uniformsDirty = true;
+}
+
+void RMDLCamera::followTarget(simd::float3 target, float distance, float height, float smoothing, float dt)
+{
+    // Position idéale derrière la cible
+    simd::float3 idealPos = target - _direction * distance + simd::float3{0, height, 0};
+    
+    // Interpolation smooth
+    float t = 1.0f - powf(smoothing, dt);
+    _position = _position + (idealPos - _position) * t;
+    
+    // Regarder la cible
+    lookAt(target);
+}
+
+void RMDLCamera::lookAt(simd::float3 target)
+{
+    simd::float3 toTarget = target - _position;
+    float dist = simd::length(toTarget);
+    
+    if (dist < 0.001f) return;
+    
+    _direction = toTarget / dist;
+    
+    // Calculer yaw/pitch depuis direction
+    _yaw = atan2f(_direction.x, _direction.z);
+    _pitch = asinf(simd::clamp(_direction.y, -1.0f, 1.0f));
+    
+    // Orthogonaliser up
+    simd::float3 worldUp = {0, 1, 0};
+    simd::float3 right = simd::normalize(simd::cross(_direction, worldUp));
+    _up = simd::cross(right, _direction);
+    
+    _uniformsDirty = true;
+}
+
+// Surcharge pour rotation avec deux floats (plus pratique)
+void RMDLCamera::rotateOnAxisOrbit(float yawDelta, float pitchDelta)
+{
+    rotateYawPitch(yawDelta, pitchDelta);
+}

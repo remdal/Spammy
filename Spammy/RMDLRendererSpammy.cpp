@@ -112,6 +112,8 @@ ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrar
 colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 mouseAndCursor(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+blackHole(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+gridCommandant(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
@@ -153,6 +155,28 @@ vertexBuffer(nullptr)
     grid.setFadeDistance(50.0f);    // Distance de fade
 //    grid.setVisible(false);
     
+    blackHole.setPosition({0.f, 80.f, -150.f});
+    blackHole.setRadius(10.f);
+    blackHole.setAccretionDiskRadii(15.f, 50.f);
+    
+    gridCommandant.setCellSize(1.0f);      // 1 unité = 1 bloc
+    gridCommandant.setGridExtent(3);       // 7x7x7 zone de construction
+    gridCommandant.setLineThickness(0.025f);
+    gridCommandant.setFadeDistance(30.f);
+    
+    // Couleurs par axe (RGB = XYZ)
+    gridCommandant.setColorXY({0.3f, 0.5f, 1.0f, 0.7f}); // Bleu - avant/arrière
+    gridCommandant.setColorXZ({0.3f, 1.0f, 0.5f, 0.7f}); // Vert - haut/bas
+    gridCommandant.setColorYZ({1.0f, 0.5f, 0.3f, 0.7f}); // Rouge - gauche/droite
+    
+    gridCommandant.setVisible(true);
+    
+    m_spaceAudio = std::make_unique<SpaceshipAudioEngine>();
+    m_spaceAudio->start();
+    
+    // Test : ajoute un moteur de base
+    int engineVoice = m_spaceAudio->synth().addVoice(BlockPresets::Engine());
+    m_spaceAudio->synth().triggerVoice(engineVoice, 1.0f);
 }
 
 GameCoordinator::~GameCoordinator()
@@ -161,7 +185,7 @@ GameCoordinator::~GameCoordinator()
     
 
     if (vertexBuffer) vertexBuffer->release();
-    indexBuffer->release();
+    if (indexBuffer) indexBuffer->release();
     transformBuffer->release();
 
 
@@ -177,103 +201,6 @@ GameCoordinator::~GameCoordinator()
 void GameCoordinator::createBuffers()
 {
     m_mouseBuffer = m_device->newBuffer(sizeof(VertexCursor), MTL::ResourceStorageModeShared);
-}
-
-void GameCoordinator::inventory(bool visible)
-{
-    grid.setVisible(visible);
-}
-
-void GameCoordinator::jump()
-{
-    float _angle = 0;
-    const float scl = 0.2f;
-    _angle += 0.002f;
-    simd::float3 objectPosition = { 0.f, 10.f, 0.f };
-    simd::float4x4 scale = math::makeScale( (simd::float3){ scl, scl, scl } );
-    simd::float4x4 rt = math::makeTranslate( objectPosition );
-    simd::float4x4 rr1 = math::makeYRotate( -_angle );
-    simd::float4x4 rr0 = math::makeXRotate( _angle * 0.5 );
-    simd::float4x4 rtInv = math::makeTranslate( { -objectPosition.x, -objectPosition.y, -objectPosition.z } );
-    simd::float4x4 zrot = math::makeZRotate( _angle * sinf(1.0));
-    simd::float4x4 yrot = math::makeYRotate( _angle * cosf(1.0));
-    simd::float4x4 fullObjectRot = rt * rr1 * rr0 * rtInv;
-    
-    simd::float3 jump = m_camera.position() + objectPosition;
-    simd::float3 jumpback = m_camera.position() - objectPosition;
-    m_camera.setPosition(jump);
-//    m_camera.setPosition(jumpback);
-//    setPosition(math::makeTranslate(jump));
-}
-
-void GameCoordinator::moveCamera(simd::float3 translation)
-{
-    simd::float3 newPosition;
-//    for (int i = 0; i < 100; i++)
-    
-        newPosition = m_camera.position() + translation;
-        m_camera.setPosition(newPosition);
-    
-}
-
-void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
-{
-    m_camera.rotateOnAxis({0.0f, 1.0f, 0.0f}, deltaYaw);
-    m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
-}
-
-void GameCoordinator::handleMouseDown(bool rightClick)
-{
-}
-
-void GameCoordinator::handleMouseUp()
-{
-}
-
-void GameCoordinator::handleScroll(float deltaY)
-{
-}
-
-void GameCoordinator::setMousePosition(float x, float y)
-{
-    cursorPosition = simd::make_float2(x, y);
-    mouseAndCursor.setMousePosition(x, y);
-}
-
-void GameCoordinator::update(float dt, const InputState& input)
-{
-    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
-    constexpr float lookSensitivity = 0.003f;
-    
-    // Mouvement caméra (frame-independent)
-    float speed = baseMoveSpeed * input.speedMultiplier * dt;
-    simd::float3 movement = input.moveDirection * speed;
-    
-    // Transformer en espace caméra
-    simd::float3 forward = m_camera.forward();
-    simd::float3 right = m_camera.right();
-    simd::float3 up = {0, 1, 0};
-    
-    simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
-    
-    m_camera.setPosition(worldMove);
-    
-    // Rotation caméra
-    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
-}
-
-void GameCoordinator::createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor> &outVertices)
-{
-    float x = (mouseX / width) * 2.0f - 1.0f;
-    float y = 1.0f - (mouseY / height) * 2.0f;
-
-    float sX = size / width * 2.0f;
-    float sY = size / height * 2.0f;
-
-    outVertices = {
-        {{x - sX, y}}, {{x + sX, y}},   // ligne horizontale
-        {{x, y - sY}}, {{x, y + sY}}    // ligne verticale
-    };
 }
 
 void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat)
@@ -395,6 +322,132 @@ void GameCoordinator::handleKeyPress(int key)
     }
 }
 
+void GameCoordinator::inventory(bool visible)
+{
+    grid.setVisible(visible);
+}
+
+void GameCoordinator::jump()
+{
+    float _angle = 0;
+    const float scl = 0.2f;
+    _angle += 0.002f;
+    simd::float3 objectPosition = { 0.f, 10.f, 0.f };
+    simd::float4x4 scale = math::makeScale( (simd::float3){ scl, scl, scl } );
+    simd::float4x4 rt = math::makeTranslate( objectPosition );
+    simd::float4x4 rr1 = math::makeYRotate( -_angle );
+    simd::float4x4 rr0 = math::makeXRotate( _angle * 0.5 );
+    simd::float4x4 rtInv = math::makeTranslate( { -objectPosition.x, -objectPosition.y, -objectPosition.z } );
+    simd::float4x4 zrot = math::makeZRotate( _angle * sinf(1.0));
+    simd::float4x4 yrot = math::makeYRotate( _angle * cosf(1.0));
+    simd::float4x4 fullObjectRot = rt * rr1 * rr0 * rtInv;
+    
+    simd::float3 jump = m_camera.position() + objectPosition;
+    simd::float3 jumpback = m_camera.position() - objectPosition;
+    m_camera.setPosition(jump);
+//    m_camera.setPosition(jumpback);
+//    setPosition(math::makeTranslate(jump));
+}
+
+void GameCoordinator::moveCamera(simd::float3 translation)
+{
+    simd::float3 newPosition;
+//    for (int i = 0; i < 100; i++)
+    
+        newPosition = m_camera.position() + translation;
+        m_camera.setPosition(newPosition);
+    
+}
+
+void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
+{
+    m_camera.rotateOnAxis({0.0f, 1.0f, 0.0f}, deltaYaw);
+    m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
+}
+
+void GameCoordinator::handleMouseDown(bool rightClick)
+{
+}
+
+void GameCoordinator::handleMouseUp()
+{
+}
+
+void GameCoordinator::handleScroll(float deltaY)
+{
+}
+
+void GameCoordinator::setMousePosition(float x, float y)
+{
+    cursorPosition = simd::make_float2(x, y);
+    mouseAndCursor.setMousePosition(x, y);
+}
+
+void GameCoordinator::createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor> &outVertices)
+{
+    float x = (mouseX / width) * 2.0f - 1.0f;
+    float y = 1.0f - (mouseY / height) * 2.0f;
+
+    float sX = size / width * 2.0f;
+    float sY = size / height * 2.0f;
+
+    outVertices = {
+        {{x - sX, y}}, {{x + sX, y}},   // ligne horizontale
+        {{x, y - sY}}, {{x, y + sY}}    // ligne verticale
+    };
+}
+
+void GameCoordinator::update(float dt, const InputState& input)
+{
+    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
+    constexpr float lookSensitivity = 0.003f;
+    
+    // Mouvement caméra (frame-independent)
+    float speed = baseMoveSpeed * input.speedMultiplier * dt;
+    simd::float3 movement = input.moveDirection * speed;
+    
+    // Transformer en espace caméra
+    simd::float3 forward = m_camera.forward();
+    simd::float3 right = m_camera.right();
+    simd::float3 up = {0, 1, 0};
+    
+    simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
+    
+    m_camera.setPosition(worldMove);
+    
+    // Rotation caméra
+    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
+    
+    float throttle = simd::length(input.moveDirection);
+    m_spaceAudio->setEngineThrottle(throttle);
+}
+
+void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
+{
+//    BlockSoundProfile profile;
+//    switch (type) {
+//        case BlockType::Engine:    profile = BlockPresets::Engine(); break;
+//        case BlockType::Thruster:  profile = BlockPresets::Thruster(); break;
+//        case BlockType::Generator: profile = BlockPresets::Generator(); break;
+//        case BlockType::Shield:    profile = BlockPresets::Shield(); break;
+//        case BlockType::Weapon:    profile = BlockPresets::Weapon(); break;
+//        case BlockType::Cockpit:   profile = BlockPresets::Cockpit(); break;
+//    }
+    
+//    int voiceId = m_spaceAudio->synth().addVoice(profile);
+//    m_spaceAudio->synth().triggerVoice(voiceId, 0.8f);
+//    m_blockVoices[blockId] = voiceId;
+}
+
+// Quand tu retires un bloc
+void GameCoordinator::removeBlockFromVehicle(int blockId)
+{
+    if (m_blockVoices.count(blockId)) {
+        m_spaceAudio->synth().releaseVoice(m_blockVoices[blockId]);
+        m_blockVoices.erase(blockId);
+    }
+}
+
 void GameCoordinator::updateUniforms()
 {
     m_cameraUniforms = m_camera.uniforms();
@@ -456,6 +509,7 @@ void GameCoordinator::draw(MTK::View* view)
     passDesc->depthAttachment()->setClearDepth(1.0f);
     passDesc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
     m_frame += 1;
+    float dt = 0.016f;
     const uint32_t frameIndex = m_frame % kMaxFramesInFlight;
 //    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
     
@@ -478,24 +532,35 @@ void GameCoordinator::draw(MTK::View* view)
     
     updateUniforms();
     
+    renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
+    renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
+    
     blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
     blender.updateBlender(0.0f);
 
     skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
 //    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
+    blackHole.update(0.016f);
+    blackHole.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_cameraUniforms.invViewProjectionMatrix, m_camera.position());
+    
+    renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
+    renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
 
-    float dt = 0.016f;
+
     world.update(dt, m_camera.position(), m_device);
     world.updateTime(dt);
-    m_cameraUniforms.position = m_camera.position();
-    renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
-    renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(m_cameraUniforms), 1);
-    
     world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+
+    gridCommandant.update(0.016f);
+    gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
+    gridCommandant.setBlockRotation(m_currentVehicleRotation);
+    gridCommandant.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+    
 //    grid.setGridCenter({0.0f, 0.0f, 0.0f});
     grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
-    
+
+    m_cameraUniforms.position = m_camera.position();
     
     
     dt += 0.016f;

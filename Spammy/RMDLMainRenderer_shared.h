@@ -127,6 +127,27 @@ struct RMDLSkyboxUniforms
     float _pad1;
 };
 
+namespace skybox {
+struct BlackHoleUniforms
+{
+    simd::float4x4 viewProjectionMatrix;
+    simd::float4x4 invViewProjectionMatrix;
+    simd::float3   cameraPosition;
+    float    time;
+    simd::float3   blackHolePosition;
+    float    blackHoleRadius;
+    float    accretionDiskInnerRadius;
+    float    accretionDiskOuterRadius;
+    float    gravitationalStrength;
+    float    rotationSpeed;
+};
+
+// Vertex INPUT (ce qui vient du buffer)
+struct BlackHoleVertexIn {
+    simd_float3 position;
+};
+}
+
 struct RMDLSnowUniforms {
     float deltaTime;
     float time;
@@ -174,6 +195,31 @@ struct GridUniforms
     float padding[2];
 };
 
+namespace GridCommandant {
+struct VehicleGridUniforms
+{
+    simd::float4x4 viewProjectionMatrix;
+    simd::float4x4 modelMatrix;
+    simd::float3   cameraPosition;
+    float          time;
+    simd::float3   gridCenter;
+    float          cellSize;
+    simd::float4   gridColorXY;
+    simd::float4   gridColorXZ;
+    simd::float4   gridColorYZ;
+    float          lineThickness;
+    float          fadeDistance;
+    float          pulseIntensity;
+    int32_t        gridExtent;
+};
 
+struct GridVertex3D {
+    simd::float3 position;
+    simd::float3 normal;
+    simd::float2 uv;
+    uint8_t      planeIndex; // 0=XY, 1=XZ, 2=YZ
+    uint8_t      padding[3];
+};
+}
 
 #endif /* RMDLMAINRENDERER_SHARED_H */

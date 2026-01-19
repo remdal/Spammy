@@ -38,6 +38,7 @@
 #include "RMDLSystem.hpp"
 
 #include "RMDLMouseAndCursor.hpp"
+#include "RMDLAVFAudio.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -83,6 +84,19 @@ struct InputState
     }
 };
 
+struct RenderContext {
+    MTL::Device*      device; // 8 bytes
+    MTL::Library*     library; // 8 si déjà chargée
+    MTL::PixelFormat  colorFormat; // 4
+    MTL::PixelFormat  depthFormat;
+};
+
+//BlackHole::BlackHole(const RenderContext& ctx)
+//    : m_device(ctx.device->retain())
+//{
+//    buildPipeline(ctx);
+//}
+
 class GameCoordinator : NonCopyable
 {
 public:
@@ -114,6 +128,9 @@ public:
     
     void inventory(bool visible);
     void jump();
+    
+    void addBlockToVehicle(int blockId, BlockType type);
+    void removeBlockFromVehicle(int blockId);
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -127,8 +144,8 @@ private:
     MTL::Device*                m_device;
     MTL::CommandQueue*          m_commandQueue;
     MTL::RenderPipelineState*           m_renderPipelineState;
-    MTL::Buffer*                        m_mouseBuffer;
-    MTL::Buffer*                        vertexBuffer;
+    MTL::Buffer*                        m_mouseBuffer = nullptr;
+    MTL::Buffer*                        vertexBuffer = nullptr;
     MTL::Buffer* indexBuffer;
     MTL::Buffer* transformBuffer;
     MTL::Buffer*                        m_viewportSizeBuffer;
@@ -168,6 +185,9 @@ private:
     MouseDepthPicker    mouseAndCursor;
     BuildGrid           grid;
     simd::float3        m_lastValidGridCenter;
+    
+    std::unique_ptr<SpaceshipAudioEngine> m_spaceAudio;
+    std::unordered_map<int, int> m_blockVoices;  // blockId -> voiceId
 
     
     RMDLCamera                          m_camera;
@@ -189,6 +209,12 @@ private:
     VibrantColorRenderer    colorsFlash;
     MTL::TextureDescriptor*             m_depthTextureDescriptor;
     MTL::Texture*                       m_depthTexture;
+    
+    skybox::BlackHole   blackHole;
+    
+    GridCommandant::VehicleBuildGrid    gridCommandant;
+    simd::float3 m_currentVehicleBlockPos = {0.f, 0.f, 0.f};
+    simd::float4x4 m_currentVehicleRotation = matrix_identity_float4x4;
     
     std::unique_ptr<RenderSystem>     _renderSystem;
     std::unique_ptr<TerrainManager>     _terrainManager;

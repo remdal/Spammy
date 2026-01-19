@@ -406,3 +406,194 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
 //    }
 //    float sunHalo = pow(max(0.0, sunDot), 32.0);
 //    color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
+
+
+// BLACK HOLE
+struct VertexOutBox
+{
+    float4 position [[position]];
+    float3 worldPos;
+    float3 rayDir;
+};
+
+vertex VertexOutBox blackHoleVertex(uint vid [[vertex_id]],
+                                    const device float3* vertices [[buffer(0)]],
+                                    constant skybox::BlackHoleUniforms& u [[buffer(1)]])
+{
+    float3 localPos = vertices[vid];
+    float scale = u.accretionDiskOuterRadius * 1.5;
+    float3 worldPos = localPos * scale + u.blackHolePosition;
+    
+    VertexOutBox out;
+    out.position = u.viewProjectionMatrix * float4(worldPos, 1.0);
+    out.worldPos = worldPos;
+    out.rayDir = normalize(worldPos - u.cameraPosition);
+    return out;
+}
+
+// Fonction de bruit pour le disque d'accrétion
+float hashHole(float2 p)
+{
+    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise(float2 p)
+{
+    float2 i = floor(p);
+    float2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hashHole(i), hashHole(i + float2(1, 0)), f.x),
+               mix(hashHole(i + float2(0, 1)), hashHole(i + float2(1, 1)), f.x), f.y);
+}
+
+float fbmHole(float2 p)
+{
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 5; i++)
+    {
+        v += a * noise(p);
+        p *= 2.0;
+        a *= 0.5;
+    }
+    return v;
+}
+
+// Calcule la couleur du disque d'accrétion
+float3 accretionDiskColor(float r, float angle, float time, float innerR, float outerR)
+{
+    float normalizedR = (r - innerR) / (outerR - innerR);
+    
+    // Température décroissante avec la distance (plus chaud au centre)
+    float temp = 1.0 - pow(normalizedR, 0.5);
+    
+    // Couleur basée sur la température (noir body radiation simplifié)
+    float3 hotColor = float3(1.0, 0.9, 0.7);   // Blanc-jaune
+    float3 warmColor = float3(1.0, 0.5, 0.1);  // Orange
+    float3 coolColor = float3(0.8, 0.2, 0.05); // Rouge sombre
+    
+    float3 baseColor = mix(coolColor, mix(warmColor, hotColor, temp), temp);
+    
+    // Turbulences dans le disque
+    float turbulence = fbmHole(float2(angle * 3.0 + time * 0.5, normalizedR * 10.0));
+    float spiralArm = sin(angle * 4.0 - normalizedR * 20.0 + time) * 0.5 + 0.5;
+    
+    float intensity = (0.7 + 0.3 * turbulence) * (0.8 + 0.2 * spiralArm);
+    intensity *= pow(1.0 - normalizedR, 0.3); // Fade vers l'extérieur
+    intensity *= smoothstep(0.0, 0.1, normalizedR); // Fade vers l'intérieur
+    
+    return baseColor * intensity * 2.5;
+}
+
+// Raymarching vers le trou noir avec distorsion gravitationnelle
+float4 rayMarchBlackHole(float3 rayOrigin, float3 rayDir, constant skybox::BlackHoleUniforms& u) {
+    float3 bhPos = u.blackHolePosition;
+    float eventHorizon = u.blackHoleRadius;
+    float innerDisk = u.accretionDiskInnerRadius;
+    float outerDisk = u.accretionDiskOuterRadius;
+    
+    float3 pos = rayOrigin;
+    float3 dir = rayDir;
+    float3 accumulatedColor = float3(0.0);
+    float accumulatedAlpha = 0.0;
+    
+    float stepSize = 0.5;
+    int maxSteps = 128;
+    
+    for (int i = 0; i < maxSteps && accumulatedAlpha < 0.98; i++) {
+        float3 toCenter = bhPos - pos;
+        float dist = length(toCenter);
+        
+        // Dans l'horizon des événements - noir total
+        if (dist < eventHorizon) {
+            accumulatedColor = mix(accumulatedColor, float3(0.0), 1.0 - accumulatedAlpha);
+            accumulatedAlpha = 1.0;
+            break;
+        }
+        
+        // Courbure gravitationnelle du rayon
+        float gravityFactor = u.gravitationalStrength * eventHorizon / (dist * dist);
+        gravityFactor = min(gravityFactor, 0.5);
+        dir = normalize(dir + normalize(toCenter) * gravityFactor * stepSize);
+        
+        // Vérifier intersection avec le disque d'accrétion
+        float3 diskNormal = float3(0.0, 1.0, 0.0);
+        float diskY = bhPos.y;
+        
+        // Épaisseur du disque
+        float diskThickness = 2.0;
+        float heightAboveDisk = abs(pos.y - diskY);
+        
+        if (heightAboveDisk < diskThickness) {
+            float2 diskPos = float2(pos.x - bhPos.x, pos.z - bhPos.z);
+            float diskR = length(diskPos);
+            
+            if (diskR > innerDisk && diskR < outerDisk) {
+                float angle = atan2(diskPos.y, diskPos.x) + u.time * u.rotationSpeed * (innerDisk / diskR);
+                float3 diskColor = accretionDiskColor(diskR, angle, u.time, innerDisk, outerDisk);
+                
+                float diskDensity = 1.0 - heightAboveDisk / diskThickness;
+                diskDensity = pow(diskDensity, 2.0);
+                
+                // Doppler shift simplifié (côté approchant plus brillant)
+                float dopplerShift = 1.0 + 0.3 * sin(angle);
+                diskColor *= dopplerShift;
+                
+                float sampleAlpha = diskDensity * 0.15;
+                accumulatedColor += diskColor * sampleAlpha * (1.0 - accumulatedAlpha);
+                accumulatedAlpha += sampleAlpha * (1.0 - accumulatedAlpha);
+            }
+        }
+        
+        // Lentille gravitationnelle - anneau de photons
+        float photonSphereRadius = eventHorizon * 1.5;
+        if (abs(dist - photonSphereRadius) < 1.0) {
+            float ringIntensity = exp(-pow(dist - photonSphereRadius, 2.0) * 2.0);
+            float3 ringColor = float3(0.6, 0.7, 1.0) * ringIntensity * 0.5;
+            accumulatedColor += ringColor * (1.0 - accumulatedAlpha);
+            accumulatedAlpha += ringIntensity * 0.1 * (1.0 - accumulatedAlpha);
+        }
+        
+        pos += dir * stepSize;
+        
+        // Sortie de la zone d'influence
+        if (dist > outerDisk * 2.0) break;
+    }
+    
+    // Glow autour de l'horizon des événements
+    float3 toCenter = bhPos - rayOrigin;
+    float closestApproach = length(cross(toCenter, rayDir));
+    float glowIntensity = exp(-pow(closestApproach - eventHorizon, 2.0) / (eventHorizon * 2.0));
+    glowIntensity *= 0.3;
+    accumulatedColor += float3(0.4, 0.5, 0.8) * glowIntensity * (1.0 - accumulatedAlpha);
+    accumulatedAlpha += glowIntensity * (1.0 - accumulatedAlpha);
+    
+    return float4(accumulatedColor, accumulatedAlpha);
+}
+
+fragment float4 blackHoleFragment(VertexOutBox in [[stage_in]],
+                                   constant skybox::BlackHoleUniforms& u [[buffer(0)]]) {
+    float3 rayOrigin = u.cameraPosition;
+    float3 rayDir = normalize(in.worldPos - rayOrigin);
+    
+    // Distance au trou noir pour early-out
+    float3 toCenter = u.blackHolePosition - rayOrigin;
+    float centerDist = length(toCenter);
+    float maxRadius = u.accretionDiskOuterRadius * 1.5;
+    
+    // Rayon ne touche pas la zone d'influence
+    float closestApproach = length(cross(toCenter, rayDir));
+    if (closestApproach > maxRadius) {
+        discard_fragment();
+    }
+    
+    float4 result = rayMarchBlackHole(rayOrigin, rayDir, u);
+    
+    if (result.a < 0.01) {
+        discard_fragment();
+    }
+    
+    // Tone mapping HDR simplifié
+    result.rgb = result.rgb / (result.rgb + 1.0);
+    
+    return result;
+}
