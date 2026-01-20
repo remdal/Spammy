@@ -145,7 +145,8 @@ void RenderSystem::createRenderTargets() {
     _bloomBlurTargets[1] = _device->newTexture(bloomDesc);
 }
 
-void RenderSystem::createPipelines(const std::string& shaderPath) {
+void RenderSystem::createPipelines(const std::string& shaderPath)
+{
     NS::Error* error = nullptr;
     
     // Load shader library

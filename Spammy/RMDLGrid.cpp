@@ -890,14 +890,8 @@ void VehicleBuildGrid::render(MTL::RenderCommandEncoder* renderCommandEncoder, c
 {
     if (!m_visible || m_indexCount == 0 || !m_vertexBuffer) return;
     
-    // Matrice modèle : translation au bloc + rotation du véhicule
-    simd::float4x4 translation = {
-        simd::float4{1, 0, 0, 0},
-        simd::float4{0, 1, 0, 0},
-        simd::float4{0, 0, 1, 0},
-        simd::float4{m_blockPosition.x, m_blockPosition.y, m_blockPosition.z, 1}
-    };
-    simd::float4x4 modelMatrix = translation * m_blockRotation;
+    // translation au bloc + rotation du véhicule
+    simd::float4x4 modelMatrix = math::makeTranslate(m_blockPosition) * m_blockRotation;
     
     VehicleGridUniforms uniforms;
     uniforms.viewProjectionMatrix = viewProjectionMatrix;

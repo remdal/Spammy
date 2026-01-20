@@ -1,10 +1,10 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /*                                        +       +          */
-/*      File: RMDLRendererSpammy.hpp           +++     +++  **/
+/*      File: RMDLRendererSpammy.hpp           +++     +++   */
 /*                                        +       +          */
-/*      By: Laboitederemdal      **        +       +        **/
+/*      By: Laboitederemdal                +       +         */
 /*                                       +           +       */
-/*      Created: 27/10/2025 15:45:19      + + + + + +   * ****/
+/*      Created: 27/10/2025 15:45:19      + + + + + +        */
 /*                                                           */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -39,10 +39,15 @@
 
 #include "RMDLMouseAndCursor.hpp"
 #include "RMDLAVFAudio.hpp"
+#include "RMDLManager.hpp"
 
 #define kMaxBuffersInFlight 3
 
 static const uint32_t NumLights = 256;
+
+enum class GamePlayMode {
+    FreeCam, Driving, Building, DEV, Flight
+};
 
 struct VertexCursor
 {
@@ -62,7 +67,7 @@ struct InputState
     simd::float3 moveDirection {0, 0, 0};
     simd::float2 lookDelta {0, 0};
     
-    float speedMultiplier = 2.0f;
+    float speedMultiplier = 4.0f;
     
     // Actions ponctuelles (consommées après lecture)
     bool jump = false;
@@ -131,6 +136,19 @@ public:
     
     void addBlockToVehicle(int blockId, BlockType type);
     void removeBlockFromVehicle(int blockId);
+
+//    void setGameMode(GameMode mode);
+////    void toggleBuildMode();
+//    void placeBlock();
+//    void removeBlock();
+//    simd_float3 screenToWorldRay(float screenX, float screenY);
+    
+    void setGamePlayMode(GamePlayMode mode);
+    void toggleVehicleBuildMode();
+    void selectVehicleSlot(int slot);
+    void rotateVehicleGhost();
+    void vehicleMouseDown(bool rightClick);
+    void vehicleMouseUp();
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -228,6 +246,14 @@ private:
     dispatch_semaphore_t                _semaphore;
     
     void updateUniforms();
+    
+    TerraVehicle::VehicleManager m_terraVehicle;
+    GamePlayMode m_gamePlayMode;
+//    NASAAtTheHelm::VehicleManager vehicleManager;
+//    NASAAtTheHelm::InventoryUIRenderer inventoryUI;
+//    GameMode m_gameMode = GameMode::FreeCam;
+//    // Position du bloc en cours de placement
+//    simd_float3 m_buildPreviewPos = {0, 0, 0};
 };
 
 class RMDLRendererSpammy : NonCopyable

@@ -112,8 +112,9 @@ ui(m_device, layerPixelFormat, m_depthPixelFormat, width, height, m_shaderLibrar
 colorsFlash(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 mouseAndCursor(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-blackHole(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-gridCommandant(device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
@@ -177,6 +178,11 @@ vertexBuffer(nullptr)
     // Test : ajoute un moteur de base
     int engineVoice = m_spaceAudio->synth().addVoice(BlockPresets::Engine());
     m_spaceAudio->synth().triggerVoice(engineVoice, 1.0f);
+
+//    vehicleManager.initialize(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary);
+//    inventoryUI.initialize(m_device);
+//    if (vehicleManager.activeVehicle)
+//        vehicleManager.activeVehicle->position = {0.0f, 5.0f, 0.0f};
 }
 
 GameCoordinator::~GameCoordinator()
@@ -189,6 +195,7 @@ GameCoordinator::~GameCoordinator()
     transformBuffer->release();
 
 
+    m_terraVehicle.cleanup();
     
     m_shaderLibrary->release();
     m_viewportSizeBuffer->release();
@@ -399,25 +406,83 @@ void GameCoordinator::createCursor(float mouseX, float mouseY, float width, floa
 
 void GameCoordinator::update(float dt, const InputState& input)
 {
-    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
-    constexpr float lookSensitivity = 0.003f;
+//    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
+//    constexpr float lookSensitivity = 0.003f;
+//    
+//    // Mouvement caméra (frame-independent)
+//    float speed = baseMoveSpeed * input.speedMultiplier * dt;
+//    simd::float3 movement = input.moveDirection * speed;
+//    
+//    // Transformer en espace caméra
+//    simd::float3 forward = m_camera.forward();
+//    simd::float3 right = m_camera.right();
+//    simd::float3 up = {0, 1, 0};
+//    
+//    simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
+//    
+//    m_camera.setPosition(worldMove);
+//    
+//    // Rotation caméra
+//    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
+    switch (m_gamePlayMode)
+    {
+        case GamePlayMode::FreeCam:
+        {
+            // Ton code existant de caméra libre
+            constexpr float baseMoveSpeed = 5.0f;
+            constexpr float lookSensitivity = 0.003f;
+            
+            float speed = baseMoveSpeed * input.speedMultiplier * dt;
+            simd::float3 movement = input.moveDirection * speed;
+            
+            simd::float3 forward = m_camera.forward();
+            simd::float3 right = m_camera.right();
+            simd::float3 up = {0, 1, 0};
+            
+            simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
+            m_camera.setPosition(m_camera.position() + worldMove);
+            m_camera.rotateOnAxis({0,1,0}, -input.lookDelta.x * lookSensitivity);
+            m_camera.rotateOnAxis(m_camera.right(), -input.lookDelta.y * lookSensitivity);
+            break;
+        }
+            
+        case GamePlayMode::Driving:
+        {
+            // Contrôle du véhicule
+            m_terraVehicle.setThrottle(-input.moveDirection.z);  // Z avant, S arrière
+            m_terraVehicle.setSteering(-input.moveDirection.x);  // Q gauche, D droite
+            m_terraVehicle.setBrake(input.moveDirection.y < 0 ? 1.f : 0.f);
+            
+            // Orbite caméra avec souris
+            m_terraVehicle.orbitCamera(-input.lookDelta.x * 0.005f,
+                                        -input.lookDelta.y * 0.005f);
+            break;
+        }
+            
+        case GamePlayMode::Building:
+        {
+            // Mode construction - orbite seulement
+            m_terraVehicle.orbitCamera(-input.lookDelta.x * 0.005f,
+                                        -input.lookDelta.y * 0.005f);
+            
+            // Ray pour placement de bloc (depuis la caméra vers le curseur)
+            simd::float3 camPos = m_terraVehicle.getCameraPosition();
+            simd::float3 camTarget = m_terraVehicle.getCameraTarget();
+            simd::float3 rayDir = simd::normalize(camTarget - camPos);
+            
+            simd::float2 normMouse = {
+                cursorPosition.x / (float)m_viewport.width,
+                1.f - (cursorPosition.y / (float)m_viewport.height)
+            };
+            simd::float2 screenSize = {(float)m_viewport.width, (float)m_viewport.height};
+            
+            m_terraVehicle.onMouseMove(normMouse, screenSize, camPos, rayDir);
+            break;
+        }
+    }
     
-    // Mouvement caméra (frame-independent)
-    float speed = baseMoveSpeed * input.speedMultiplier * dt;
-    simd::float3 movement = input.moveDirection * speed;
-    
-    // Transformer en espace caméra
-    simd::float3 forward = m_camera.forward();
-    simd::float3 right = m_camera.right();
-    simd::float3 up = {0, 1, 0};
-    
-    simd::float3 worldMove = right * movement.x + up * movement.y + forward * movement.z;
-    
-    m_camera.setPosition(worldMove);
-    
-    // Rotation caméra
-    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
-    
+    // Toujours mettre à jour physique véhicule
+    m_terraVehicle.update(dt);
     float throttle = simd::length(input.moveDirection);
     m_spaceAudio->setEngineThrottle(throttle);
 }

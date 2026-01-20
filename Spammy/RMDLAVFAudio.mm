@@ -10,7 +10,8 @@
 #import <AVFAudio/AVFAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
 
-struct SpaceshipAudioEngine::Impl {
+struct SpaceshipAudioEngine::Impl
+{
     AVAudioEngine* engine = nil;
     AVAudioSourceNode* sourceNode = nil;
     bool running = false;
@@ -49,13 +50,15 @@ SpaceshipAudioEngine::SpaceshipAudioEngine() : m_impl(std::make_unique<Impl>()) 
                      format:format];
 }
 
-SpaceshipAudioEngine::~SpaceshipAudioEngine() {
+SpaceshipAudioEngine::~SpaceshipAudioEngine()
+{
     stop();
     m_impl->sourceNode = nil;
     m_impl->engine = nil;
 }
 
-void SpaceshipAudioEngine::start() {
+void SpaceshipAudioEngine::start()
+{
     if (!m_impl->running) {
         NSError* error = nil;
         [m_impl->engine startAndReturnError:&error];
@@ -66,18 +69,21 @@ void SpaceshipAudioEngine::start() {
     }
 }
 
-void SpaceshipAudioEngine::stop() {
+void SpaceshipAudioEngine::stop()
+{
     if (m_impl->running) {
         [m_impl->engine stop];
         m_impl->running = false;
     }
 }
 
-void SpaceshipAudioEngine::setEngineThrottle(float throttle) {
+void SpaceshipAudioEngine::setEngineThrottle(float throttle)
+{
     m_synth.setMasterThrottle(throttle);
 }
 
-void SpaceshipAudioEngine::addBlockSound(int blockType) {
+void SpaceshipAudioEngine::addBlockSound(int blockType)
+{
     BlockSoundProfile profile;
     switch (blockType) {
         case 0: profile = BlockPresets::Engine(); break;

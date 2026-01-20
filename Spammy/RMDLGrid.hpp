@@ -20,6 +20,8 @@
 
 #include "RMDLMainRenderer_shared.h"
 
+#include "RMDLMathUtils.hpp"
+
 class BuildGrid
 {
 public:

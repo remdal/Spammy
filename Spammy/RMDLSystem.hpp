@@ -33,31 +33,41 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace GameOver {
+
+struct GameStates
+{
+    uint32_t Score = 0;
+    
+    
+};
+}
+
 namespace OfficialConfig {
 
-    constexpr uint32_t CHUNK_SIZE = 8;
-    constexpr uint32_t CHUNK_HEIGHT = 256;
-    constexpr float TERRAIN_SCALE = 1.0f;
-    constexpr uint32_t VIEW_DISTANCE_CHUNKS = 12;
-    constexpr uint32_t MAX_LOADED_CHUNKS = 512;
-    
-    constexpr uint32_t LOD_LEVELS = 5;
-    constexpr float LOD_DISTANCES[LOD_LEVELS] = { 64.0f, 128.0f, 256.0f, 512.0f, 1024.0f };
-    
-    constexpr float GRAVITY = -9.81f;
-    constexpr float PHYSICS_TIMESTEP = 1.0f / 60.0f;
-    constexpr uint32_t MAX_PHYSICS_SUBSTEPS = 4;
-    
-    constexpr uint32_t SHADOW_MAP_SIZE = 4096;
-    constexpr uint32_t MAX_POINT_LIGHTS = 64;
-    constexpr float HDR_EXPOSURE = 1.2f;
-    
-    constexpr uint32_t BIOME_COUNT = 8;
-    constexpr float BIOME_BLEND_DISTANCE = 32.0f;
-    
-    constexpr float SPAWN_CRATER_RADIUS = 128.0f;
-    constexpr float SPAWN_CRATER_DEPTH = 8.0f;
-    constexpr float SPAWN_SAFE_RADIUS = 256.0f;
+constexpr uint32_t CHUNK_SIZE = 8;
+constexpr uint32_t CHUNK_HEIGHT = 256;
+constexpr float TERRAIN_SCALE = 1.0f;
+constexpr uint32_t VIEW_DISTANCE_CHUNKS = 12;
+constexpr uint32_t MAX_LOADED_CHUNKS = 512;
+
+constexpr uint32_t LOD_LEVELS = 5;
+constexpr float LOD_DISTANCES[LOD_LEVELS] = { 64.0f, 128.0f, 256.0f, 512.0f, 1024.0f };
+
+constexpr float GRAVITY = -9.81f;
+constexpr float PHYSICS_TIMESTEP = 1.0f / 60.0f;
+constexpr uint32_t MAX_PHYSICS_SUBSTEPS = 4;
+
+constexpr uint32_t SHADOW_MAP_SIZE = 4096;
+constexpr uint32_t MAX_POINT_LIGHTS = 64;
+constexpr float HDR_EXPOSURE = 1.2f;
+
+constexpr uint32_t BIOME_COUNT = 8;
+constexpr float BIOME_BLEND_DISTANCE = 32.0f;
+
+constexpr float SPAWN_CRATER_RADIUS = 128.0f;
+constexpr float SPAWN_CRATER_DEPTH = 8.0f;
+constexpr float SPAWN_SAFE_RADIUS = 256.0f;
 }
 
 namespace Types {
