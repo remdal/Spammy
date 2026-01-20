@@ -60,7 +60,7 @@ enum class BlockType : uint8_t {
     Snow,
     Wood,
     Leaves,
-    GrassDetailed,      // Avec normal/roughness
+    GrassDetailed,
     StoneDetailed,
     SandDetailed,
     COUNT
@@ -99,7 +99,7 @@ struct GeneratedChunkData
 {
     int chunkX;
     int chunkZ;
-    std::vector<uint8_t> blockData; // CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE
+    std::vector<uint8_t> blockData;
     bool isReady;
 };
 

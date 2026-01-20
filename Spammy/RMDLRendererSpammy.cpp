@@ -115,7 +115,8 @@ grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-vertexBuffer(nullptr)
+vertexBuffer(nullptr), indexBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
+m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -183,12 +184,15 @@ vertexBuffer(nullptr)
 //    inventoryUI.initialize(m_device);
 //    if (vehicleManager.activeVehicle)
 //        vehicleManager.activeVehicle->position = {0.0f, 5.0f, 0.0f};
+    
+    m_inventoryPanel.setSlotData(0, 1, 8, {0.3f, 0.3f, 0.35f, 1.f});
+//    m_inventoryPanel.setSlotData(1, 2, 20, {0.5f, 0.5f, 0.55f, 1.f});
+//    m_inventoryPanel.setSlotData(2, 3, 4, {0.8f, 0.4f, 0.2f, 1.f});
 }
 
 GameCoordinator::~GameCoordinator()
 {
     m_shaderLibrary->release();
-    
 
     if (vertexBuffer) vertexBuffer->release();
     if (indexBuffer) indexBuffer->release();
@@ -372,6 +376,55 @@ void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
     m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
 }
 
+void GameCoordinator::setGamePlayMode(GamePlayMode mode)
+{
+    m_gamePlayMode = mode;
+    
+    if (mode == GamePlayMode::Building)
+        m_terraVehicle.toggleBuildMode();
+    else if (m_terraVehicle.isBuildMode())
+        m_terraVehicle.toggleBuildMode();
+}
+
+void GameCoordinator::toggleVehicleBuildMode()
+{
+    if (m_gamePlayMode == GamePlayMode::Building)
+        m_gamePlayMode = GamePlayMode::Driving;
+    else
+        m_gamePlayMode = GamePlayMode::Building;
+    m_terraVehicle.toggleBuildMode();
+}
+
+void GameCoordinator::selectVehicleSlot(int slot)
+{
+    m_terraVehicle.selectInventorySlot(slot);
+}
+
+void GameCoordinator::rotateVehicleGhost()
+{
+    m_terraVehicle.rotateGhostBlock();
+}
+
+void GameCoordinator::vehicleMouseDown(bool rightClick)
+{
+    simd::float2 normPos = {
+        cursorPosition.x / (float)m_viewport.width,
+        1.f - (cursorPosition.y / (float)m_viewport.height)
+    };
+    simd::float2 screenSize = {(float)m_viewport.width, (float)m_viewport.height};
+    m_terraVehicle.onMouseDown(normPos, screenSize, rightClick);
+}
+
+void GameCoordinator::vehicleMouseUp()
+{
+    simd::float2 normPos = {
+        cursorPosition.x / (float)m_viewport.width,
+        1.f - (cursorPosition.y / (float)m_viewport.height)
+    };
+    simd::float2 screenSize = {(float)m_viewport.width, (float)m_viewport.height};
+    m_terraVehicle.onMouseUp(normPos, screenSize);
+}
+
 void GameCoordinator::handleMouseDown(bool rightClick)
 {
 }
@@ -382,6 +435,8 @@ void GameCoordinator::handleMouseUp()
 
 void GameCoordinator::handleScroll(float deltaY)
 {
+    if (m_gamePlayMode == GamePlayMode::Driving || m_gamePlayMode == GamePlayMode::Building || m_gamePlayMode == GamePlayMode::DEV)
+        m_terraVehicle.zoomCamera(deltaY * 0.5f);
 }
 
 void GameCoordinator::setMousePosition(float x, float y)
@@ -480,8 +535,7 @@ void GameCoordinator::update(float dt, const InputState& input)
             break;
         }
     }
-    
-    // Toujours mettre à jour physique véhicule
+
     m_terraVehicle.update(dt);
     float throttle = simd::length(input.moveDirection);
     m_spaceAudio->setEngineThrottle(throttle);
@@ -504,7 +558,6 @@ void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
 //    m_blockVoices[blockId] = voiceId;
 }
 
-// Quand tu retires un bloc
 void GameCoordinator::removeBlockFromVehicle(int blockId)
 {
     if (m_blockVoices.count(blockId)) {
@@ -582,6 +635,9 @@ void GameCoordinator::draw(MTK::View* view)
     
     MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(passDesc);
     renderCommandEncoder->setViewport(m_viewport);
+    
+    simd::float3 vehicleCamPos = m_terraVehicle.getCameraPosition();
+    simd::float3 vehicleCamTarget = m_terraVehicle.getCameraTarget();
 
     _rotationAngle += 0.0002f;
     if (_rotationAngle > 2 * M_PI)
@@ -624,6 +680,8 @@ void GameCoordinator::draw(MTK::View* view)
     
 //    grid.setGridCenter({0.0f, 0.0f, 0.0f});
     grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+    
+    m_terraVehicle.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
 
     m_cameraUniforms.position = m_camera.position();
     
@@ -657,7 +715,23 @@ void GameCoordinator::draw(MTK::View* view)
 //    renderCommandEncoder->setFragmentBuffer(m_mouseBuffer, 0, 1);
 //    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, 3UL); // NS::UInt
 
-    
+    simd::float2 screenSz = {(float)m_viewport.width, (float)m_viewport.height};
+    m_inventoryPanel.render(renderCommandEncoder, screenSz);
+
+    // Dans setMousePosition()
+    m_inventoryPanel.onMouseMoved(simd::make_float2(cursorPosition.x, cursorPosition.y),
+                                  simd::make_float2(m_viewport.width, m_viewport.height));
+
+    // Dans handleMouseDown()
+    m_inventoryPanel.onMouseDown(cursorPosition,
+                                 simd::make_float2(m_viewport.width, m_viewport.height));
+
+    // Dans handleMouseUp()
+    m_inventoryPanel.onMouseUp(cursorPosition,
+                               simd::make_float2(m_viewport.width, m_viewport.height));
+
+    // Toggle visibilité (touche I ou E)
+    m_inventoryPanel.setVisible(!m_inventoryPanel.isVisible());
     
     
     renderCommandEncoder->endEncoding();

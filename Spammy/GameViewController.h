@@ -28,4 +28,12 @@
 - (void)jump;
 - (void)inventory:(BOOL)visible;
 
+- (void)toggleVehicleMode;
+- (void)toggleVehicleBuildMode;
+- (void)selectVehicleSlot:(int)slot;
+- (void)rotateVehicleGhost;
+- (void)vehicleMouseDown:(BOOL)rightClick;
+- (void)vehicleMouseUp;
+- (void)handleScroll:(float)delta;
+
 @end

@@ -59,9 +59,7 @@ vertex TerraVaryings terraBlockVS(TerraBlockVertex in [[stage_in]],
     out.position = uniforms.viewProjection * worldPos;
     out.worldPos = worldPos.xyz;
     
-    float3x3 normalMat = float3x3(inst.modelMatrix[0].xyz,
-                                   inst.modelMatrix[1].xyz,
-                                   inst.modelMatrix[2].xyz);
+    float3x3 normalMat = float3x3(inst.modelMatrix[0].xyz, inst.modelMatrix[1].xyz, inst.modelMatrix[2].xyz);
     out.worldNormal = normalize(normalMat * in.normal);
     
     out.uv = in.uv;

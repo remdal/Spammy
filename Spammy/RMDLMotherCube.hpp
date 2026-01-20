@@ -8,6 +8,10 @@
 #ifndef RMDLMotherCube_hpp
 #define RMDLMotherCube_hpp
 
-#include <stdio.h>
+namespace cube {
+
+
+}
+
 
 #endif /* RMDLMotherCube_hpp */

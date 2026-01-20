@@ -5,18 +5,128 @@
 //  Created by Rémy on 12/01/2026.
 //
 
-//#ifndef RMDLInventory_hpp
-//#define RMDLInventory_hpp
-//
-//#include <Metal/Metal.hpp>
-//
-//#include <simd/simd.h>
-//#include <vector>
+#ifndef RMDLInventory_hpp
+#define RMDLInventory_hpp
+
+#include <Metal/Metal.hpp>
+
+#include <simd/simd.h>
+#include <vector>
 //#include <string>
 //#include <memory>
 //#include <fstream>
 //#include <algorithm>
-//
+
+namespace inventoryWindow {
+
+struct InventoryPanelVertex
+{
+    simd::float2 position;
+    simd::float2 texCoord;
+    simd::float4 color;
+    float cornerRadius;
+    float borderWidth;
+    uint32_t slotIndex;
+    uint32_t flags; // 1=background, 2=slot, 4=icon
+};
+
+struct InventoryPanelUniforms
+{
+    simd::float2 screenSize;
+    simd::float2 panelOrigin;
+    simd::float2 panelSize;
+    simd::float2 slotDimensions;
+    float slotSpacing;
+    float time;
+    int32_t hoveredSlotIndex;
+    int32_t selectedSlotIndex;
+    simd::float4 panelBackgroundColor;
+    simd::float4 slotNormalColor;
+    simd::float4 slotHoveredColor;
+    simd::float4 slotSelectedColor;
+    simd::float4 titleBarColor;
+    float titleBarHeight;
+    float panelCornerRadius;
+    float slotCornerRadius;
+    float borderThickness;
+};
+
+struct InventorySlotData
+{
+    uint32_t itemTypeID;
+    uint32_t itemCount;
+    simd::float4 itemColor;
+    bool isEmpty;
+    
+    InventorySlotData();
+};
+
+class InventoryPanel
+{
+public:
+    static constexpr uint32_t PANEL_COLUMNS = 10;
+    static constexpr uint32_t PANEL_ROWS = 4;
+    static constexpr uint32_t PANEL_SLOT_COUNT = PANEL_COLUMNS * PANEL_ROWS;
+    
+    InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    ~InventoryPanel();
+    
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float2 screenSize);
+    void update(float deltaTime);
+    
+    void onMouseDown(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseUp(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseMoved(simd::float2 screenPosition, simd::float2 screenSize);
+    
+    void setSlotData(uint32_t slotIndex, uint32_t typeID, uint32_t count, simd::float4 color);
+    void clearSlot(uint32_t slotIndex);
+    int32_t getHoveredSlot() const;
+    int32_t getSelectedSlot() const;
+    void setSelectedSlot(int32_t slotIndex);
+    
+    void setVisible(bool visible);
+    bool isVisible() const;
+    void setPanelPosition(simd::float2 normalizedPosition);
+    simd::float2 getPanelPosition() const;
+    
+private:
+    MTL::Device* m_device;
+    MTL::RenderPipelineState* m_renderPipeline;
+    MTL::DepthStencilState* m_depthStencilState;
+    MTL::Buffer* m_vertexBuffer;
+    MTL::Buffer* m_indexBuffer;
+    MTL::Buffer* m_uniformBuffer;
+    
+    InventoryPanelUniforms m_uniforms;
+    InventorySlotData m_slots[PANEL_SLOT_COUNT];
+    
+    simd::float2 m_panelPosition;      // Normalized [0,1]
+    simd::float2 m_panelSizePixels;
+    simd::float2 m_slotSizePixels;
+    float m_slotSpacingPixels;
+    float m_titleBarHeightPixels;
+    
+    bool m_isVisible;
+    bool m_isDragging;
+    simd::float2 m_dragStartOffset;
+    int32_t m_hoveredSlotIndex;
+    int32_t m_selectedSlotIndex;
+    float m_time;
+    
+    uint32_t m_vertexCount;
+    uint32_t m_indexCount;
+    
+    void buildRenderPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library);
+    void buildGeometry();
+    void rebuildVertices(simd::float2 screenSize);
+    
+    bool hitTestTitleBar(simd::float2 normalizedPos, simd::float2 screenSize) const;
+    int32_t hitTestSlot(simd::float2 normalizedPos, simd::float2 screenSize) const;
+    simd::float2 getSlotPositionNormalized(uint32_t slotIndex, simd::float2 screenSize) const;
+};
+
+}
+
 //// Block/Item type definition
 //enum class ItemType : uint16_t {
 //    None = 0,
@@ -258,5 +368,5 @@
 //    static const char* getItemName(ItemType type);
 //    static simd::float4 getItemColor(ItemType type);
 //};
-//
-//#endif /* RMDLInventory_hpp */
+
+#endif /* RMDLInventory_hpp */

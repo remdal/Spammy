@@ -13,8 +13,8 @@
 #include <memory>
 #include <vector>
 
-#include "RMDLNeedNasa.hpp"
-#include "RMDLPetitPrince.hpp"
+//#include "RMDLNeedNasa.hpp"
+//#include "RMDLPetitPrince.hpp"
 
 #include "RMDLMathUtils.hpp"
 
@@ -61,7 +61,8 @@ struct BlockGPUInstance
     float _pad;
 };
 
-struct VehicleGPUUniforms {
+struct VehicleGPUUniforms
+{
     simd::float4x4 viewProjection;
     simd::float3 cameraPos;
     float time;
@@ -69,9 +70,10 @@ struct VehicleGPUUniforms {
     float _pad;
 };
 
-struct InventoryGPUUniforms {
+struct InventoryGPUUniforms
+{
     simd::float2 screenSize;
-    simd::float2 panelPosition;    // Position du panneau (draggable)
+    simd::float2 position;
     simd::float2 panelSize;
     simd::float2 slotSize;
     float slotPadding;
@@ -80,7 +82,8 @@ struct InventoryGPUUniforms {
     int32_t selectedSlot;
 };
 
-struct InventorySlotGPU {
+struct InventorySlotGPU
+{
     simd::float4 iconColor;
     uint32_t count;
     uint32_t typeID;
@@ -88,7 +91,8 @@ struct InventorySlotGPU {
     float _pad;
 };
 
-struct BlockDefinition {
+struct BlockDefinition
+{
     uint32_t typeID;
     std::string name;
     std::string description;
@@ -106,10 +110,9 @@ struct BlockDefinition {
                     float m, float hp, simd::float4 col);
 };
 
-// ============================================================================
-// BLOCK INSTANCE (instance placée sur un véhicule)
-// ============================================================================
-struct AttachPoint {
+
+struct AttachPoint
+{
     simd::float3 localOffset;
     simd::float3 normal;
     AttachFace face;
@@ -120,7 +123,8 @@ struct AttachPoint {
     AttachPoint(simd::float3 off, simd::float3 n, AttachFace f);
 };
 
-class BlockInstance {
+class BlockInstance
+{
 public:
     uint32_t instanceID;
     uint32_t definitionID;
@@ -137,10 +141,8 @@ public:
     simd::float4x4 computeWorldMatrix(simd::float3 vehiclePos, simd::float4x4 vehicleRot) const;
 };
 
-// ============================================================================
-// COMMANDER BLOCK (bloc spécial - cœur du véhicule)
-// ============================================================================
-class CommanderBlock : public BlockInstance {
+class CommanderBlock : public BlockInstance
+{
 public:
     float energyCapacity;
     float currentEnergy;
@@ -364,8 +366,7 @@ public:
     void cleanup();
     
     void update(float dt);
-    void render(MTL::RenderCommandEncoder* enc, simd::float4x4 vpMatrix,
-                simd::float3 camPos);
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float4x4 viewProjectionMatrix, simd::float3 cameraPosition);
     void renderUI(MTL::RenderCommandEncoder* enc, simd::float2 screenSize);
     
     // Contrôles véhicule

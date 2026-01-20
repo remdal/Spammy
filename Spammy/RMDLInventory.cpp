@@ -5,8 +5,380 @@
 //  Created by Rémy on 12/01/2026.
 //
 
-//#include "RMDLInventory.hpp"
-//
+#include "RMDLInventory.hpp"
+
+namespace inventoryWindow {
+
+InventorySlotData::InventorySlotData()
+: itemTypeID(0), itemCount(0), itemColor{0.5f, 0.5f, 0.5f, 1.f}, isEmpty(true)
+{
+    
+}
+
+InventoryPanel::InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+: m_device(device)
+, m_renderPipeline(nullptr), m_depthStencilState(nullptr)
+, m_vertexBuffer(nullptr), m_indexBuffer(nullptr), m_uniformBuffer(nullptr)
+, m_panelPosition{0.5f, 0.5f}
+, m_panelSizePixels{540.f, 280.f}
+, m_slotSizePixels{48.f, 48.f}
+, m_slotSpacingPixels{6.f}
+, m_titleBarHeightPixels{28.f}
+, m_isVisible(true)
+, m_isDragging(false)
+, m_dragStartOffset{0.f, 0.f}
+, m_hoveredSlotIndex(-1)
+, m_selectedSlotIndex(0)
+, m_time(0.f)
+, m_vertexCount(0), m_indexCount(0)
+{
+    m_uniforms.panelBackgroundColor = {0.08f, 0.09f, 0.12f, 0.74f};
+    m_uniforms.slotNormalColor = {0.14f, 0.16f, 0.20f, 1.f};
+    m_uniforms.slotHoveredColor = {0.22f, 0.26f, 0.32f, 1.f};
+    m_uniforms.slotSelectedColor = {0.25f, 0.45f, 0.75f, 1.f};
+    m_uniforms.titleBarColor = {0.12f, 0.14f, 0.18f, 1.f};
+    m_uniforms.panelCornerRadius = 12.f;
+    m_uniforms.slotCornerRadius = 6.f;
+    m_uniforms.borderThickness = 1.5f;
+    
+    for (uint32_t i = 0; i < PANEL_SLOT_COUNT; i++)
+    {
+        m_slots[i] = InventorySlotData();
+    }
+    
+    buildRenderPipeline(colorPixelFormat, depthPixelFormat, shaderLibrary);
+    buildGeometry();
+}
+
+InventoryPanel::~InventoryPanel()
+{
+    if (m_renderPipeline) m_renderPipeline->release();
+    if (m_depthStencilState) m_depthStencilState->release();
+    if (m_vertexBuffer) m_vertexBuffer->release();
+    if (m_indexBuffer) m_indexBuffer->release();
+    if (m_uniformBuffer) m_uniformBuffer->release();
+}
+
+void InventoryPanel::buildRenderPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library)
+{
+    NS::Error* error = nullptr;
+    
+    MTL::Function* vertexFunction = library->newFunction(MTLSTR("inventoryPanelVertexShader"));
+    MTL::Function* fragmentFunction = library->newFunction(MTLSTR("inventoryPanelFragmentShader"));
+    
+    if (!vertexFunction || !fragmentFunction) {
+        printf("InventoryPanel: Failed to load shader functions\n");
+        return;
+    }
+    
+    MTL::VertexDescriptor* vertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    // position
+    vertexDescriptor->attributes()->object(0)->setFormat(MTL::VertexFormatFloat2);
+    vertexDescriptor->attributes()->object(0)->setOffset(0);
+    vertexDescriptor->attributes()->object(0)->setBufferIndex(0);
+    // texCoord
+    vertexDescriptor->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
+    vertexDescriptor->attributes()->object(1)->setOffset(sizeof(simd::float2));
+    vertexDescriptor->attributes()->object(1)->setBufferIndex(0);
+    // color
+    vertexDescriptor->attributes()->object(2)->setFormat(MTL::VertexFormatFloat4);
+    vertexDescriptor->attributes()->object(2)->setOffset(sizeof(simd::float2) * 2);
+    vertexDescriptor->attributes()->object(2)->setBufferIndex(0);
+    // cornerRadius
+    vertexDescriptor->attributes()->object(3)->setFormat(MTL::VertexFormatFloat);
+    vertexDescriptor->attributes()->object(3)->setOffset(sizeof(simd::float2) * 2 + sizeof(simd::float4));
+    vertexDescriptor->attributes()->object(3)->setBufferIndex(0);
+    // borderWidth
+    vertexDescriptor->attributes()->object(4)->setFormat(MTL::VertexFormatFloat);
+    vertexDescriptor->attributes()->object(4)->setOffset(sizeof(simd::float2) * 2 + sizeof(simd::float4) + sizeof(float));
+    vertexDescriptor->attributes()->object(4)->setBufferIndex(0);
+    // slotIndex
+    vertexDescriptor->attributes()->object(5)->setFormat(MTL::VertexFormatUInt);
+    vertexDescriptor->attributes()->object(5)->setOffset(sizeof(simd::float2) * 2 + sizeof(simd::float4) + sizeof(float) * 2);
+    vertexDescriptor->attributes()->object(5)->setBufferIndex(0);
+    // flags
+    vertexDescriptor->attributes()->object(6)->setFormat(MTL::VertexFormatUInt);
+    vertexDescriptor->attributes()->object(6)->setOffset(sizeof(simd::float2) * 2 + sizeof(simd::float4) + sizeof(float) * 2 + sizeof(uint32_t));
+    vertexDescriptor->attributes()->object(6)->setBufferIndex(0);
+    
+    vertexDescriptor->layouts()->object(0)->setStride(sizeof(InventoryPanelVertex));
+    vertexDescriptor->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+    
+    MTL::RenderPipelineDescriptor* pipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+    pipelineDescriptor->setVertexFunction(vertexFunction);
+    pipelineDescriptor->setFragmentFunction(fragmentFunction);
+    pipelineDescriptor->setVertexDescriptor(vertexDescriptor);
+    pipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(colorFormat);
+    pipelineDescriptor->colorAttachments()->object(0)->setBlendingEnabled(true);
+    pipelineDescriptor->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    pipelineDescriptor->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    pipelineDescriptor->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+    pipelineDescriptor->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    pipelineDescriptor->setDepthAttachmentPixelFormat(depthFormat);
+    
+    m_renderPipeline = m_device->newRenderPipelineState(pipelineDescriptor, &error);
+    if (!m_renderPipeline)
+        printf("InventoryPanel: Pipeline creation failed\n");
+    
+    MTL::DepthStencilDescriptor* depthDescriptor = MTL::DepthStencilDescriptor::alloc()->init();
+    depthDescriptor->setDepthCompareFunction(MTL::CompareFunctionAlways);
+    depthDescriptor->setDepthWriteEnabled(false);
+    m_depthStencilState = m_device->newDepthStencilState(depthDescriptor);
+    
+    vertexFunction->release();
+    fragmentFunction->release();
+    pipelineDescriptor->release();
+    vertexDescriptor->release();
+    depthDescriptor->release();
+}
+
+void InventoryPanel::buildGeometry()
+{
+    // 1 quad pour le fond + 1 quad pour la title bar + PANEL_SLOT_COUNT
+    uint32_t totalQuads = 2 + PANEL_SLOT_COUNT + 1;
+    uint32_t maxVertices = totalQuads * 4;
+    uint32_t maxIndices = totalQuads * 6;
+    
+    m_vertexBuffer = m_device->newBuffer(maxVertices * sizeof(InventoryPanelVertex), MTL::ResourceStorageModeShared);
+    m_indexBuffer = m_device->newBuffer(maxIndices * sizeof(uint32_t), MTL::ResourceStorageModeShared);
+    m_uniformBuffer = m_device->newBuffer(sizeof(InventoryPanelUniforms), MTL::ResourceStorageModeShared);
+}
+
+void InventoryPanel::rebuildVertices(simd::float2 screenSize)
+{
+    std::vector<InventoryPanelVertex> vertices;
+    std::vector<uint32_t> indices;
+    
+    float panelW = m_panelSizePixels.x / screenSize.x;
+    float panelH = m_panelSizePixels.y / screenSize.y;
+    float titleH = m_titleBarHeightPixels / screenSize.y;
+    float slotW = m_slotSizePixels.x / screenSize.x;
+    float slotH = m_slotSizePixels.y / screenSize.y;
+    float spacing = m_slotSpacingPixels / screenSize.x;
+    float spacingY = m_slotSpacingPixels / screenSize.y;
+    
+    float left = m_panelPosition.x - panelW * 0.5f;
+    float top = m_panelPosition.y - panelH * 0.5f;
+    
+    auto addQuad = [&](simd::float2 pos, simd::float2 size, simd::float4 color, float radius, float border, uint32_t slot, uint32_t flags)
+    {
+        uint32_t base = (uint32_t)vertices.size();
+        vertices.push_back({{pos.x, pos.y}, {0, 0}, color, radius, border, slot, flags});
+        vertices.push_back({{pos.x + size.x, pos.y}, {1, 0}, color, radius, border, slot, flags});
+        vertices.push_back({{pos.x + size.x, pos.y + size.y}, {1, 1}, color, radius, border, slot, flags});
+        vertices.push_back({{pos.x, pos.y + size.y}, {0, 1}, color, radius, border, slot, flags});
+        indices.insert(indices.end(), {base, base+1, base+2, base, base+2, base+3});
+    };
+    
+    // Panel background
+    addQuad(simd::float2{left, top}, simd::float2{panelW, panelH}, m_uniforms.panelBackgroundColor,
+            m_uniforms.panelCornerRadius, 0.f, 0, 1);
+    
+    // Title bar
+    addQuad(simd::float2{left, top}, simd::float2{panelW, titleH}, m_uniforms.titleBarColor,
+            m_uniforms.panelCornerRadius, 0.f, 0, 1);
+    
+    // Slots
+    float contentTop = top + titleH + spacingY;
+    float contentLeft = left + spacing;
+    
+    for (uint32_t row = 0; row < PANEL_ROWS; row++)
+    {
+        for (uint32_t col = 0; col < PANEL_COLUMNS; col++)
+        {
+            uint32_t slotIdx = row * PANEL_COLUMNS + col;
+            float sx = contentLeft + col * (slotW + spacing);
+            float sy = contentTop + row * (slotH + spacingY);
+            
+            simd::float4 slotColor = m_uniforms.slotNormalColor;
+            if ((int32_t)slotIdx == m_selectedSlotIndex)
+                slotColor = m_uniforms.slotSelectedColor;
+            else if ((int32_t)slotIdx == m_hoveredSlotIndex)
+                slotColor = m_uniforms.slotHoveredColor;
+            
+            addQuad(simd::float2{sx, sy}, simd::float2{slotW, slotH}, slotColor,
+                    m_uniforms.slotCornerRadius, m_uniforms.borderThickness, slotIdx, 2);
+            
+            // Item icon (if not empty)
+            if (!m_slots[slotIdx].isEmpty)
+            {
+                float iconPad = 4.f / screenSize.x;
+                float iconPadY = 4.f / screenSize.y;
+                addQuad(simd::float2{sx + iconPad, sy + iconPadY},
+                        simd::float2{slotW - iconPad * 2.f, slotH - iconPadY * 2.f},
+                        m_slots[slotIdx].itemColor, 4.f, 0.f, slotIdx, 4);
+            }
+        }
+    }
+    
+    m_vertexCount = (uint32_t)vertices.size();
+    m_indexCount = (uint32_t)indices.size();
+    
+    memcpy(m_vertexBuffer->contents(), vertices.data(), vertices.size() * sizeof(InventoryPanelVertex));
+    memcpy(m_indexBuffer->contents(), indices.data(), indices.size() * sizeof(uint32_t));
+}
+
+void InventoryPanel::update(float deltaTime)
+{
+    m_time += deltaTime;
+}
+
+void InventoryPanel::render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize)
+{
+    if (!m_isVisible || !m_renderPipeline) return;
+    
+    rebuildVertices(screenSize);
+    
+    m_uniforms.screenSize = screenSize;
+    m_uniforms.panelOrigin = m_panelPosition;
+    m_uniforms.panelSize = m_panelSizePixels;
+    m_uniforms.slotDimensions = m_slotSizePixels;
+    m_uniforms.slotSpacing = m_slotSpacingPixels;
+    m_uniforms.time = m_time;
+    m_uniforms.hoveredSlotIndex = m_hoveredSlotIndex;
+    m_uniforms.selectedSlotIndex = m_selectedSlotIndex;
+    m_uniforms.titleBarHeight = m_titleBarHeightPixels;
+    
+    memcpy(m_uniformBuffer->contents(), &m_uniforms, sizeof(InventoryPanelUniforms));
+    
+    encoder->setRenderPipelineState(m_renderPipeline);
+    encoder->setDepthStencilState(m_depthStencilState);
+    encoder->setVertexBuffer(m_vertexBuffer, 0, 0);
+    encoder->setVertexBuffer(m_uniformBuffer, 0, 1);
+    encoder->setFragmentBuffer(m_uniformBuffer, 0, 0);
+    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_indexCount, MTL::IndexTypeUInt32, m_indexBuffer, 0);
+}
+
+bool InventoryPanel::hitTestTitleBar(simd::float2 normalizedPos, simd::float2 screenSize) const
+{
+    float panelW = m_panelSizePixels.x / screenSize.x;
+    float panelH = m_panelSizePixels.y / screenSize.y;
+    float titleH = m_titleBarHeightPixels / screenSize.y;
+    
+    float left = m_panelPosition.x - panelW * 0.5f;
+    float top = m_panelPosition.y - panelH * 0.5f;
+    
+    return normalizedPos.x >= left && normalizedPos.x <= left + panelW &&
+           normalizedPos.y >= top && normalizedPos.y <= top + titleH;
+}
+
+int32_t InventoryPanel::hitTestSlot(simd::float2 normalizedPos, simd::float2 screenSize) const
+{
+    float panelW = m_panelSizePixels.x / screenSize.x;
+    float panelH = m_panelSizePixels.y / screenSize.y;
+    float titleH = m_titleBarHeightPixels / screenSize.y;
+    float slotW = m_slotSizePixels.x / screenSize.x;
+    float slotH = m_slotSizePixels.y / screenSize.y;
+    float spacing = m_slotSpacingPixels / screenSize.x;
+    float spacingY = m_slotSpacingPixels / screenSize.y;
+    
+    float left = m_panelPosition.x - panelW * 0.5f;
+    float top = m_panelPosition.y - panelH * 0.5f;
+    float contentTop = top + titleH + spacingY;
+    float contentLeft = left + spacing;
+    
+    for (uint32_t row = 0; row < PANEL_ROWS; row++) {
+        for (uint32_t col = 0; col < PANEL_COLUMNS; col++) {
+            float sx = contentLeft + col * (slotW + spacing);
+            float sy = contentTop + row * (slotH + spacingY);
+            
+            if (normalizedPos.x >= sx && normalizedPos.x <= sx + slotW &&
+                normalizedPos.y >= sy && normalizedPos.y <= sy + slotH) {
+                return (int32_t)(row * PANEL_COLUMNS + col);
+            }
+        }
+    }
+    return -1;
+}
+
+simd::float2 InventoryPanel::getSlotPositionNormalized(uint32_t slotIndex, simd::float2 screenSize) const
+{
+    if (slotIndex >= PANEL_SLOT_COUNT) return {0, 0};
+    
+    float panelW = m_panelSizePixels.x / screenSize.x;
+    float panelH = m_panelSizePixels.y / screenSize.y;
+    float titleH = m_titleBarHeightPixels / screenSize.y;
+    float slotW = m_slotSizePixels.x / screenSize.x;
+    float slotH = m_slotSizePixels.y / screenSize.y;
+    float spacing = m_slotSpacingPixels / screenSize.x;
+    float spacingY = m_slotSpacingPixels / screenSize.y;
+    
+    float left = m_panelPosition.x - panelW * 0.5f;
+    float top = m_panelPosition.y - panelH * 0.5f;
+    
+    uint32_t col = slotIndex % PANEL_COLUMNS;
+    uint32_t row = slotIndex / PANEL_COLUMNS;
+    
+    float sx = left + spacing + col * (slotW + spacing);
+    float sy = top + titleH + spacingY + row * (slotH + spacingY);
+    
+    return {sx + slotW * 0.5f, sy + slotH * 0.5f};
+}
+
+void InventoryPanel::onMouseDown(simd::float2 screenPosition, simd::float2 screenSize)
+{
+    simd::float2 normalizedPos = {screenPosition.x / screenSize.x, screenPosition.y / screenSize.y};
+    
+    if (hitTestTitleBar(normalizedPos, screenSize))
+    {
+        m_isDragging = true;
+        m_dragStartOffset = {normalizedPos.x - m_panelPosition.x, normalizedPos.y - m_panelPosition.y};
+        return;
+    }
+    
+    int32_t slot = hitTestSlot(normalizedPos, screenSize);
+    if (slot >= 0)
+        m_selectedSlotIndex = slot;
+}
+
+void InventoryPanel::onMouseUp(simd::float2 screenPosition, simd::float2 screenSize)
+{
+    m_isDragging = false;
+}
+
+void InventoryPanel::onMouseMoved(simd::float2 screenPosition, simd::float2 screenSize)
+{
+    simd::float2 normalizedPos = {screenPosition.x / screenSize.x, screenPosition.y / screenSize.y};
+    
+    if (m_isDragging)
+    {
+        m_panelPosition = {normalizedPos.x - m_dragStartOffset.x, normalizedPos.y - m_dragStartOffset.y};
+        
+        // Clamp to screen
+        float panelW = m_panelSizePixels.x / screenSize.x;
+        float panelH = m_panelSizePixels.y / screenSize.y;
+        m_panelPosition.x = fmaxf(panelW * 0.5f, fminf(1.f - panelW * 0.5f, m_panelPosition.x));
+        m_panelPosition.y = fmaxf(panelH * 0.5f, fminf(1.f - panelH * 0.5f, m_panelPosition.y));
+        return;
+    }
+    
+    m_hoveredSlotIndex = hitTestSlot(normalizedPos, screenSize);
+}
+
+void InventoryPanel::setSlotData(uint32_t slotIndex, uint32_t typeID, uint32_t count, simd::float4 color)
+{
+    if (slotIndex >= PANEL_SLOT_COUNT) return;
+    m_slots[slotIndex].itemTypeID = typeID;
+    m_slots[slotIndex].itemCount = count;
+    m_slots[slotIndex].itemColor = color;
+    m_slots[slotIndex].isEmpty = (count == 0);
+}
+
+void InventoryPanel::clearSlot(uint32_t slotIndex)
+{
+    if (slotIndex >= PANEL_SLOT_COUNT) return;
+    m_slots[slotIndex] = InventorySlotData();
+}
+
+int32_t InventoryPanel::getHoveredSlot() const { return m_hoveredSlotIndex; }
+int32_t InventoryPanel::getSelectedSlot() const { return m_selectedSlotIndex; }
+void InventoryPanel::setSelectedSlot(int32_t slotIndex) { m_selectedSlotIndex = slotIndex; }
+void InventoryPanel::setVisible(bool visible) { m_isVisible = visible; }
+bool InventoryPanel::isVisible() const { return m_isVisible; }
+void InventoryPanel::setPanelPosition(simd::float2 normalizedPosition) { m_panelPosition = normalizedPosition; }
+simd::float2 InventoryPanel::getPanelPosition() const { return m_panelPosition; }
+
+}
 //void InventoryItem::updateProperties() {
 //    auto props = ItemProperties::getProperties(type);
 //    name = props.name;

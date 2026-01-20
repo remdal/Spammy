@@ -40,6 +40,7 @@
 #include "RMDLMouseAndCursor.hpp"
 #include "RMDLAVFAudio.hpp"
 #include "RMDLManager.hpp"
+#include "RMDLInventory.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -67,7 +68,7 @@ struct InputState
     simd::float3 moveDirection {0, 0, 0};
     simd::float2 lookDelta {0, 0};
     
-    float speedMultiplier = 4.0f;
+    float speedMultiplier = 2.0f;
     
     // Actions ponctuelles (consommées après lecture)
     bool jump = false;
@@ -112,6 +113,8 @@ public:
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
     void makeArgumentTable();
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
+    
+    GamePlayMode m_gamePlayMode;
     
     void update(float deltaTime, const InputState& input);
 
@@ -199,9 +202,7 @@ private:
     MTL::DepthStencilState*             _lightingDepthState;
     MTL::ComputePipelineState*          _pipelineStateDescriptor;
     
-    
-    MouseDepthPicker    mouseAndCursor;
-    BuildGrid           grid;
+
     simd::float3        m_lastValidGridCenter;
     
     std::unique_ptr<SpaceshipAudioEngine> m_spaceAudio;
@@ -227,10 +228,16 @@ private:
     VibrantColorRenderer    colorsFlash;
     MTL::TextureDescriptor*             m_depthTextureDescriptor;
     MTL::Texture*                       m_depthTexture;
+    MouseDepthPicker    mouseAndCursor;
+    BuildGrid           grid;
     
     skybox::BlackHole   blackHole;
     
+    
+    
     GridCommandant::VehicleBuildGrid    gridCommandant;
+    
+    TerraVehicle::VehicleManager m_terraVehicle;
     simd::float3 m_currentVehicleBlockPos = {0.f, 0.f, 0.f};
     simd::float4x4 m_currentVehicleRotation = matrix_identity_float4x4;
     
@@ -247,8 +254,8 @@ private:
     
     void updateUniforms();
     
-    TerraVehicle::VehicleManager m_terraVehicle;
-    GamePlayMode m_gamePlayMode;
+    
+    inventoryWindow::InventoryPanel m_inventoryPanel;
 //    NASAAtTheHelm::VehicleManager vehicleManager;
 //    NASAAtTheHelm::InventoryUIRenderer inventoryUI;
 //    GameMode m_gameMode = GameMode::FreeCam;

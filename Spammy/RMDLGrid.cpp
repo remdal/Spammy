@@ -10,7 +10,7 @@
 #include <vector>
 
 BuildGrid::BuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
-: m_pipelineState(nullptr),m_depthStencilState(nullptr), m_vertexBuffer(nullptr), m_uniformBuffer(nullptr),
+: m_pipelineState(nullptr), m_depthStencilState(nullptr), m_vertexBuffer(nullptr), m_uniformBuffer(nullptr),
 m_vertexCount(0), m_visible(false), m_gridSize(16)
 {
     m_uniforms.gridSize = 16.0f;
@@ -728,7 +728,8 @@ void BuildGrid::setVisible(bool visible)
 namespace GridCommandant {
 
 VehicleBuildGrid::VehicleBuildGrid(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
-: m_device(device->retain())
+: m_device(device->retain()),
+m_vertexBuffer(nullptr), m_indexBuffer(nullptr)
 {
     buildPipeline(device, pixelFormat, depthPixelFormat, shaderLibrary);
     m_uniformBuffer = device->newBuffer(sizeof(VehicleGridUniforms), MTL::ResourceStorageModeShared);

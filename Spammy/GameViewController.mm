@@ -45,7 +45,6 @@ enum : Controls
     controlsFast        = 0x80,
     controlsSlow        = 0x81,
     
-    // AZERTY
     inventory           = 0x0f  // R Key
 };
 
@@ -86,6 +85,20 @@ enum : Controls
         {
             case 0x31: [self.gameCoordinator jump]; break; // Espace
             case inventory: [self.gameCoordinator inventory : true]; break; // R
+            case 0x0B: // B
+                [self.gameCoordinator toggleVehicleBuildMode];
+                break;
+            
+            case 0x12: [self.gameCoordinator selectVehicleSlot:0]; break;
+            case 0x13: [self.gameCoordinator selectVehicleSlot:1]; break;
+            case 0x14: [self.gameCoordinator selectVehicleSlot:2]; break;
+            case 0x15: [self.gameCoordinator selectVehicleSlot:3]; break;
+            case 0x17: [self.gameCoordinator selectVehicleSlot:4]; break;
+            case 0x16: [self.gameCoordinator selectVehicleSlot:5]; break;
+            case 0x1A: [self.gameCoordinator selectVehicleSlot:6]; break;
+            case 0x1C: [self.gameCoordinator selectVehicleSlot:7]; break;
+            case 0x19: [self.gameCoordinator selectVehicleSlot:8]; break;
+            case 0x1D: [self.gameCoordinator selectVehicleSlot:9]; break;
         }
     }
     NSString* chars = [event charactersIgnoringModifiers];
@@ -107,14 +120,14 @@ enum : Controls
 - (void)flagsChanged:(NSEvent*)event
 {
     if (event.modifierFlags & NSEventModifierFlagShift)
-        [_pressedKeys addObject:@(controlsFast)];
+        [_pressedKeys addObject:@(0x80)];
     else
-        [_pressedKeys removeObject:@(controlsFast)];
+        [_pressedKeys removeObject:@(0x80)];
 
     if (event.modifierFlags & NSEventModifierFlagControl)
-        [_pressedKeys addObject:@(controlsSlow)];
+        [_pressedKeys addObject:@(0x81)];
     else
-        [_pressedKeys removeObject:@(controlsSlow)];
+        [_pressedKeys removeObject:@(0x81)];
 }
 
 - (void)handleActionKey:(uint16_t)keyCode pressed:(BOOL)pressed
@@ -125,19 +138,22 @@ enum : Controls
 - (void)mouseUp:(NSEvent *)event
 {
     [[NSCursor crosshairCursor] set];
+    [self.gameCoordinator vehicleMouseUp];
 }
 
 - (void)mouseDown:(NSEvent *)event
 {
     [[NSCursor closedHandCursor] set];
-    if (!_mouseCaptured)
-        [self captureMouse];
-//    else
-//        [self.gameCoordinator triggerPrimaryAction];
+    [self.gameCoordinator vehicleMouseDown:NO];
+//    if (!_mouseCaptured)
+//        [self captureMouse];
+////    else
+////        [self.gameCoordinator triggerPrimaryAction];
 }
 
 - (void)rightMouseDown:(NSEvent *)event
 {
+    [self.gameCoordinator vehicleMouseDown:YES];
 //    [self.gameCoordinator triggerSecondaryAction];
 }
 
@@ -161,28 +177,35 @@ enum : Controls
     [self.gameCoordinator rotateCameraYaw : deltaX Pitch : deltaY];
 }
 
+- (void)scrollWheel:(NSEvent *)event
+{
+    float delta = [event scrollingDeltaY];
+    if ([event hasPreciseScrollingDeltas]) delta *= 0.1f;
+    [self.gameCoordinator handleScroll:delta];
+}
+
 //- (void)mouseEntered:(NSEvent *)event
 //{
 //}
 
-- (void)captureMouse
-{
-    _mouseCaptured = YES;
-    CGAssociateMouseAndMouseCursorPosition(YES);
-//    [NSCursor hide];
-}
-
-- (void)releaseMouse
-{
-    _mouseCaptured = NO;
-    CGAssociateMouseAndMouseCursorPosition(NO);
-//    [NSCursor unhide];
-}
-
-- (void)cancelOperation:(id)sender
-{
-    [self releaseMouse];
-}
+//- (void)captureMouse
+//{
+//    _mouseCaptured = YES;
+//    CGAssociateMouseAndMouseCursorPosition(YES);
+////    [NSCursor hide];
+//}
+//
+//- (void)releaseMouse
+//{
+//    _mouseCaptured = NO;
+//    CGAssociateMouseAndMouseCursorPosition(NO);
+////    [NSCursor unhide];
+//}
+//
+//- (void)cancelOperation:(id)sender
+//{
+//    [self releaseMouse];
+//}
 
 - (InputState)pollInputState
 {
@@ -220,9 +243,9 @@ enum : Controls
     if ([_pressedKeys containsObject:@(0x09)]) { /* V */ }
     if ([_pressedKeys containsObject:@(0x0B)]) { /* B */ }
     if ([_pressedKeys containsObject:@(0x2D)]) { /* N */ }
-    if ([_pressedKeys containsObject:@(0x38)]) { /* Shift gch */ }
+    if ([_pressedKeys containsObject:@(0x38)]) { /* Shift gch nok ->0x80*/ }
     if ([_pressedKeys containsObject:@(0x3C)]) { /* Shift drt */ }
-    if ([_pressedKeys containsObject:@(0x3B)]) { /* Ctrl gauche */ }
+    if ([_pressedKeys containsObject:@(0x3B)]) { /* Ctrl gauche nok ->0x81*/ }
     if ([_pressedKeys containsObject:@(0x3E)]) { /* Ctrl droite */ }
     if ([_pressedKeys containsObject:@(0x3A)]) { /* Option gch */ }
     if ([_pressedKeys containsObject:@(0x3D)]) { /* Option drt */ }
@@ -245,11 +268,10 @@ enum : Controls
     if (len > 1.0f)
         state.moveDirection /= len;
     
-    // QWERTY
     if ([_pressedKeys containsObject:@(0x80)])
-        state.speedMultiplier = 3.0f; // Shift
+        state.speedMultiplier = 3.0f; // Shift aze
     if ([_pressedKeys containsObject:@(0x81)])
-        state.speedMultiplier = 0.2f; // Ctrl
+        state.speedMultiplier = 0.2f; // Ctrl aze
     
     state.lookDelta = _mouseDrag;
     _mouseDrag = {0, 0};
@@ -344,7 +366,7 @@ enum : Controls
 
 - (void)moveCameraX:(float)x Y:(float)y Z:(float)z
 {
-    _pGameCoordinator->moveCamera( simd::float3 {x, y, z} );
+    _pGameCoordinator->moveCamera(simd::float3 {x, y, z});
 }
 
 - (void)rotateCameraYaw:(float)yaw Pitch:(float)pitch
@@ -365,6 +387,44 @@ enum : Controls
 - (void)jump
 {
     _pGameCoordinator->jump();
+}
+
+- (void)toggleVehicleMode
+{
+    if (_pGameCoordinator->m_gamePlayMode == GamePlayMode::FreeCam || _pGameCoordinator->m_gamePlayMode == GamePlayMode::DEV)
+        _pGameCoordinator->setGamePlayMode(GamePlayMode::Driving);
+    else
+        _pGameCoordinator->setGamePlayMode(GamePlayMode::FreeCam);
+}
+
+- (void)toggleVehicleBuildMode
+{
+    _pGameCoordinator->toggleVehicleBuildMode();
+}
+
+- (void)selectVehicleSlot:(int)slot
+{
+    _pGameCoordinator->selectVehicleSlot(slot);
+}
+
+- (void)rotateVehicleGhost
+{
+    _pGameCoordinator->rotateVehicleGhost();
+}
+
+- (void)vehicleMouseDown:(BOOL)rightClick
+{
+    _pGameCoordinator->vehicleMouseDown(rightClick);
+}
+
+- (void)vehicleMouseUp
+{
+    _pGameCoordinator->vehicleMouseUp();
+}
+
+- (void)handleScroll:(float)delta
+{
+    _pGameCoordinator->handleScroll(delta);
 }
 
 - (void)mouseMoved:(NSEvent *)event
