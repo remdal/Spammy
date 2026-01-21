@@ -116,7 +116,11 @@ blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr), indexBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
-m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
+m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
+moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
+sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
+terrainLisse(m_device, 89)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -126,7 +130,7 @@ m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
     m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
-//    m_cameraPNJ.initPerspectiveWithPosition(<#simd::float3 position#>, <#simd::float3 direction#>, <#simd::float3 up#>, <#float viewAngle#>, <#float aspectRatio#>, <#float nearPlane#>, <#float farPlane#>)
+    m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
@@ -185,9 +189,19 @@ m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
 //    if (vehicleManager.activeVehicle)
 //        vehicleManager.activeVehicle->position = {0.0f, 5.0f, 0.0f};
     
-    m_inventoryPanel.setSlotData(0, 1, 8, {0.3f, 0.3f, 0.35f, 1.f});
 //    m_inventoryPanel.setSlotData(1, 2, 20, {0.5f, 0.5f, 0.55f, 1.f});
 //    m_inventoryPanel.setSlotData(2, 3, 4, {0.8f, 0.4f, 0.2f, 1.f});
+    
+    configLisse.seed = seed;
+    configLisse.flatRadius = 50.0f;      // 50 unités de zone plate
+    configLisse.maxHeight = 30.0f;       // max 30 unités de hauteur
+    configLisse.flatness = 0.7f;         // assez plat globalement
+    configLisse.center = simd::float2{0, 0};
+    
+    terrainLisse.setViewDistance(10);
+    terrainLisse.setFlatRadius(100.0f);
+
+    moon.setOrbit(500.0f, 0.1f);
 }
 
 GameCoordinator::~GameCoordinator()
@@ -376,6 +390,37 @@ void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
     m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
 }
 
+void GameCoordinator::setInventory()
+{
+    m_inventoryPanel.setVisible(!m_inventoryPanel.isVisible());
+    if (testTransitionCamera == 0)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInOutCubic);
+    if (testTransitionCamera == 1)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::Linear);
+    if (testTransitionCamera == 2)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::SmoothStep);
+    if (testTransitionCamera == 3)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::SmootherStep);
+    if (testTransitionCamera == 4)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInQuad);
+    if (testTransitionCamera == 5)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseOutQuad);
+    if (testTransitionCamera == 6)
+        m_camera.transitionTo(m_cameraPNJ, 5.f, RMDLCameraEase::EaseInOutQuad);
+    if (testTransitionCamera == 7)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInCubic);
+    if (testTransitionCamera == 8)
+        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseOutCubic);
+    if (testTransitionCamera == 9)
+        m_camera.transitionTo(m_cameraPNJ, 5.5f, RMDLCameraEase::EaseInOutBack);
+    testTransitionCamera++;
+    if (testTransitionCamera == 10)
+    {
+        m_camera.transitionTo(cinematicView, 15.0f, RMDLCameraEase::SmootherStep);
+        testTransitionCamera = 0;
+    }
+}
+
 void GameCoordinator::setGamePlayMode(GamePlayMode mode)
 {
     m_gamePlayMode = mode;
@@ -427,10 +472,12 @@ void GameCoordinator::vehicleMouseUp()
 
 void GameCoordinator::handleMouseDown(bool rightClick)
 {
+    m_inventoryPanel.onMouseDown(cursorPosition, simd::make_float2(m_viewport.width, m_viewport.height));
 }
 
 void GameCoordinator::handleMouseUp()
 {
+    m_inventoryPanel.onMouseUp(cursorPosition, simd::make_float2(m_viewport.width, m_viewport.height));
 }
 
 void GameCoordinator::handleScroll(float deltaY)
@@ -443,6 +490,7 @@ void GameCoordinator::setMousePosition(float x, float y)
 {
     cursorPosition = simd::make_float2(x, y);
     mouseAndCursor.setMousePosition(x, y);
+    m_inventoryPanel.onMouseMoved(simd::make_float2(cursorPosition.x, cursorPosition.y), simd::make_float2(m_viewport.width, m_viewport.height));
 }
 
 void GameCoordinator::createCursor(float mouseX, float mouseY, float width, float height, float size, std::vector<VertexCursor> &outVertices)
@@ -539,6 +587,13 @@ void GameCoordinator::update(float dt, const InputState& input)
     m_terraVehicle.update(dt);
     float throttle = simd::length(input.moveDirection);
     m_spaceAudio->setEngineThrottle(throttle);
+    
+    moon.updateOrbit(dt);
+    m_camera.updateTransition(dt);
+//    planet->applyGravityTo(m_vehicleRigidBody);
+//    if (moon->isOnSurface(m_vehicleRigidBody.position, 50.0f)) {
+//        moon->applyGravityTo(m_vehicleRigidBody);
+//    }
 }
 
 void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
@@ -622,7 +677,7 @@ void GameCoordinator::draw(MTK::View* view)
 
     MTL::CommandBuffer* commandBuffer = m_commandQueue->commandBuffer();
     MTL::RenderPassDescriptor* passDesc = view->currentRenderPassDescriptor();
-    passDesc->depthAttachment()->setTexture(m_depth);
+    passDesc->depthAttachment()->setTexture(m_depth.get());
     passDesc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
     passDesc->depthAttachment()->setClearDepth(1.0f);
     passDesc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
@@ -632,6 +687,7 @@ void GameCoordinator::draw(MTK::View* view)
 //    passDesc->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.1, 0.15, 0.2, 1.0));
     
     
+    terrainLisse.update(m_camera.position(), commandBuffer);
     
     MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(passDesc);
     renderCommandEncoder->setViewport(m_viewport);
@@ -652,6 +708,7 @@ void GameCoordinator::draw(MTK::View* view)
     };
     
     updateUniforms();
+    update(dt, m_input);
     
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
@@ -669,9 +726,9 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
 
 
-    world.update(dt, m_camera.position(), m_device);
-    world.updateTime(dt);
-    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+//    world.update(dt, m_camera.position(), m_device);
+//    world.updateTime(dt);
+//    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 
     gridCommandant.update(0.016f);
     gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
@@ -718,27 +775,16 @@ void GameCoordinator::draw(MTK::View* view)
     simd::float2 screenSz = {(float)m_viewport.width, (float)m_viewport.height};
     m_inventoryPanel.render(renderCommandEncoder, screenSz);
 
-    // Dans setMousePosition()
-    m_inventoryPanel.onMouseMoved(simd::make_float2(cursorPosition.x, cursorPosition.y),
-                                  simd::make_float2(m_viewport.width, m_viewport.height));
 
-    // Dans handleMouseDown()
-    m_inventoryPanel.onMouseDown(cursorPosition,
-                                 simd::make_float2(m_viewport.width, m_viewport.height));
-
-    // Dans handleMouseUp()
-    m_inventoryPanel.onMouseUp(cursorPosition,
-                               simd::make_float2(m_viewport.width, m_viewport.height));
-
-    // Toggle visibilité (touche I ou E)
-    m_inventoryPanel.setVisible(!m_inventoryPanel.isVisible());
+    terrainLisse.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     
     
     renderCommandEncoder->endEncoding();
+
     
     mouseAndCursor.setInverseViewProjection(m_cameraUniforms.invViewProjectionMatrix);
     
-    mouseAndCursor.pick(commandBuffer, m_depth);
+    mouseAndCursor.pick(commandBuffer, m_depth.get());
     
 //    uint* ptr = reinterpret_cast<uint*>(m_textureBuffer->contents());
 //    m_textureBuffer->didModifyRange(NS::Range::Make(0, sizeof(uint)));
@@ -749,7 +795,8 @@ void GameCoordinator::draw(MTK::View* view)
 //    computeCommandEncoder->setBuffer(m_mouseBuffer, 0, 1);
 //    computeCommandEncoder->dispatchThreadgroups({ 1, 1, 1 }, { 64, 1, 1 });
 //    computeCommandEncoder->endEncoding();
-
+    
+    
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
     commandBuffer->waitUntilCompleted();
@@ -794,7 +841,7 @@ void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, N
 //    m_camera.setAspectRatio(width / (float)height);
     mouseAndCursor.setScreenSize((float)width, (float)height);
     m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
-    m_depth = m_device->newTexture(m_depthTextureDescriptor);
+    m_depth = NS::TransferPtr(m_device->newTexture(m_depthTextureDescriptor));
 }
 
 void GameCoordinator::setViewportWindow(NS::UInteger width, NS::UInteger height)

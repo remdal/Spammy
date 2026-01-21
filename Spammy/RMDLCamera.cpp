@@ -75,7 +75,9 @@ bool RMDLCamera::isParallel() const
 
 void RMDLCamera::updateUniforms()
 {
-    _uniforms.viewMatrix = sInvMatrixLookat(_position, _position + _direction, _up);
+    simd::float3 pos = _position + _shakeOffset;
+    _uniforms.viewMatrix = sInvMatrixLookat(pos, pos + _direction, _up);
+    //_uniforms.viewMatrix = sInvMatrixLookat(_position, _position + _direction, _up);
     if (_viewAngle != 0)
     {
         float va_tan = 1.0f / tan(_viewAngle * 0.5f);
@@ -239,7 +241,7 @@ simd::float4x4 RMDLCamera::ViewMatrix()
     return (uniforms().viewMatrix);
 }
 
-simd::float4x4 RMDLCamera::ProjectionMatrix()
+simd::float4x4 RMDLCamera::getProjectionMatrix()
 {
     return (uniforms().projectionMatrix);
 }
@@ -458,4 +460,162 @@ void RMDLCamera::lookAt(simd::float3 target)
 void RMDLCamera::rotateOnAxisOrbit(float yawDelta, float pitchDelta)
 {
     rotateYawPitch(yawDelta, pitchDelta);
+}
+
+RMDLCameraSnapshot RMDLCamera::snapshot() const
+{
+    return { _position, _direction, _up, _viewAngle, _nearPlane, _farPlane, _orbitTarget, _orbitDistance, _yaw, _pitch };
+}
+
+void RMDLCamera::applySnapshot(const RMDLCameraSnapshot& snap)
+{
+    _position = snap.position;
+    _direction = snap.direction;
+    _up = snap.up;
+    _viewAngle = snap.viewAngle;
+    _nearPlane = snap.nearPlane;
+    _farPlane = snap.farPlane;
+    _orbitTarget = snap.orbitTarget;
+    _orbitDistance = snap.orbitDistance;
+    _yaw = snap.yaw;
+    _pitch = snap.pitch;
+    _uniformsDirty = true;
+}
+
+void RMDLCamera::transitionTo(const RMDLCameraSnapshot& target, float duration, RMDLCameraEase ease, std::function<void()> onComplete)
+{
+    _transitionFrom = snapshot();
+    _transitionTo = target;
+    _transitionDuration = simd::max(0.001f, duration);
+    _transitionElapsed = 0.0f;
+    _transitionEase = ease;
+    _transitionActive = true;
+    _transitionOnComplete = onComplete;
+}
+
+void RMDLCamera::transitionTo(const RMDLCamera& other, float duration, RMDLCameraEase ease, std::function<void()> onComplete)
+{
+    transitionTo(other.snapshot(), duration, ease, onComplete);
+}
+
+void RMDLCamera::updateTransition(float dt)
+{
+    if (_shakeDuration > 0.0f)
+    {
+        _shakeElapsed += dt;
+        if (_shakeElapsed < _shakeDuration)
+        {
+            float decay = 1.0f - (_shakeElapsed / _shakeDuration);
+            float phase = _shakeElapsed * _shakeFrequency;
+            _shakeOffset = {
+                sinf(phase) * _shakeIntensity * decay,
+                cosf(phase * 1.3f) * _shakeIntensity * decay * 0.7f,
+                sinf(phase * 0.7f) * _shakeIntensity * decay * 0.3f
+            };
+            _uniformsDirty = true;
+        }
+        else
+        {
+            _shakeDuration = 0.0f;
+            _shakeOffset = {0, 0, 0};
+            _uniformsDirty = true;
+        }
+    }
+    
+    if (!_transitionActive) return;
+    
+    _transitionElapsed += dt;
+    float t = simd::min(1.0f, _transitionElapsed / _transitionDuration);
+    float easedT = applyEase(t, _transitionEase);
+    
+    // Lerp position
+    _position = _transitionFrom.position + easedT * (_transitionTo.position - _transitionFrom.position);
+    
+    // Slerp direction
+    _direction = slerpDirection(_transitionFrom.direction, _transitionTo.direction, easedT);
+    
+    // Slerp up
+    _up = slerpDirection(_transitionFrom.up, _transitionTo.up, easedT);
+    
+    // Lerp scalaires
+    _viewAngle = _transitionFrom.viewAngle + easedT * (_transitionTo.viewAngle - _transitionFrom.viewAngle);
+    _nearPlane = _transitionFrom.nearPlane + easedT * (_transitionTo.nearPlane - _transitionFrom.nearPlane);
+    _farPlane = _transitionFrom.farPlane + easedT * (_transitionTo.farPlane - _transitionFrom.farPlane);
+    
+    // Orbit params
+    _orbitTarget = _transitionFrom.orbitTarget + easedT * (_transitionTo.orbitTarget - _transitionFrom.orbitTarget);
+    _orbitDistance = _transitionFrom.orbitDistance + easedT * (_transitionTo.orbitDistance - _transitionFrom.orbitDistance);
+    _yaw = _transitionFrom.yaw + easedT * (_transitionTo.yaw - _transitionFrom.yaw);
+    _pitch = _transitionFrom.pitch + easedT * (_transitionTo.pitch - _transitionFrom.pitch);
+    
+    _uniformsDirty = true;
+    
+    if (t >= 1.0f)
+    {
+        _transitionActive = false;
+        applySnapshot(_transitionTo);
+        if (_transitionOnComplete) _transitionOnComplete();
+    }
+}
+
+float RMDLCamera::applyEase(float t, RMDLCameraEase ease) const
+{
+    switch (ease)
+    {
+        case RMDLCameraEase::Linear:
+            return t;
+        case RMDLCameraEase::SmoothStep:
+            return t * t * (3.0f - 2.0f * t);
+        case RMDLCameraEase::SmootherStep:
+            return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+        case RMDLCameraEase::EaseInQuad:
+            return t * t;
+        case RMDLCameraEase::EaseOutQuad:
+            return t * (2.0f - t);
+        case RMDLCameraEase::EaseInOutQuad:
+            return (t < 0.5f) ? 2.0f * t * t : -1.0f + (4.0f - 2.0f * t) * t;
+        case RMDLCameraEase::EaseInCubic:
+            return t * t * t;
+        case RMDLCameraEase::EaseOutCubic:
+        {
+            float f = t - 1.0f;
+            return f * f * f + 1.0f;
+        }
+        case RMDLCameraEase::EaseInOutCubic:
+            return (t < 0.5f) ? 4.0f * t * t * t
+                             : (t - 1.0f) * (2.0f * t - 2.0f) * (2.0f * t - 2.0f) + 1.0f;
+        case RMDLCameraEase::EaseInOutBack:
+        {
+            const float c1 = 1.70158f;
+            const float c2 = c1 * 1.525f;
+            return (t < 0.5f)
+                    ? (std::pow(2.0f * t, 2.0f) * ((c2 + 1.0f) * 2.0f * t - c2)) / 2.0f
+                    : (std::pow(2.0f * t - 2.0f, 2.0f) * ((c2 + 1.0f) * (t * 2.0f - 2.0f) + c2) + 2.0f) / 2.0f;
+        }
+    }
+    return t;
+}
+
+simd::float3 RMDLCamera::slerpDirection(simd::float3 a, simd::float3 b, float t) const
+{
+    a = simd::normalize(a);
+    b = simd::normalize(b);
+    float dot = simd::dot(a, b);
+    
+    // Si presque parallèles, lerp simple
+    if (dot > 0.9995f)
+        return simd::normalize(a + t * (b - a));
+    
+    dot = simd::clamp(dot, -1.0f, 1.0f);
+    float theta = acosf(dot) * t;
+    simd::float3 relative = simd::normalize(b - a * dot);
+    return a * cosf(theta) + relative * sinf(theta);
+}
+
+void RMDLCamera::applyShake(float intensity, float duration, float frequency)
+{
+    _shakeIntensity = intensity;
+    _shakeDuration = duration;
+    _shakeElapsed = 0.0f;
+    _shakeFrequency = frequency;
 }

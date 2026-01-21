@@ -88,6 +88,7 @@ enum : Controls
             case 0x0B: // B
                 [self.gameCoordinator toggleVehicleBuildMode];
                 break;
+            case 0x22: [self.gameCoordinator setInventory]; break; // i
             
             case 0x12: [self.gameCoordinator selectVehicleSlot:0]; break;
             case 0x13: [self.gameCoordinator selectVehicleSlot:1]; break;
@@ -382,6 +383,11 @@ enum : Controls
 - (void)inventory:(BOOL)visible
 {
     _pGameCoordinator->inventory(visible);
+}
+
+- (void)setInventory
+{
+    _pGameCoordinator->setInventory();
 }
 
 - (void)jump

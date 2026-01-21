@@ -42,6 +42,9 @@
 #include "RMDLManager.hpp"
 #include "RMDLInventory.hpp"
 
+#include "RMDLMap.hpp"
+#include "RMDLPhysics.hpp"
+
 #define kMaxBuffersInFlight 3
 
 static const uint32_t NumLights = 256;
@@ -115,6 +118,7 @@ public:
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
     
     GamePlayMode m_gamePlayMode;
+    InputState  m_input;
     
     void update(float deltaTime, const InputState& input);
 
@@ -152,6 +156,8 @@ public:
     void rotateVehicleGhost();
     void vehicleMouseDown(bool rightClick);
     void vehicleMouseUp();
+    
+    void setInventory();
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -184,7 +190,7 @@ private:
     MTL::Texture*                        m_gBuffer0;
     MTL::Texture*                        m_gBuffer1;
     MTL::Texture*                        m_shadow;
-    MTL::Texture*                        m_depth;
+    NS::SharedPtr<MTL::Texture>                        m_depth;
 
     MTL::Buffer*                        m_textureBuffer;
     
@@ -212,6 +218,14 @@ private:
     RMDLCamera                          m_camera;
     RMDLCamera                          m_cameraPNJ;
     RMDLCamera                          m_cameraShadow;
+    RMDLCameraSnapshot cinematicView = {
+        .position = {30, 10, 30},
+        .direction = simd::normalize(simd::float3{-1, -0.2f, -1}),
+        .up = {0, 1, 0},
+        .viewAngle = M_PI / 5.0f,  // FOV serré
+        .nearPlane = 0.1f,
+        .farPlane = 500.0f
+    };
     MTL::PixelFormat                    m_pixelFormat;
     MTL::PixelFormat                    m_depthPixelFormat;
     MTL::DepthStencilState*             m_depthStencilState;
@@ -230,6 +244,7 @@ private:
     MTL::Texture*                       m_depthTexture;
     MouseDepthPicker    mouseAndCursor;
     BuildGrid           grid;
+    int testTransitionCamera = 0;
     
     skybox::BlackHole   blackHole;
     
@@ -253,6 +268,13 @@ private:
     dispatch_semaphore_t                _semaphore;
     
     void updateUniforms();
+    
+    TerrainConfigLisse  configLisse;
+    InfiniteTerrainManager   terrainLisse;
+    
+    Moon    moon;
+    Sea     sea;
+    Planet  planet;
     
     
     inventoryWindow::InventoryPanel m_inventoryPanel;

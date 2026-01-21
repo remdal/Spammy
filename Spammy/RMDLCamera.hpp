@@ -12,8 +12,36 @@
 # define RMDLCAMERA_HPP
 
 # include <simd/simd.h>
+# include <functional>
 
 # import "RMDLMainRenderer_shared.h"
+
+enum class RMDLCameraEase {
+    Linear,
+    SmoothStep,
+    SmootherStep,
+    EaseInQuad,
+    EaseOutQuad,
+    EaseInOutQuad,
+    EaseInCubic,
+    EaseOutCubic,
+    EaseInOutCubic,
+    EaseInOutBack,
+};
+
+struct RMDLCameraSnapshot
+{
+    simd::float3    position;
+    simd::float3    direction;
+    simd::float3    up;
+    float           viewAngle;
+    float           nearPlane;
+    float           farPlane;
+    simd::float3    orbitTarget;
+    float           orbitDistance;
+    float           yaw;
+    float           pitch;
+};
 
 class RMDLCamera
 {
@@ -49,7 +77,7 @@ public:
     void            setUp(simd::float3 newUp);
     void            setDirection(simd::float3 newDirection);
     simd::float4x4  ViewMatrix();
-    simd::float4x4  ProjectionMatrix();
+    simd::float4x4  getProjectionMatrix();
     simd::float4x4  ViewProjectionMatrix();
     simd::float4x4  InvOrientationProjectionMatrix();
     simd::float4x4  InvViewProjectionMatrix();
@@ -79,6 +107,25 @@ public:
     void updateOrbitPosition();
     void updateDirectionFromYawPitch();
     void rotateOnAxisOrbit(float yawDelta, float pitchDelta);
+    
+    RMDLCameraSnapshot snapshot() const;
+    void applySnapshot(const RMDLCameraSnapshot& snap);
+    
+    void transitionTo(const RMDLCameraSnapshot& target, float duration,
+                      RMDLCameraEase ease = RMDLCameraEase::SmoothStep,
+                      std::function<void()> onComplete = std::function<void()>());
+    
+    void transitionTo(const RMDLCamera& other, float duration,
+                      RMDLCameraEase ease = RMDLCameraEase::SmoothStep,
+                      std::function<void()> onComplete = std::function<void()>());
+    
+    void updateTransition(float delta);
+    
+    bool isTransitioning() const { return _transitionActive; }
+    void cancelTransition() { _transitionActive = false; }
+    
+    // Shake
+    void applyShake(float intensity, float duration, float frequency = 25.0f);
 private:
     float           _nearPlane;
     float           _farPlane;
@@ -93,14 +140,31 @@ private:
     bool            _uniformsDirty;
     RMDLCameraUniforms  _uniforms;
     
-    float _yaw = 0.0f;                  // Rotation horizontale (radians)
-    float _pitch = 0.0f;                // Rotation verticale (radians)
+    float _yaw = 0.0f;
+    float _pitch = 0.0f;
     float _pitchMin = -M_PI_2 + 0.1f;   // Limite basse (-89°)
     float _pitchMax = M_PI_2 - 0.1f;    // Limite haute (+89°)
     
     simd::float3 _orbitTarget = {0, 0, 0};
     float _orbitDistance = 10.0f;
     bool _orbitMode = false;
+
+    float applyEase(float t, RMDLCameraEase ease) const;
+    simd::float3 slerpDirection(simd::float3 a, simd::float3 b, float t) const;
+    
+    bool _transitionActive = false;
+    RMDLCameraSnapshot _transitionFrom;
+    RMDLCameraSnapshot _transitionTo;
+    float _transitionDuration = 0.0f;
+    float _transitionElapsed = 0.0f;
+    RMDLCameraEase _transitionEase = RMDLCameraEase::SmoothStep;
+    std::function<void()> _transitionOnComplete = nullptr;
+    
+    float _shakeIntensity = 0.0f;
+    float _shakeDuration = 0.0f;
+    float _shakeElapsed = 0.0f;
+    float _shakeFrequency = 25.0f;
+    simd::float3 _shakeOffset = {0, 0, 0};
 };
 
 #endif /* RMDLCAMERA_HPP */

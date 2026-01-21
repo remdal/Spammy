@@ -11,23 +11,24 @@ static const char* pickerShaderSource = R"(
 #include <metal_stdlib>
 using namespace metal;
 
-struct PickerUniforms {
+struct PickerUniforms 
+{
     float2 mousePos;
     float2 screenSize;
     float4x4 inverseViewProj;
 };
 
-struct PickResult {
+struct PickResult 
+{
     float3 worldPosition;
     float depth;
     int valid;
 };
 
-kernel void pickDepth(
-    texture2d<float, access::read> depthTexture [[texture(0)]],
-    constant PickerUniforms& uniforms [[buffer(0)]],
-    device PickResult& result [[buffer(1)]],
-    uint2 gid [[thread_position_in_grid]])
+kernel void pickDepth(texture2d<float, access::read> depthTexture [[texture(0)]],
+                      constant PickerUniforms& uniforms [[buffer(0)]],
+                      device PickResult& result [[buffer(1)]],
+                      uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x != 0 || gid.y != 0) return;
     

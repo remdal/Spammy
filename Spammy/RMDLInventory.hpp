@@ -12,10 +12,7 @@
 
 #include <simd/simd.h>
 #include <vector>
-//#include <string>
-//#include <memory>
-//#include <fstream>
-//#include <algorithm>
+#include <string>
 
 namespace inventoryWindow {
 
@@ -26,47 +23,47 @@ struct InventoryPanelVertex
     simd::float4 color;
     float cornerRadius;
     float borderWidth;
+    uint32_t elementType; // 0=slot, 1=icon, 2=handle, 3=scrollIndicator
     uint32_t slotIndex;
-    uint32_t flags; // 1=background, 2=slot, 4=icon
 };
 
 struct InventoryPanelUniforms
 {
     simd::float2 screenSize;
     simd::float2 panelOrigin;
-    simd::float2 panelSize;
     simd::float2 slotDimensions;
     float slotSpacing;
     float time;
     int32_t hoveredSlotIndex;
     int32_t selectedSlotIndex;
-    simd::float4 panelBackgroundColor;
     simd::float4 slotNormalColor;
     simd::float4 slotHoveredColor;
     simd::float4 slotSelectedColor;
-    simd::float4 titleBarColor;
-    float titleBarHeight;
-    float panelCornerRadius;
+    simd::float4 handleColor;
     float slotCornerRadius;
-    float borderThickness;
+    float scrollOffset;
+    float maxScrollOffset;
+    float handleSize;
 };
 
-struct InventorySlotData
+struct InventoryItemData
 {
     uint32_t itemTypeID;
     uint32_t itemCount;
-    simd::float4 itemColor;
-    bool isEmpty;
+    simd::float4 displayColor;
+    MTL::Texture* iconTexture; // PNG
+    bool hasItem;
     
-    InventorySlotData();
+    InventoryItemData();
 };
 
 class InventoryPanel
 {
 public:
-    static constexpr uint32_t PANEL_COLUMNS = 10;
-    static constexpr uint32_t PANEL_ROWS = 4;
-    static constexpr uint32_t PANEL_SLOT_COUNT = PANEL_COLUMNS * PANEL_ROWS;
+    static constexpr uint32_t VISIBLE_COLUMNS = 10;
+    static constexpr uint32_t VISIBLE_ROWS = 4;
+    static constexpr uint32_t TOTAL_ROWS = 8;
+    static constexpr uint32_t TOTAL_SLOTS = VISIBLE_COLUMNS * TOTAL_ROWS;
     
     InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
     ~InventoryPanel();
@@ -77,38 +74,50 @@ public:
     void onMouseDown(simd::float2 screenPosition, simd::float2 screenSize);
     void onMouseUp(simd::float2 screenPosition, simd::float2 screenSize);
     void onMouseMoved(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseScroll(float deltaY);
     
-    void setSlotData(uint32_t slotIndex, uint32_t typeID, uint32_t count, simd::float4 color);
+    void setSlotItem(uint32_t slotIndex, uint32_t typeID, uint32_t count, simd::float4 color);
+    void setSlotTexture(uint32_t slotIndex, MTL::Texture* texture);
     void clearSlot(uint32_t slotIndex);
+    
+    MTL::Texture* loadIconTexture(const std::string& filePath);
+    
     int32_t getHoveredSlot() const;
     int32_t getSelectedSlot() const;
     void setSelectedSlot(int32_t slotIndex);
     
     void setVisible(bool visible);
     bool isVisible() const;
-    void setPanelPosition(simd::float2 normalizedPosition);
-    simd::float2 getPanelPosition() const;
     
 private:
     MTL::Device* m_device;
-    MTL::RenderPipelineState* m_renderPipeline;
-    MTL::DepthStencilState* m_depthStencilState;
+    MTL::RenderPipelineState* m_slotPipeline;
+    MTL::RenderPipelineState* m_iconPipeline;
+    MTL::DepthStencilState* m_depthState;
+    MTL::SamplerState* m_iconSampler;
     MTL::Buffer* m_vertexBuffer;
     MTL::Buffer* m_indexBuffer;
     MTL::Buffer* m_uniformBuffer;
     
     InventoryPanelUniforms m_uniforms;
-    InventorySlotData m_slots[PANEL_SLOT_COUNT];
+    InventoryItemData m_items[TOTAL_SLOTS];
     
-    simd::float2 m_panelPosition;      // Normalized [0,1]
-    simd::float2 m_panelSizePixels;
+    simd::float2 m_panelPosition;
     simd::float2 m_slotSizePixels;
     float m_slotSpacingPixels;
-    float m_titleBarHeightPixels;
+    float m_handleSizePixels;
+    float m_handleThicknessPixels;
     
     bool m_isVisible;
-    bool m_isDragging;
-    simd::float2 m_dragStartOffset;
+    bool m_isDraggingPanel;
+    bool m_isDraggingHandle;
+    simd::float2 m_dragOffset;
+    int32_t m_activeHandle; // 0=top, 1=bottom, 2=left, 3=right
+    
+    float m_scrollOffset;
+    float m_scrollVelocity;
+    float m_maxScrollOffset;
+    
     int32_t m_hoveredSlotIndex;
     int32_t m_selectedSlotIndex;
     float m_time;
@@ -116,13 +125,14 @@ private:
     uint32_t m_vertexCount;
     uint32_t m_indexCount;
     
-    void buildRenderPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library);
-    void buildGeometry();
-    void rebuildVertices(simd::float2 screenSize);
+    void buildPipelines(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library);
+    void buildBuffers();
+    void rebuildGeometry(simd::float2 screenSize);
     
-    bool hitTestTitleBar(simd::float2 normalizedPos, simd::float2 screenSize) const;
-    int32_t hitTestSlot(simd::float2 normalizedPos, simd::float2 screenSize) const;
-    simd::float2 getSlotPositionNormalized(uint32_t slotIndex, simd::float2 screenSize) const;
+    int32_t hitTestSlot(simd::float2 normPos, simd::float2 screenSize) const;
+    int32_t hitTestHandle(simd::float2 normPos, simd::float2 screenSize) const;
+    simd::float2 getSlotScreenPosition(uint32_t slotIndex, simd::float2 screenSize) const;
+    simd::float2 getPanelDimensions(simd::float2 screenSize) const;
 };
 
 }

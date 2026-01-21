@@ -27,6 +27,7 @@
 - (void)playSoundTestY;
 - (void)jump;
 - (void)inventory:(BOOL)visible;
+- (void)setInventory;
 
 - (void)toggleVehicleMode;
 - (void)toggleVehicleBuildMode;
