@@ -120,7 +120,8 @@ m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
 moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
 sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
-terrainLisse(m_device, 89)
+terrainLisse(m_device, 89),
+blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -202,6 +203,22 @@ terrainLisse(m_device, 89)
     terrainLisse.setFlatRadius(100.0f);
 
     moon.setOrbit(500.0f, 0.1f);
+    
+    blocs.addBlock(cube::BlockType::CubeBasic, {0, 2, 0});
+    blocs.addBlock(cube::BlockType::Blender, {1, 2, 0});
+//    blocs.addBlock(cube::BlockType::CubeBasic, {1, 2, 0});
+    blocs.addBlock(cube::BlockType::RobotHead, {0, 3, 0});
+    blocs.addBlock(cube::BlockType::WheelMedium, {-1, 2, 0}, 8);  // Rotation latérale
+    blocs.addBlock(cube::BlockType::WheelMedium, {2, 2, 0}, 8);
+    blocs.addBlock(cube::BlockType::Cockpit, {0, 2, -1});
+    blocs.addBlock(cube::BlockType::ThrusterSmall, {0, 2, 1});
+    blocs.setBlockColor(1, {1.0f, 0.3f, 0.3f, 1.0f});
+    auto* block = blocs.getBlockAt({1, 2, 0});
+    if (block) {
+        printf("Block OK: type=%d\n", (int)block->type);
+    } else {
+        printf("Block NOT FOUND!\n");
+    }
 }
 
 GameCoordinator::~GameCoordinator()
@@ -594,6 +611,7 @@ void GameCoordinator::update(float dt, const InputState& input)
 //    if (moon->isOnSurface(m_vehicleRigidBody.position, 50.0f)) {
 //        moon->applyGravityTo(m_vehicleRigidBody);
 //    }
+    blocs.update(dt);
 }
 
 void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
@@ -738,7 +756,7 @@ void GameCoordinator::draw(MTK::View* view)
 //    grid.setGridCenter({0.0f, 0.0f, 0.0f});
     grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
     
-    m_terraVehicle.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+//    m_terraVehicle.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
 
     m_cameraUniforms.position = m_camera.position();
     
@@ -777,6 +795,8 @@ void GameCoordinator::draw(MTK::View* view)
 
 
     terrainLisse.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    
+    blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
     
     
     renderCommandEncoder->endEncoding();

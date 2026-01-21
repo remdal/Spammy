@@ -72,7 +72,8 @@ float fbm(float2 p, uint seed, int octaves) {
     float frequency = 1.0;
     float maxValue = 0.0;
     
-    for (int i = 0; i < octaves; i++) {
+    for (int i = 0; i < octaves; i++)
+    {
         value += amplitude * smoothNoise(p * frequency, seed + uint(i) * 1337);
         maxValue += amplitude;
         amplitude *= 0.5;
@@ -89,6 +90,11 @@ uint classifyBiome(float2 worldPos, float2 center, float flatRadius, uint seed)
 
     if (dist < flatRadius)
         return 0; // SafeZone
+    
+    // LOD
+//    if (dist < 200) size = 128;
+//    else if (dist < 600) size = 64;
+//    else if (dist < 1500) size = 16;
     
     // Biome noise
 //    float biomeNoise = fbm(worldPos * 0.01, seed + 9999, 3);
@@ -156,7 +162,6 @@ kernel void terrainGenerateKernel(device TerrainVertexLisse* vertices [[buffer(0
     float finalHeight = getBiomeHeight(biome, baseHeight, config.flatness);
     finalHeight = mix(finalHeight, 0.0, flatBlend);
     
-    // Vertex output
     vertices[idx].position = float3(worldPos.x, finalHeight, worldPos.y);
     vertices[idx].uv = localPos / float(chunk.size);
     vertices[idx].biomeID = biome;

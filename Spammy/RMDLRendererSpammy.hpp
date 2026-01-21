@@ -45,6 +45,8 @@
 #include "RMDLMap.hpp"
 #include "RMDLPhysics.hpp"
 
+#include "RMDLMotherCube.hpp"
+
 #define kMaxBuffersInFlight 3
 
 static const uint32_t NumLights = 256;
@@ -219,10 +221,10 @@ private:
     RMDLCamera                          m_cameraPNJ;
     RMDLCamera                          m_cameraShadow;
     RMDLCameraSnapshot cinematicView = {
-        .position = {30, 10, 30},
+        .position = {30, 1000, 30},
         .direction = simd::normalize(simd::float3{-1, -0.2f, -1}),
         .up = {0, 1, 0},
-        .viewAngle = M_PI / 5.0f,  // FOV serré
+        .viewAngle = M_PI / 5.0f,
         .nearPlane = 0.1f,
         .farPlane = 500.0f
     };
@@ -275,6 +277,8 @@ private:
     Moon    moon;
     Sea     sea;
     Planet  planet;
+    
+    cube::BlockSystem   blocs;
     
     
     inventoryWindow::InventoryPanel m_inventoryPanel;
