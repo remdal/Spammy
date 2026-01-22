@@ -101,7 +101,7 @@ GameCoordinator::GameCoordinator(MTL::Device* device,
                                  MTL::PixelFormat layerPixelFormat, MTL::PixelFormat depthPixelFormat,
                                  NS::UInteger width, NS::UInteger height,
                                  const std::string& resourcePath)
-: m_device(device->retain()), m_shaderLibrary(m_device->newDefaultLibrary()),
+: m_device(device->retain()), m_shaderLibrary(m_device->newDefaultLibrary()), m_commandQueue(m_device->newCommandQueue()),
 m_pixelFormat(layerPixelFormat), m_depthPixelFormat(depthPixelFormat),
 _rotationAngle(0.0f), m_frame(0),
 m_editMode(false), m_buildMode(true),
@@ -115,17 +115,16 @@ grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-vertexBuffer(nullptr), indexBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
+vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
 m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
 moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
 sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
 terrainLisse(m_device, 89),
-blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
+blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
-    m_commandQueue = m_device->newCommandQueue();
     _pAudioEngine = std::make_unique<PhaseAudio>(resourcePath);
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
@@ -212,7 +211,7 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary)
     blocs.addBlock(cube::BlockType::WheelMedium, {2, 2, 0}, 8);
     blocs.addBlock(cube::BlockType::Cockpit, {0, 2, -1});
     blocs.addBlock(cube::BlockType::ThrusterSmall, {0, 2, 1});
-    blocs.setBlockColor(1, {1.0f, 0.3f, 0.3f, 1.0f});
+//    blocs.setBlockColor(1, {1.0f, 0.3f, 0.3f, 1.0f});
     auto* block = blocs.getBlockAt({1, 2, 0});
     if (block) {
         printf("Block OK: type=%d\n", (int)block->type);
@@ -227,7 +226,7 @@ GameCoordinator::~GameCoordinator()
 
     if (vertexBuffer) vertexBuffer->release();
     if (indexBuffer) indexBuffer->release();
-    transformBuffer->release();
+    if (transformBuffer) transformBuffer->release();
 
 
     m_terraVehicle.cleanup();
@@ -796,7 +795,7 @@ void GameCoordinator::draw(MTK::View* view)
 
     terrainLisse.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     
-    blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+    blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position(), dt);
     
     
     renderCommandEncoder->endEncoding();

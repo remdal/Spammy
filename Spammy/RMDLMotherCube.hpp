@@ -9,20 +9,39 @@
 #define RMDLMotherCube_hpp
 
 #include <Metal/Metal.hpp>
+
 #include <simd/simd.h>
 #include <vector>
 #include <unordered_map>
 #include <memory>
 #include <functional>
 
+#include "RMDLFontLoader.h"
+
 namespace cube {
 
-struct BlockVertex
+struct alignas(16) BlockGPUInstance
+{
+    simd::float4x4 modelMatrix;
+    simd::float4 color;
+    simd::float4 params;
+};
+
+struct alignas(16) BlockVertex
 {
     simd::float3 position;
     simd::float3 normal;
     simd::float2 uv;
     simd::float4 color;
+};
+
+struct alignas(16) BlockUniforms
+{
+    simd::float4x4 viewProj;
+    simd::float3 camPos;
+    float time;
+    simd::float3 lightDir;
+    float _pad;
 };
 
 struct BlockFace
@@ -48,7 +67,7 @@ enum class BlockCategory : uint8_t {
 };
 
 enum class BlockType : uint16_t {
-    // Structure
+
     CubeBasic = 0,
     CubeArmored,
     CubeLight,
@@ -56,7 +75,6 @@ enum class BlockType : uint16_t {
     Corner,
     Beam,
 
-    // Propulsion
     WheelSmall = 100,
     WheelMedium,
     WheelLarge,
@@ -64,19 +82,16 @@ enum class BlockType : uint16_t {
     ThrusterLarge,
     Hover,
     
-    // Control
     Cockpit = 200,
     CommandSeat,
     RemoteControl,
     AICore,
     
-    // Cosmetic / Robot
     RobotHead = 300,
     RobotEye,
     Antenna,
     Light,
     
-    // Utility
     Battery = 400,
     Generator,
     FuelTank,
@@ -89,6 +104,7 @@ enum class BlockType : uint16_t {
 struct BlockDefinition
 {
     BlockType type;
+    uint8_t textureType = 0;
     BlockCategory category;
     const char* name;
     const char* description;
@@ -106,7 +122,6 @@ struct BlockDefinition
     
     std::vector<AttachmentPoint> attachments;
     
-    // Stats spécifiques
     union {
         struct { float maxSpeed, torque, grip; } wheel;
         struct { float thrust, fuelConsumption; } thruster;
@@ -114,10 +129,6 @@ struct BlockDefinition
         struct { float range, accuracy; } weapon;
     } stats;
 };
-
-// ============================================================================
-// BLOCK INSTANCE - Runtime data for placed blocks
-// ============================================================================
 
 struct BlockInstance {
     uint32_t id;
@@ -140,9 +151,152 @@ struct BlockInstance {
     simd::float4x4 getRotationMatrix() const;
 };
 
-// ============================================================================
-// BLOCK MESH GENERATOR
-// ============================================================================
+class BlockTextureManager
+{
+public:
+    BlockTextureManager(MTL::Device* device) : m_device(device) {}
+    ~BlockTextureManager() { cleanup(); }
+    
+    // return i for array
+    uint32_t loadTexture(const std::string& path);
+    
+    void createDefaultTexture()
+    {
+        if (!m_stagingTextures.empty()) return;
+        
+        auto desc = MTL::TextureDescriptor::texture2DDescriptor(
+            MTL::PixelFormatRGBA16Unorm, 4, 4, false);
+        desc->setUsage(MTL::TextureUsageShaderRead);
+        desc->setStorageMode(MTL::StorageModeShared);
+        
+        MTL::Texture* defaultTex = m_device->newTexture(desc);
+        
+        // Fill with white
+        uint32_t white[16];
+        for (int i = 0; i < 16; i++) white[i] = 0xFFFFFFFF;
+        
+        defaultTex->replaceRegion(MTL::Region(0, 0, 0, 4, 4, 1), 0, white, 4 * 4);
+        
+        m_stagingTextures.push_back(defaultTex);
+        m_textureIndices["default"] = 0;
+        m_textureSize = 4;
+        
+        printf("Created default white texture\n");
+    }
+    
+    // Crée le texture array final (appeler après tous les loadTexture)
+    void buildTextureArray(MTL::CommandQueue* queue);
+    
+    // Accessors
+    MTL::Texture* getTextureArray() const { return m_textureArray; }
+    MTL::SamplerState* getSampler() const { return m_sampler; }
+    uint32_t getTextureIndex(const std::string& name) const;
+    
+    void cleanup();
+    
+private:
+    MTL::Device* m_device;
+    MTL::Texture* m_textureArray = nullptr;
+    MTL::SamplerState* m_sampler = nullptr;
+    
+    std::vector<MTL::Texture*> m_stagingTextures;
+    std::unordered_map<std::string, uint32_t> m_textureIndices;
+    
+    uint32_t m_textureSize = 2048;
+};
+
+inline uint32_t BlockTextureManager::loadTexture(const std::string& path)
+{
+    // Extract filename for indexing
+    size_t lastSlash = path.find_last_of("/\\");
+    std::string name = (lastSlash != std::string::npos) ? path.substr(lastSlash + 1) : path;
+    
+    if (m_textureIndices.count(name)) {
+        return m_textureIndices[name];
+    }
+    
+    MTL::Texture* tex = loadSingleTexture(path, m_device);
+    if (!tex) return 0;
+    
+    uint32_t index = (uint32_t)m_stagingTextures.size();
+    m_stagingTextures.push_back(tex);
+    m_textureIndices[name] = index;
+    
+    if (index == 0)
+            m_textureSize = (uint32_t)tex->width();
+    
+    return index;
+}
+
+inline void BlockTextureManager::buildTextureArray(MTL::CommandQueue* queue)
+{
+    createDefaultTexture();
+    if (m_stagingTextures.empty()) return;
+    
+    uint32_t size = (uint32_t)m_stagingTextures[0]->width();
+    
+    auto desc = MTL::TextureDescriptor::texture2DDescriptor(MTL::PixelFormatRGBA16Unorm, m_textureSize, m_textureSize, true);
+    desc->setTextureType(MTL::TextureType2DArray);
+    desc->setArrayLength(m_stagingTextures.size());
+    desc->setUsage(MTL::TextureUsageShaderRead);
+    desc->setStorageMode(MTL::StorageModePrivate);
+    desc->setMipmapLevelCount(1 + (uint32_t)log2(size));
+    
+    m_textureArray = m_device->newTexture(desc);
+    
+    // Copy textures to array
+    auto cmdBuf = queue->commandBuffer();
+    auto blit = cmdBuf->blitCommandEncoder();
+    
+    for (size_t i = 0; i < m_stagingTextures.size(); i++)
+    {
+        auto src = m_stagingTextures[i];
+        uint32_t srcW = (uint32_t)src->width();
+        uint32_t srcH = (uint32_t)src->height();
+        
+        // Copy (si tailles différentes, ça va crop/pad - idéalement resize avant)
+        uint32_t copyW = std::min(srcW, size);
+        uint32_t copyH = std::min(srcH, size);
+        
+        blit->copyFromTexture(src, 0, 0, MTL::Origin(0, 0, 0),
+                              MTL::Size(copyW, copyH, 1), // textureW
+                              m_textureArray, i, 0, MTL::Origin(0, 0, 0));
+    }
+    
+    blit->generateMipmaps(m_textureArray);
+    blit->endEncoding();
+    cmdBuf->commit();
+    cmdBuf->waitUntilCompleted();
+    
+    // Create sampler
+    auto samplerDesc = MTL::SamplerDescriptor::alloc()->init();
+    samplerDesc->setMinFilter(MTL::SamplerMinMagFilterLinear);
+    samplerDesc->setMagFilter(MTL::SamplerMinMagFilterLinear);
+    samplerDesc->setMipFilter(MTL::SamplerMipFilterLinear);
+    samplerDesc->setSAddressMode(MTL::SamplerAddressModeRepeat);
+    samplerDesc->setTAddressMode(MTL::SamplerAddressModeRepeat);
+    samplerDesc->setMaxAnisotropy(8);
+    m_sampler = m_device->newSamplerState(samplerDesc);
+    samplerDesc->release();
+    
+    // Release staging textures
+    for (auto tex : m_stagingTextures) {
+        tex->release();
+    }
+    m_stagingTextures.clear();
+}
+
+inline uint32_t BlockTextureManager::getTextureIndex(const std::string& name) const {
+    auto it = m_textureIndices.find(name);
+    return (it != m_textureIndices.end()) ? it->second : 0;
+}
+
+inline void BlockTextureManager::cleanup() {
+    if (m_textureArray) { m_textureArray->release(); m_textureArray = nullptr; }
+    if (m_sampler) { m_sampler->release(); m_sampler = nullptr; }
+    for (auto tex : m_stagingTextures) tex->release();
+    m_stagingTextures.clear();
+}
 
 class BlockMeshGenerator {
 public:
@@ -176,11 +330,8 @@ private:
                            simd::float3 normal, simd::float4 color);
 };
 
-// ============================================================================
-// BLOCK REGISTRY - Singleton catalog of all block definitions
-// ============================================================================
-
-class BlockRegistry {
+class BlockRegistry
+{
 public:
     static BlockRegistry& instance() {
         static BlockRegistry reg;
@@ -205,32 +356,22 @@ private:
     std::unordered_map<BlockType, BlockDefinition> m_definitions;
 };
 
-// ============================================================================
-// GPU INSTANCE DATA
-// ============================================================================
-
-struct BlockGPUInstance {
-    simd::float4x4 modelMatrix;
-    simd::float4 color;
-    simd::float4 params;  // x=damage, y=powered, z=animPhase, w=blockTypeId
-};
-
-// ============================================================================
-// BLOCK RENDERER - Batched instanced rendering
-// ============================================================================
-
-class BlockRenderer {
+class BlockRenderer
+{
 public:
     BlockRenderer(MTL::Device* device, MTL::PixelFormat colorFormat,
-                  MTL::PixelFormat depthFormat, MTL::Library* library);
+                  MTL::PixelFormat depthFormat, MTL::Library* library, const std::string& resourcesPath, MTL::CommandQueue* commandQueue);
     ~BlockRenderer();
     
     void buildMeshes();
+    void loadTextures(const std::string& resourcePath, MTL::CommandQueue* queue);
     void updateInstances(const std::vector<BlockInstance>& blocks, float time);
-    void render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos);
+    void render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos, float time);
     
     void setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot);
     void clearGhost() { m_hasGhost = false; }
+    
+    BlockTextureManager& textures() { return m_textures; }
     
 private:
     void createPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat);
@@ -240,18 +381,42 @@ private:
     MTL::Library* m_library;
     MTL::RenderPipelineState* m_pipeline = nullptr;
     MTL::DepthStencilState* m_depthState = nullptr;
-    
-    // Par type de bloc: offset et count dans le buffer unifié
-    struct MeshRange {
-        uint32_t vertexOffset;
-        uint32_t indexOffset;
-        uint32_t indexCount;
-    };
-    std::unordered_map<BlockType, MeshRange> m_meshRanges;
+    MTL::RenderPipelineState* m_pipelineOpaque = nullptr;
+    MTL::RenderPipelineState* m_pipelineTransparent = nullptr;
+    MTL::DepthStencilState* m_depthStateOpaque = nullptr;
+    MTL::DepthStencilState* m_depthStateTransparent = nullptr;
     
     MTL::Buffer* m_vertexBuffer = nullptr;
     MTL::Buffer* m_indexBuffer = nullptr;
-    MTL::Buffer* m_instanceBuffer = nullptr;
+    uint32_t m_totalVertices = 0;
+    uint32_t m_totalIndices = 0;
+    
+    // Instance data - triple buffering
+    static constexpr uint32_t kMaxInstances = 8192;
+    static constexpr uint32_t kBufferCount = 3;
+    MTL::Buffer* m_instanceBuffers[kBufferCount] = {};
+    MTL::Buffer* m_uniformBuffers[kBufferCount] = {};
+    uint32_t m_bufferIndex = 0;
+    
+    // Par type de bloc: offset et count dans le buffer unifié
+    struct MeshRange
+    {
+        uint32_t vertexOffset;
+        uint32_t indexOffset;
+        uint32_t indexCount;
+        uint32_t textureIndex;
+        bool transparent;
+    };
+    std::unordered_map<BlockType, MeshRange> m_meshRanges;
+    
+    struct DrawBatch
+    {
+        BlockType type;
+        uint32_t instanceOffset;
+        uint32_t instanceCount;
+    };
+    std::vector<DrawBatch> m_opaqueBatches;
+    std::vector<DrawBatch> m_transparentBatches;
     
     std::vector<BlockGPUInstance> m_gpuInstances;
     uint32_t m_instanceCount = 0;
@@ -261,17 +426,17 @@ private:
     BlockType m_ghostType;
     simd::int3 m_ghostPos;
     uint8_t m_ghostRot;
+    
+    BlockTextureManager m_textures;
+//    std::unordered_map<std::string, NS::SharedPtr<MTL::Texture>> m_textureAssets;
+//    MTL::Texture*               m_diffuseTexture = nullptr;
 };
 
-// ============================================================================
-// BLOCK SYSTEM - Main manager
-// ============================================================================
-
-class BlockSystem {
+class BlockSystem
+{
 public:
     BlockSystem(MTL::Device* device, MTL::PixelFormat colorFormat,
-                MTL::PixelFormat depthFormat, MTL::Library* library);
-    
+                MTL::PixelFormat depthFormat, MTL::Library* library, const std::string& resourcesPath, MTL::CommandQueue* commandQueue);
     // Block management
     uint32_t addBlock(BlockType type, simd::int3 pos, uint8_t rotation = 0);
     bool removeBlock(uint32_t id);
@@ -288,7 +453,7 @@ public:
     
     // Update & Render
     void update(float dt);
-    void render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos);
+    void render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos, float time);
     
     // Ghost preview
     void setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot);

@@ -6,6 +6,38 @@
 
 #include <stdio.h>
 
+MTL::Texture* loadSingleTexture(const std::string& path, MTL::Device* device)
+{
+        @autoreleasepool {
+            NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
+            
+            // Check if file exists
+            if (![[NSFileManager defaultManager] fileExistsAtPath:url.path]) {
+                NSLog(@"Texture file not found: %s", path.c_str());
+                return nullptr;
+            }
+            
+            MTKTextureLoader* loader = [[MTKTextureLoader alloc] initWithDevice:(__bridge id<MTLDevice>)device];
+            
+            NSDictionary* options = @{
+                MTKTextureLoaderOptionSRGB: @(YES),
+                MTKTextureLoaderOptionTextureStorageMode: @(MTLStorageModeShared),
+                MTKTextureLoaderOptionTextureUsage: @(MTLTextureUsageShaderRead),
+                MTKTextureLoaderOptionGenerateMipmaps: @(NO)  // On génère après dans l'array
+            };
+            
+            NSError* error = nil;
+            id<MTLTexture> texture = [loader newTextureWithContentsOfURL:url options:options error:&error];
+            
+            if (!texture) {
+                NSLog(@"Error loading texture '%s': %@", path.c_str(), error.localizedDescription);
+                return nullptr;
+            }
+            assert(texture);
+            return (__bridge MTL::Texture*)texture;
+        }
+    }
+
 MTL::Texture* newTextureFromFile(const std::string& texturePath, MTL::Device* pDevice)
 {
     NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:texturePath.c_str()]];

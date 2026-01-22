@@ -12,9 +12,8 @@
 
 namespace cube {
 
-
-void BlockRegistry::registerDefaults() {
-    // === STRUCTURE BLOCKS ===
+void BlockRegistry::registerDefaults()
+{
     registerBlock({
         .type = BlockType::CubeBasic,
         .category = BlockCategory::Structure,
@@ -156,6 +155,7 @@ void BlockRegistry::registerDefaults() {
     
 //    registerBlock({.type = BlockType::Blender,})
     registerBlock({ .type = BlockType::Blender,
+                    .textureType = 0,
                     .category = BlockCategory::Cosmetic,
                     .name = "Icosphere",
                     .description = "Blender import",
@@ -164,73 +164,185 @@ void BlockRegistry::registerDefaults() {
                     .baseColor = {0.6f, 0.62f, 0.65f, 1.0f}, });
 }
 
-BlockRenderer::BlockRenderer(MTL::Device* device, MTL::PixelFormat colorFormat,
-                             MTL::PixelFormat depthFormat, MTL::Library* library)
-    : m_device(device), m_library(library) {
+BlockRenderer::BlockRenderer(MTL::Device* device, MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library, const std::string& resourcesPath, MTL::CommandQueue* commandQueue)
+: m_device(device), m_library(library), m_textures(device)
+{
     createPipeline(colorFormat, depthFormat);
+    for (int i = 0; i < kBufferCount; i++)
+    {
+        m_instanceBuffers[i] = device->newBuffer(kMaxInstances * sizeof(BlockGPUInstance), MTL::ResourceStorageModeShared);
+        m_uniformBuffers[i] = device->newBuffer(sizeof(BlockUniforms), MTL::ResourceStorageModeShared);
+    }
+    
+    m_gpuInstances.reserve(kMaxInstances);
+    
+    loadTextures(resourcesPath, commandQueue);
     buildMeshes();
 }
 
-BlockRenderer::~BlockRenderer() {
+BlockRenderer::~BlockRenderer()
+{
     if (m_pipeline) m_pipeline->release();
     if (m_depthState) m_depthState->release();
     if (m_vertexBuffer) m_vertexBuffer->release();
     if (m_indexBuffer) m_indexBuffer->release();
-    if (m_instanceBuffer) m_instanceBuffer->release();
+    if (m_pipelineOpaque) m_pipelineOpaque->release();
+    if (m_pipelineTransparent) m_pipelineTransparent->release();
+    if (m_depthStateOpaque) m_depthStateOpaque->release();
+    if (m_depthStateTransparent) m_depthStateTransparent->release();
+    for (int i = 0; i < kBufferCount; i++)
+    {
+        if (m_instanceBuffers[i]) m_instanceBuffers[i]->release();
+        if (m_uniformBuffers[i]) m_uniformBuffers[i]->release();
+    }
 }
 
-void BlockRenderer::createPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat) {
+void BlockRenderer::createPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat)
+{
     NS::Error* err = nullptr;
     
-    auto vertFn = m_library->newFunction(MTLSTR("blockVertex"));
-    auto fragFn = m_library->newFunction(MTLSTR("blockFragment"));
-    
-    auto desc = MTL::RenderPipelineDescriptor::alloc()->init();
-    desc->setVertexFunction(vertFn);
-    desc->setFragmentFunction(fragFn);
-    desc->colorAttachments()->object(0)->setPixelFormat(colorFormat);
-    desc->setDepthAttachmentPixelFormat(depthFormat);
+//    auto vertFn = m_library->newFunction(MTLSTR("blockVertex"));
+//    auto fragFn = m_library->newFunction(MTLSTR("blockFragment"));
+//    
+//    auto desc = MTL::RenderPipelineDescriptor::alloc()->init();
+//    desc->setVertexFunction(vertFn);
+//    desc->setFragmentFunction(fragFn);
+//    desc->colorAttachments()->object(0)->setPixelFormat(colorFormat);
+//    desc->setDepthAttachmentPixelFormat(depthFormat);
+//    
+//    // Vertex descriptor
+//    auto vertDesc = MTL::VertexDescriptor::alloc()->init();
+//    // Position
+//    vertDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+//    vertDesc->attributes()->object(0)->setOffset(0);
+//    vertDesc->attributes()->object(0)->setBufferIndex(0);
+//    // Normal
+//    vertDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
+//    vertDesc->attributes()->object(1)->setOffset(sizeof(simd::float3));
+//    vertDesc->attributes()->object(1)->setBufferIndex(0);
+//    // UV
+//    vertDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
+//    vertDesc->attributes()->object(2)->setOffset(sizeof(simd::float3) * 2);
+//    vertDesc->attributes()->object(2)->setBufferIndex(0);
+//    // Color
+//    vertDesc->attributes()->object(3)->setFormat(MTL::VertexFormatFloat4);
+//    vertDesc->attributes()->object(3)->setOffset(sizeof(simd::float3) * 2 + sizeof(simd::float2));
+//    vertDesc->attributes()->object(3)->setBufferIndex(0);
+//    
+//    vertDesc->layouts()->object(0)->setStride(sizeof(BlockVertex));
+//    vertDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
+//    
+//    desc->setVertexDescriptor(vertDesc);
+//    
+//    m_pipeline = m_device->newRenderPipelineState(desc, &err);
+//    
+//    // Depth state
+//    auto depthDesc = MTL::DepthStencilDescriptor::alloc()->init();
+//    depthDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+//    depthDesc->setDepthWriteEnabled(true);
+//    m_depthState = m_device->newDepthStencilState(depthDesc);
+//    
+//    vertFn->release();
+//    fragFn->release();
+//    desc->release();
+//    vertDesc->release();
+//    depthDesc->release();
+    auto vertFn = m_library->newFunction(MTLSTR("blockVertexOptimized"));
+    auto fragOpaque = m_library->newFunction(MTLSTR("blockFragmentPBR"));
+    auto fragTransparent = m_library->newFunction(MTLSTR("blockFragmentTransparent"));
     
     // Vertex descriptor
     auto vertDesc = MTL::VertexDescriptor::alloc()->init();
+    
     // Position
     vertDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
-    vertDesc->attributes()->object(0)->setOffset(0);
+    vertDesc->attributes()->object(0)->setOffset(offsetof(BlockVertex, position));
     vertDesc->attributes()->object(0)->setBufferIndex(0);
     // Normal
     vertDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
-    vertDesc->attributes()->object(1)->setOffset(sizeof(simd::float3));
+    vertDesc->attributes()->object(1)->setOffset(offsetof(BlockVertex, normal));
     vertDesc->attributes()->object(1)->setBufferIndex(0);
     // UV
     vertDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
-    vertDesc->attributes()->object(2)->setOffset(sizeof(simd::float3) * 2);
+    vertDesc->attributes()->object(2)->setOffset(offsetof(BlockVertex, uv));
     vertDesc->attributes()->object(2)->setBufferIndex(0);
     // Color
     vertDesc->attributes()->object(3)->setFormat(MTL::VertexFormatFloat4);
-    vertDesc->attributes()->object(3)->setOffset(sizeof(simd::float3) * 2 + sizeof(simd::float2));
+    vertDesc->attributes()->object(3)->setOffset(offsetof(BlockVertex, color));
     vertDesc->attributes()->object(3)->setBufferIndex(0);
     
     vertDesc->layouts()->object(0)->setStride(sizeof(BlockVertex));
     vertDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
     
-    desc->setVertexDescriptor(vertDesc);
+    // Opaque pipeline
+    auto descOpaque = MTL::RenderPipelineDescriptor::alloc()->init();
+    descOpaque->setVertexFunction(vertFn);
+    descOpaque->setFragmentFunction(fragOpaque);
+    descOpaque->setVertexDescriptor(vertDesc);
+    descOpaque->setDepthAttachmentPixelFormat(depthFormat);
+    descOpaque->colorAttachments()->object(0)->setPixelFormat(colorFormat);
     
-    m_pipeline = m_device->newRenderPipelineState(desc, &err);
+    m_pipelineOpaque = m_device->newRenderPipelineState(descOpaque, &err);
     
-    // Depth state
+    // Transparent pipeline
+    auto descTrans = MTL::RenderPipelineDescriptor::alloc()->init();
+    descTrans->setVertexFunction(vertFn);
+    descTrans->setFragmentFunction(fragTransparent);
+    descTrans->setVertexDescriptor(vertDesc);
+    descTrans->setDepthAttachmentPixelFormat(depthFormat);
+    
+    auto colorAtt = descTrans->colorAttachments()->object(0);
+    colorAtt->setPixelFormat(colorFormat);
+    colorAtt->setBlendingEnabled(true);
+    colorAtt->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    colorAtt->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    colorAtt->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+    colorAtt->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    
+    m_pipelineTransparent = m_device->newRenderPipelineState(descTrans, &err);
+    
+    // Depth states
     auto depthDesc = MTL::DepthStencilDescriptor::alloc()->init();
     depthDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
     depthDesc->setDepthWriteEnabled(true);
-    m_depthState = m_device->newDepthStencilState(depthDesc);
+    m_depthStateOpaque = m_device->newDepthStencilState(depthDesc);
+    
+    depthDesc->setDepthWriteEnabled(false);
+    m_depthStateTransparent = m_device->newDepthStencilState(depthDesc);
     
     vertFn->release();
-    fragFn->release();
-    desc->release();
+    fragOpaque->release();
+    fragTransparent->release();
+    descOpaque->release();
+    descTrans->release();
     vertDesc->release();
     depthDesc->release();
 }
 
-void BlockRenderer::buildMeshes() {
+void BlockRenderer::loadTextures(const std::string& resourcePath, MTL::CommandQueue* queue)
+{
+//    std::vector<std::string> texturePaths = {
+//        resourcePath + "/textures/metal_diffuse.png",
+//        resourcePath + "/textures/block_diffuse.png",
+//        resourcePath + "/textures/panel_diffuse.png",
+//    };
+//    
+//    for (const auto& path : texturePaths) {
+//        m_textures.loadTexture(path);  // Ignore les échecs silencieusement
+//    }
+    // Load block textures
+    m_textures.loadTexture(resourcePath + "/diffusecube.png");
+    
+//    m_textures.loadTexture(resourcePath + "/textures/rubber_diffuse.png");
+//    m_textures.loadTexture(resourcePath + "/textures/panel_diffuse.png");
+//    m_textures.loadTexture(resourcePath + "/textures/glass_diffuse.png");
+//    m_textures.loadTexture(resourcePath + "/textures/glow_diffuse.png");
+    
+    m_textures.buildTextureArray(queue);
+}
+
+void BlockRenderer::buildMeshes()
+{
     std::vector<BlockVertex> allVerts;
     std::vector<uint16_t> allIndices;
     
@@ -240,6 +352,8 @@ void BlockRenderer::buildMeshes() {
         MeshRange range;
         range.vertexOffset = (uint32_t)allVerts.size();
         range.indexOffset = (uint32_t)allIndices.size();
+        range.textureIndex = def.textureType;
+        range.transparent = def.isTransparent;
         
         std::vector<BlockVertex> verts;
         std::vector<uint16_t> indices;
@@ -300,25 +414,120 @@ void BlockRenderer::buildMeshes() {
         allIndices.insert(allIndices.end(), indices.begin(), indices.end());
     }
     
-    m_vertexBuffer = m_device->newBuffer(allVerts.data(), allVerts.size() * sizeof(BlockVertex),
-                                         MTL::ResourceStorageModeShared);
-    m_indexBuffer = m_device->newBuffer(allIndices.data(), allIndices.size() * sizeof(uint16_t),
-                                        MTL::ResourceStorageModeShared);
+    m_vertexBuffer = m_device->newBuffer(allVerts.data(), allVerts.size() * sizeof(BlockVertex), MTL::ResourceStorageModeShared);
+    m_indexBuffer = m_device->newBuffer(allIndices.data(), allIndices.size() * sizeof(uint16_t), MTL::ResourceStorageModeShared);
     
     // Pre-allocate instance buffer (max 4096 blocks)
-    m_instanceBuffer = m_device->newBuffer(4096 * sizeof(BlockGPUInstance), MTL::ResourceStorageModeShared);
+    m_instanceBuffers[0] = m_device->newBuffer(4096 * sizeof(BlockGPUInstance), MTL::ResourceStorageModeShared);
 }
 
 void BlockRenderer::updateInstances(const std::vector<BlockInstance>& blocks, float time) {
     m_gpuInstances.clear();
-    m_gpuInstances.reserve(blocks.size() + 1);
+//    m_gpuInstances.reserve(blocks.size() + 1);
+    m_opaqueBatches.clear();
+    m_transparentBatches.clear();
     
-    for (const auto& block : blocks) {
-        BlockGPUInstance gpu;
-        gpu.modelMatrix = block.getModelMatrix();
-        gpu.color = block.tintColor;
-        gpu.params = {block.damage, block.powered ? 1.0f : 0.0f, time, (float)block.type};
-        m_gpuInstances.push_back(gpu);
+//    for (const auto& block : blocks) {
+//        BlockGPUInstance gpu;
+//        gpu.viewProj = block.getModelMatrix();
+//        gpu.color = block.tintColor;
+//        gpu.params = {block.damage, block.powered ? 1.0f : 0.0f, time, (float)block.type};
+//        m_gpuInstances.push_back(gpu);
+//    }
+//    
+//    // Ghost block
+//    if (m_hasGhost) {
+//        BlockInstance ghost;
+//        ghost.gridPos = m_ghostPos;
+//        ghost.rotation = m_ghostRot;
+//        ghost.type = m_ghostType;
+//        ghost.tintColor = {1, 1, 1, 0.4f};  // Semi-transparent
+//        
+//        BlockGPUInstance gpu;
+//        gpu.viewProj = ghost.getModelMatrix();
+//        gpu.color = ghost.tintColor;
+//        gpu.params = {0, 0, time, (float)m_ghostType};
+//        m_gpuInstances.push_back(gpu);
+//    }
+//    
+//    m_instanceCount = (uint32_t)m_gpuInstances.size();
+//    
+//    if (m_instanceCount > 0) {
+//        memcpy(m_instanceBuffers[0]->contents(), m_gpuInstances.data(),
+//               m_instanceCount * sizeof(BlockGPUInstance));
+//    }
+//}
+//
+//void BlockRenderer::render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos) {
+//    if (m_instanceCount == 0) return;
+//    
+//    enc->setRenderPipelineState(m_pipeline);
+//    enc->setDepthStencilState(m_depthState);
+//    enc->setCullMode(MTL::CullModeBack);
+//    
+//    enc->setVertexBuffer(m_vertexBuffer, 0, 0);
+//    enc->setVertexBuffer(m_instanceBuffers[0], 0, 1);
+//    enc->setVertexBytes(&viewProj, sizeof(viewProj), 2);
+//    enc->setVertexBytes(&camPos, sizeof(camPos), 3);
+//    
+//    enc->setFragmentBytes(&camPos, sizeof(camPos), 0);
+//    
+//    // Group instances by block type for batched drawing
+//    std::unordered_map<BlockType, std::vector<uint32_t>> typeInstances;
+//    for (uint32_t i = 0; i < m_instanceCount; i++) {
+//        BlockType t = (BlockType)(int)m_gpuInstances[i].params.w;
+//        typeInstances[t].push_back(i);
+//    }
+//    
+//    for (auto& [type, instances] : typeInstances) {
+//        auto it = m_meshRanges.find(type);
+//        if (it == m_meshRanges.end()) continue;
+//        
+//        const auto& range = it->second;
+//        
+//        for (uint32_t instIdx : instances) {
+//            enc->setVertexBufferOffset(instIdx * sizeof(BlockGPUInstance), 1);
+//            enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
+//                                       range.indexCount, MTL::IndexTypeUInt16,
+//                                       m_indexBuffer, range.indexOffset * sizeof(uint16_t),
+//                                       1);
+//        }
+//    }
+//}
+    std::unordered_map<BlockType, std::vector<uint32_t>> typeGroups;
+    
+    for (uint32_t i = 0; i < blocks.size(); i++) {
+        typeGroups[blocks[i].type].push_back(i);
+    }
+    
+    // Build batches
+    for (auto& [type, indices] : typeGroups) {
+        auto rangeIt = m_meshRanges.find(type);
+        if (rangeIt == m_meshRanges.end()) continue;
+        
+        const auto& range = rangeIt->second;
+        
+        DrawBatch batch;
+        batch.type = type;
+        batch.instanceOffset = (uint32_t)m_gpuInstances.size();
+        batch.instanceCount = (uint32_t)indices.size();
+        
+        for (uint32_t idx : indices) {
+            const auto& block = blocks[idx];
+            
+            BlockGPUInstance gpu;
+            gpu.modelMatrix = block.getModelMatrix();
+            gpu.color = block.tintColor;
+            gpu.params = {block.damage, block.powered ? 1.0f : 0.0f,
+                         time, (float)range.textureIndex};
+            m_gpuInstances.push_back(gpu);
+        }
+        
+        if (range.transparent) {
+            m_transparentBatches.push_back(batch);
+        } else {
+            m_opaqueBatches.push_back(batch);
+        }
     }
     
     // Ghost block
@@ -327,61 +536,97 @@ void BlockRenderer::updateInstances(const std::vector<BlockInstance>& blocks, fl
         ghost.gridPos = m_ghostPos;
         ghost.rotation = m_ghostRot;
         ghost.type = m_ghostType;
-        ghost.tintColor = {1, 1, 1, 0.4f};  // Semi-transparent
+        ghost.tintColor = {1, 1, 1, 0.5f};
         
-        BlockGPUInstance gpu;
-        gpu.modelMatrix = ghost.getModelMatrix();
-        gpu.color = ghost.tintColor;
-        gpu.params = {0, 0, time, (float)m_ghostType};
-        m_gpuInstances.push_back(gpu);
+        auto rangeIt = m_meshRanges.find(m_ghostType);
+        if (rangeIt != m_meshRanges.end()) {
+            DrawBatch batch;
+            batch.type = m_ghostType;
+            batch.instanceOffset = (uint32_t)m_gpuInstances.size();
+            batch.instanceCount = 1;
+            
+            BlockGPUInstance gpu;
+            gpu.modelMatrix = ghost.getModelMatrix();
+            gpu.color = ghost.tintColor;
+            gpu.params = {0, 0, time, (float)rangeIt->second.textureIndex};
+            m_gpuInstances.push_back(gpu);
+            
+            m_transparentBatches.push_back(batch);
+        }
     }
     
     m_instanceCount = (uint32_t)m_gpuInstances.size();
-    
-    if (m_instanceCount > 0) {
-        memcpy(m_instanceBuffer->contents(), m_gpuInstances.data(),
-               m_instanceCount * sizeof(BlockGPUInstance));
-    }
 }
 
-void BlockRenderer::render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos) {
+void BlockRenderer::render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos, float time)
+{
     if (m_instanceCount == 0) return;
+    m_bufferIndex = (m_bufferIndex + 1) % kBufferCount;
     
-    enc->setRenderPipelineState(m_pipeline);
-    enc->setDepthStencilState(m_depthState);
-    enc->setCullMode(MTL::CullModeBack);
+    BlockUniforms uniforms;
+    uniforms.viewProj = viewProj;
+    uniforms.camPos = camPos;
+    uniforms.time = time;
+    uniforms.lightDir = simd::normalize(simd::float3{0.5f, 1.0f, 0.3f});
+    memcpy(m_uniformBuffers[m_bufferIndex]->contents(), &uniforms, sizeof(uniforms));
+    memcpy(m_instanceBuffers[m_bufferIndex]->contents(), m_gpuInstances.data(),  m_instanceCount * sizeof(BlockGPUInstance));
     
     enc->setVertexBuffer(m_vertexBuffer, 0, 0);
-    enc->setVertexBuffer(m_instanceBuffer, 0, 1);
-    enc->setVertexBytes(&viewProj, sizeof(viewProj), 2);
-    enc->setVertexBytes(&camPos, sizeof(camPos), 3);
+    enc->setVertexBuffer(m_instanceBuffers[m_bufferIndex], 0, 1);
+    enc->setVertexBuffer(m_uniformBuffers[m_bufferIndex], 0, 2);
+    enc->setFragmentBuffer(m_uniformBuffers[m_bufferIndex], 0, 0);
     
-    enc->setFragmentBytes(&camPos, sizeof(camPos), 0);
-    
-    // Group instances by block type for batched drawing
-    std::unordered_map<BlockType, std::vector<uint32_t>> typeInstances;
-    for (uint32_t i = 0; i < m_instanceCount; i++) {
-        BlockType t = (BlockType)(int)m_gpuInstances[i].params.w;
-        typeInstances[t].push_back(i);
+    if (m_textures.getTextureArray())
+    {
+        enc->setFragmentTexture(m_textures.getTextureArray(), 0);
+        enc->setFragmentSamplerState(m_textures.getSampler(), 0);
     }
     
-    for (auto& [type, instances] : typeInstances) {
-        auto it = m_meshRanges.find(type);
-        if (it == m_meshRanges.end()) continue;
+    // === OPAQUE PASS ===
+    enc->setRenderPipelineState(m_pipelineOpaque);
+    enc->setDepthStencilState(m_depthStateOpaque);
+    enc->setCullMode(MTL::CullModeBack);
+    
+    for (const auto& batch : m_opaqueBatches) {
+        const auto& range = m_meshRanges[batch.type];
         
-        const auto& range = it->second;
+        enc->drawIndexedPrimitives(
+                                   MTL::PrimitiveTypeTriangle,
+                                   range.indexCount,
+                                   MTL::IndexTypeUInt16,
+                                   m_indexBuffer,
+                                   range.indexOffset * sizeof(uint16_t),
+                                   batch.instanceCount,
+                                   0,  // baseVertex
+                                   batch.instanceOffset
+                                   );
+    }
+    
+    // === TRANSPARENT PASS ===
+    if (!m_transparentBatches.empty()) {
+        enc->setRenderPipelineState(m_pipelineTransparent);
+        enc->setDepthStencilState(m_depthStateTransparent);
+        enc->setCullMode(MTL::CullModeNone);
         
-        for (uint32_t instIdx : instances) {
-            enc->setVertexBufferOffset(instIdx * sizeof(BlockGPUInstance), 1);
-            enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-                                       range.indexCount, MTL::IndexTypeUInt16,
-                                       m_indexBuffer, range.indexOffset * sizeof(uint16_t),
-                                       1);
+        for (const auto& batch : m_transparentBatches) {
+            const auto& range = m_meshRanges[batch.type];
+            
+            enc->drawIndexedPrimitives(
+                                       MTL::PrimitiveTypeTriangle,
+                                       range.indexCount,
+                                       MTL::IndexTypeUInt16,
+                                       m_indexBuffer,
+                                       range.indexOffset * sizeof(uint16_t),
+                                       batch.instanceCount,
+                                       0,
+                                       batch.instanceOffset
+                                       );
         }
     }
 }
 
-void BlockRenderer::setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot) {
+void BlockRenderer::setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot)
+{
     m_hasGhost = true;
     m_ghostType = type;
     m_ghostPos = pos;
@@ -393,8 +638,8 @@ void BlockRenderer::setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot) {
 // ============================================================================
 
 BlockSystem::BlockSystem(MTL::Device* device, MTL::PixelFormat colorFormat,
-                         MTL::PixelFormat depthFormat, MTL::Library* library) {
-    m_renderer = std::make_unique<BlockRenderer>(device, colorFormat, depthFormat, library);
+                         MTL::PixelFormat depthFormat, MTL::Library* library, const std::string& resourcesPath, MTL::CommandQueue* commandQueue) {
+    m_renderer = std::make_unique<BlockRenderer>(device, colorFormat, depthFormat, library, resourcesPath, commandQueue);
 }
 
 uint32_t BlockSystem::addBlock(BlockType type, simd::int3 pos, uint8_t rotation) {
@@ -446,8 +691,7 @@ BlockInstance* BlockSystem::getBlockAt(simd::int3 pos) {
 
 bool BlockSystem::canPlaceAt(BlockType type, simd::int3 pos, uint8_t rotation) const
 {
-//    return m_gridMap.find(hashPos(pos)) == m_gridMap.end(); //;!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // Check if position is occupied
+//    return m_gridMap.find(hashPos(pos)) == m_gridMap.end();
     if (m_gridMap.find(hashPos(pos)) != m_gridMap.end()) return false;
     
     // First block can be placed anywhere
@@ -457,28 +701,33 @@ bool BlockSystem::canPlaceAt(BlockType type, simd::int3 pos, uint8_t rotation) c
     return hasNeighbor(pos);
 }
 
-bool BlockSystem::hasNeighbor(simd::int3 pos) const {
+bool BlockSystem::hasNeighbor(simd::int3 pos) const
+{
     static const simd::int3 offsets[6] = {
         {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1}
     };
-    for (const auto& off : offsets) {
+    for (const auto& off : offsets)
+    {
         simd::int3 neighbor = pos + off;
         if (m_gridMap.find(hashPos(neighbor)) != m_gridMap.end()) return true;
     }
     return false;
 }
 
-void BlockSystem::setBlockColor(uint32_t id, simd::float4 color) {
+void BlockSystem::setBlockColor(uint32_t id, simd::float4 color)
+{
     if (auto* block = getBlock(id)) block->tintColor = color;
 }
 
-void BlockSystem::update(float dt) {
-    m_time += dt;
+void BlockSystem::update(float delta)
+{
+    m_time += delta;
     m_renderer->updateInstances(m_blocks, m_time);
 }
 
-void BlockSystem::render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos) {
-    m_renderer->render(enc, viewProj, camPos);
+void BlockSystem::render(MTL::RenderCommandEncoder* enc, simd::float4x4 viewProj, simd::float3 camPos, float time)
+{
+    m_renderer->render(enc, viewProj, camPos, time);
 }
 
 void BlockSystem::setGhostBlock(BlockType type, simd::int3 pos, uint8_t rot) {
