@@ -49,7 +49,7 @@ fragment float4 voxel_fragment(VoxelFragmentInput in [[stage_in]],
     float lighting = ambient + diffuse * 0.7;
     
     float distance = length(in.worldPosition - camera.position);
-    float fogStart = 150.0;
+    float fogStart = 100.0;
     float fogEnd = 250.0;
     float fogFactor = smoothstep(fogStart, fogEnd, distance);
     float4 fogColor = float4(0.6, 0.8, 1.0, 1.0);

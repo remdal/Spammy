@@ -314,14 +314,12 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
     color = saturate(color);
     // Gamma
     color = pow(color, float3(1.0 / 2.5));
-    float sunDot = dot(rd, uniforms.sunDir);
-    if (sunDot > 0.9995) {
+    float sunDot = dot(rd, uniforms.rmdlSun.sunDirection);
+    if (sunDot > 0.9995)
         color += float3(1.0) * uniforms.sunIntensity * 0.1;
-    }
     float sunHalo = pow(max(0.0, sunDot), 32.0);
     color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
     
-
     return float4(color, 1.0);
 }
 

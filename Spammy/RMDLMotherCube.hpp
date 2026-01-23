@@ -16,7 +16,7 @@
 #include <memory>
 #include <functional>
 
-#include "RMDLFontLoader.h"
+#include "RMDLPNGLoader.h"
 
 namespace cube {
 
@@ -323,14 +323,19 @@ private:
 class BlockRegistry
 {
 public:
-    static BlockRegistry& instance()
+    static std::shared_ptr<BlockRegistry> deinitialization_safe()
+    {
+        static std::shared_ptr<BlockRegistry> s{new BlockRegistry};
+        return s;
+    }
+    static BlockRegistry& instance() // Thread-safe
     {
         static BlockRegistry reg;
         return reg;
     }
     
-//    [[nodiscard]]
-    const BlockDefinition* get(BlockType type) const // noexcept
+    [[nodiscard]]
+    const BlockDefinition* get(BlockType type) const noexcept
     {
         auto it = m_definitions.find(type);
         return it != m_definitions.end() ? &it->second : nullptr;
@@ -345,6 +350,8 @@ public:
     
 private:
     BlockRegistry() { registerDefaults(); }
+    BlockRegistry(const BlockRegistry&) = delete;
+    BlockRegistry& operator =(const BlockRegistry&) = delete;
     void registerDefaults();
     
     std::unordered_map<BlockType, BlockDefinition> m_definitions;
@@ -353,8 +360,7 @@ private:
 class BlockRenderer
 {
 public:
-    BlockRenderer(MTL::Device* device, MTL::PixelFormat colorFormat,
-                  MTL::PixelFormat depthFormat, MTL::Library* library, const std::string& resourcesPath, MTL::CommandQueue* commandQueue);
+    BlockRenderer(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthFormat, MTL::Library* shaderLibrary, const std::string& resourcePath, MTL::CommandQueue* commandQueue);
     ~BlockRenderer();
     
     void buildMeshes();
@@ -368,7 +374,7 @@ public:
     BlockTextureManager& textures() { return m_textures; }
     
 private:
-    void createPipeline(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat);
+    void createPipeline(MTL::PixelFormat pixelFormat, MTL::PixelFormat depthFormat);
     void createMeshBuffers();
     
     MTL::Device* m_device;

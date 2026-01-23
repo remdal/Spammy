@@ -72,7 +72,8 @@ struct VertexOut
 };
 
 vertex VertexOut vehicleGridVertex(VertexIn in [[stage_in]],
-                                   constant GridCommandant::VehicleGridUniforms& u [[buffer(1)]]) {
+                                   constant GridCommandant::VehicleGridUniforms& u [[buffer(1)]])
+{
     float4 worldPos4 = u.modelMatrix * float4(in.position, 1.0);
     float3 worldPos = worldPos4.xyz;
     float3 worldNormal = normalize((u.modelMatrix * float4(in.normal, 0.0)).xyz);
@@ -88,7 +89,8 @@ vertex VertexOut vehicleGridVertex(VertexIn in [[stage_in]],
 }
 
 fragment float4 vehicleGridFragment(VertexOut in [[stage_in]],
-                                    constant GridCommandant::VehicleGridUniforms& u [[buffer(0)]]) {
+                                    constant GridCommandant::VehicleGridUniforms& u [[buffer(0)]])
+{
     // Sélection couleur par plan
     float4 baseColor;
     switch (in.planeIndex) {

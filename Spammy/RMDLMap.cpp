@@ -141,8 +141,10 @@ InfiniteTerrainManager::InfiniteTerrainManager(MTL::Device* device, uint32_t see
     buildRenderPipeline(MTL::PixelFormatRGBA16Float, MTL::PixelFormatDepth32Float);
 }
 
-InfiniteTerrainManager::~InfiniteTerrainManager() {
-    for (auto& [coord, chunk] : m_chunks) {
+InfiniteTerrainManager::~InfiniteTerrainManager()
+{
+    for (auto& [coord, chunk] : m_chunks)
+    {
         if (chunk.vertexBuffer) chunk.vertexBuffer->release();
         if (chunk.indexBuffer) chunk.indexBuffer->release();
     }

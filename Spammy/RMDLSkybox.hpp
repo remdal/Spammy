@@ -57,7 +57,7 @@ public:
 private:
     void createPipeline(MTL::Library* pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat);
     
-    MTL::Device*                    _pDevice;
+    MTL::Device*                    m_device;
     MTL::Buffer*                    _pVertexBuffer;
     MTL::Buffer*                    _pUniformBuffer;
     MTL::DepthStencilState*         _pDepthState;

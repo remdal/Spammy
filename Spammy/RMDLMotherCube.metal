@@ -66,13 +66,12 @@ struct BlockVertexOut
     float blockType;
 };
 
-vertex BlockVertexOut blockVertex(
-    BlockVertex in [[stage_in]],
-    constant BlockInstance* instances [[buffer(1)]],
-    constant float4x4& viewProj [[buffer(2)]],
-    constant float3& camPos [[buffer(3)]],
-    uint instanceId [[instance_id]]
-) {
+vertex BlockVertexOut blockVertex(BlockVertex in [[stage_in]],
+                                  constant BlockInstance* instances [[buffer(1)]],
+                                  constant float4x4& viewProj [[buffer(2)]],
+                                  constant float3& camPos [[buffer(3)]],
+                                  uint instanceId [[instance_id]])
+{
     BlockInstance inst = instances[instanceId];
     
     float4 worldPos = inst.modelMatrix * float4(in.position, 1.0);
@@ -91,15 +90,9 @@ vertex BlockVertexOut blockVertex(
     return out;
 }
 
-// ============================================================================
-// FRAGMENT SHADER
-// ============================================================================
-
-fragment float4 blockFragment(
-    BlockVertexOut in [[stage_in]],
-    constant float3& camPos [[buffer(0)]]
-) {
-    // Direction lumière (soleil)
+fragment float4 blockFragment(BlockVertexOut in [[stage_in]],
+                              constant float3& camPos [[buffer(0)]])
+{
     float3 lightDir = normalize(float3(0.5, 1.0, 0.3));
     float3 lightColor = float3(1.0, 0.98, 0.95);
     float3 ambientColor = float3(0.15, 0.18, 0.25);

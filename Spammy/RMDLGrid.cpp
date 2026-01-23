@@ -753,19 +753,19 @@ void VehicleBuildGrid::buildPipeline(MTL::Device* device, MTL::PixelFormat pixel
     NS::SharedPtr<MTL::Function> fragmentFunction = NS::TransferPtr(shaderLibrary->newFunction(MTLSTR("vehicleGridFragment")));
     
     NS::SharedPtr<MTL::VertexDescriptor> vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-    // Position
+
     vertexDescriptor->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
     vertexDescriptor->attributes()->object(0)->setOffset(0);
     vertexDescriptor->attributes()->object(0)->setBufferIndex(0);
-    // Normal
+    
     vertexDescriptor->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
     vertexDescriptor->attributes()->object(1)->setOffset(sizeof(simd::float3));
     vertexDescriptor->attributes()->object(1)->setBufferIndex(0);
-    // UV
+    
     vertexDescriptor->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
     vertexDescriptor->attributes()->object(2)->setOffset(sizeof(simd::float3) * 2);
     vertexDescriptor->attributes()->object(2)->setBufferIndex(0);
-    // Plane index
+
     vertexDescriptor->attributes()->object(3)->setFormat(MTL::VertexFormatUChar);
     vertexDescriptor->attributes()->object(3)->setOffset(sizeof(simd::float3) * 2 + sizeof(simd::float2));
     vertexDescriptor->attributes()->object(3)->setBufferIndex(0);
@@ -799,8 +799,6 @@ void VehicleBuildGrid::generatePlaneGrid(std::vector<GridVertex3D>& vertices, st
     int32_t ext = m_gridExtent;
     float halfSize = ext * m_cellSize;
     
-    // Générer les lignes de la grille comme des quads fins
-    // Lignes dans la direction tangent
     for (int32_t i = -ext; i <= ext; i++)
     {
         float offset = i * m_cellSize;

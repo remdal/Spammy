@@ -254,7 +254,15 @@ fragment float4 terrainFragmentShader(TerrainVertexOut in [[stage_in]])
     uint biomeIdx = min(in.biomeID, 7u);
     float3 baseColor = biomeColors[biomeIdx];
     
-    float3 finalColor = baseColor * (ambient + diffuse);
+    float4 finalColor = float4(baseColor * (ambient + diffuse), 1.0);
     
-    return float4(finalColor, 1.0);
+    float distance = length(in.worldPos - in.worldPos + 100);
+    float fogStart = 100.0;
+    float fogEnd = 250.0;
+    float fogFactor = smoothstep(fogStart, fogEnd, distance);
+    float4 fogColor = float4(0.6, 0.8, 1.0, 1.0);
+    
+    return mix(finalColor, fogColor, fogFactor);
+    
+    return float4(finalColor);
 }

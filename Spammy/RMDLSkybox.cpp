@@ -9,22 +9,23 @@
 
 namespace sky {
 
-RMDLSkybox::RMDLSkybox(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary) :
-_pDevice(pDevice->retain())
+RMDLSkybox::RMDLSkybox(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary) :
+m_device(device->retain())
 {
-    _pUniformBuffer = _pDevice->newBuffer(sizeof(RMDLSkyboxUniforms), MTL::ResourceStorageModeShared);
-    createPipeline(pShaderLibrary, pPixelFormat, pDepthPixelFormat);
-    float vertices[] = { -1.0f, -1.0f, 0.0f,
-                          1.0f, -1.0f, 0.0f,
-                         -1.0f,  1.0f, 0.0f,
-                          1.0f,  1.0f, 0.0f };
+    _pUniformBuffer = m_device->newBuffer(sizeof(RMDLSkyboxUniforms), MTL::ResourceStorageModeShared);
+    createPipeline(shaderLibrary, pixelFormat, depthPixelFormat);
+    float vertices[] = { -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, -1.0f,  1.0f, 0.0f, 1.0f,  1.0f, 0.0f };
     _pVertexCount = 4;
-    _pVertexBuffer = _pDevice->newBuffer(vertices, sizeof(vertices), MTL::ResourceStorageModeShared);
+    _pVertexBuffer = m_device->newBuffer(vertices, sizeof(vertices), MTL::ResourceStorageModeShared);
 }
 
 RMDLSkybox::~RMDLSkybox()
 {
-    
+    if (_pVertexBuffer) _pVertexBuffer->release();
+    if (_pUniformBuffer) _pUniformBuffer->release();
+    if (_pDepthState) _pDepthState->release();
+    if (_pPipelineStateBlender) _pPipelineStateBlender->release();
+    if (m_device) m_device->release();
 }
 
 void RMDLSkybox::createPipeline(MTL::Library *pShaderLibrary, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat)
@@ -46,12 +47,12 @@ void RMDLSkybox::createPipeline(MTL::Library *pShaderLibrary, MTL::PixelFormat p
     pRenderDescriptor->colorAttachments()->object(0)->setPixelFormat(pPixelFormat);
 
     NS::Error* pError = nullptr;
-    _pPipelineStateBlender = _pDevice->newRenderPipelineState(pRenderDescriptor.get(), &pError);
+    _pPipelineStateBlender = m_device->newRenderPipelineState(pRenderDescriptor.get(), &pError);
 
     NS::SharedPtr<MTL::DepthStencilDescriptor> pDepthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
     pDepthStencilDesc->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLessEqual);
     pDepthStencilDesc->setDepthWriteEnabled(false);
-    _pDepthState = _pDevice->newDepthStencilState(pDepthStencilDesc.get());
+    _pDepthState = m_device->newDepthStencilState(pDepthStencilDesc.get());
 }
 
 void RMDLSkybox::updateUniforms(const simd::float4x4& view, const simd::float4x4& proj, const simd::float3& camPos)
@@ -62,7 +63,7 @@ void RMDLSkybox::updateUniforms(const simd::float4x4& view, const simd::float4x4
     pUniforms->invViewProjection = simd_inverse(viewProj);
     pUniforms->cameraPos = camPos;
 
-    pUniforms->sunDir = simd_normalize(_pAtmosphereParams.sunDirection);
+    pUniforms->rmdlSun.sunDirection = simd_normalize(_pAtmosphereParams.sunDirection);
     pUniforms->sunIntensity = _pAtmosphereParams.sunIntensity;
     pUniforms->rayleighCoeff = _pAtmosphereParams.rayleighScattering;
     pUniforms->rayleighHeight = _pAtmosphereParams.rayleighScaleHeight;
@@ -104,9 +105,9 @@ void RMDLSkybox::setTimeOfDay(float time)
     _pAtmosphereParams.sunDirection = calculateSunDirection(time);
 }
 
-void RMDLSkybox::setSunDirection(const simd::float3& dir)
+void RMDLSkybox::setSunDirection(const simd::float3& direction)
 {
-    _pAtmosphereParams.sunDirection = simd_normalize(dir);
+    _pAtmosphereParams.sunDirection = simd_normalize(direction);
 }
 }
 

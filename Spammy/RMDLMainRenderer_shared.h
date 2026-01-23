@@ -108,12 +108,17 @@ typedef enum RenderTargetIndex
     RenderTargetDepth     = 3
 }   RenderTargetIndex;
 
+struct RMDLSun
+{
+    simd::float3 sunDirection;
+};
+
 struct RMDLSkyboxUniforms
 {
     simd::float4x4 invViewProjection;
     simd::float3 cameraPos;
     float _pad0;
-    simd::float3 sunDir;
+    RMDLSun rmdlSun;
     float sunIntensity;
     simd::float3 rayleighCoeff;
     float rayleighHeight;
