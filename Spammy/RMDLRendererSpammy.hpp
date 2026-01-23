@@ -172,7 +172,7 @@ public:
 private:
     MTL::Device*                m_device;
     MTL::CommandQueue*          m_commandQueue;
-    MTL::RenderPipelineState*           m_renderPipelineState;
+    MTL::RenderPipelineState*           m_renderPipelineState = nullptr;
     MTL::Buffer*                        m_mouseBuffer = nullptr;
     MTL::Buffer*                        vertexBuffer = nullptr;
     MTL::Buffer* indexBuffer;
@@ -218,6 +218,7 @@ private:
 
     
     RMDLCamera                          m_camera;
+    RMDLCamera                          m_cameraOrtho;
     RMDLCamera                          m_cameraPNJ;
     RMDLCamera                          m_cameraShadow;
     RMDLCameraSnapshot cinematicView = {

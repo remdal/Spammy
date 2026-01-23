@@ -98,7 +98,8 @@ enum class BlockType : uint16_t {
     Radar,
     
     Blender = 500,
-    Ico
+    Ico,
+    WTF,
 };
 
 struct BlockDefinition
@@ -142,7 +143,8 @@ struct BlockInstance {
     bool powered;
     bool active;
     
-    simd::float4x4 getModelMatrix() const {
+    simd::float4x4 getModelMatrix() const
+    {
         simd::float4x4 t = simd::float4x4(1.0f);
         t.columns[3] = simd::float4{(float)gridPos.x, (float)gridPos.y, (float)gridPos.z, 1.0f};
         return t * getRotationMatrix();
@@ -230,7 +232,7 @@ inline uint32_t BlockTextureManager::loadTexture(const std::string& path)
 
 inline void BlockTextureManager::buildTextureArray(MTL::CommandQueue* queue)
 {
-    createDefaultTexture();
+//    createDefaultTexture();
     if (m_stagingTextures.empty()) return;
     
     uint32_t size = (uint32_t)m_stagingTextures[0]->width();
@@ -286,64 +288,55 @@ inline void BlockTextureManager::buildTextureArray(MTL::CommandQueue* queue)
     m_stagingTextures.clear();
 }
 
-inline uint32_t BlockTextureManager::getTextureIndex(const std::string& name) const {
+inline uint32_t BlockTextureManager::getTextureIndex(const std::string& name) const
+{
     auto it = m_textureIndices.find(name);
     return (it != m_textureIndices.end()) ? it->second : 0;
 }
 
-inline void BlockTextureManager::cleanup() {
+inline void BlockTextureManager::cleanup()
+{
     if (m_textureArray) { m_textureArray->release(); m_textureArray = nullptr; }
     if (m_sampler) { m_sampler->release(); m_sampler = nullptr; }
     for (auto tex : m_stagingTextures) tex->release();
     m_stagingTextures.clear();
 }
 
-class BlockMeshGenerator {
+class BlockMeshGenerator
+{
 public:
-    static void generateCube(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                            simd::float3 size, simd::float4 color);
-    
-    static void generateWedge(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                             simd::float3 size, simd::float4 color);
-    
-    static void generateWheel(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                             float radius, float width, int segments, simd::float4 color);
-    
-    static void generateCockpit(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                               simd::float3 size, simd::float4 color);
-    
-    static void generateRobotHead(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                                  simd::float4 color);
-    
-    static void generateThruster(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                                float radius, float length, simd::float4 color);
-    
+    static void generateCube(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float3 size, simd::float4 color);
+    static void generateWedge(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float3 size, simd::float4 color);
+    static void generateWheel(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, float radius, float width, int segments, simd::float4 color);
+    static void generateCockpit(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float3 size, simd::float4 color);
+    static void generateRobotHead(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float4 color);
+    static void generateThruster(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, float radius, float length, simd::float4 color);
     static void generateIcosphere(std::vector<BlockVertex>& v, std::vector<uint16_t>& idx, simd::float4 c);
-    
+    static void generateWTF(std::vector<BlockVertex>& v, std::vector<uint16_t>& idx, simd::float4 c);
+
 private:
-    static void addQuad(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                       simd::float3 p0, simd::float3 p1, simd::float3 p2, simd::float3 p3,
-                       simd::float3 normal, simd::float4 color);
+    static void addQuad(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float3 p0, simd::float3 p1, simd::float3 p2, simd::float3 p3, simd::float3 normal, simd::float4 color);
     
-    static void addTriangle(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices,
-                           simd::float3 p0, simd::float3 p1, simd::float3 p2,
-                           simd::float3 normal, simd::float4 color);
+    static void addTriangle(std::vector<BlockVertex>& verts, std::vector<uint16_t>& indices, simd::float3 p0, simd::float3 p1, simd::float3 p2, simd::float3 normal, simd::float4 color);
 };
 
 class BlockRegistry
 {
 public:
-    static BlockRegistry& instance() {
+    static BlockRegistry& instance()
+    {
         static BlockRegistry reg;
         return reg;
     }
     
-    const BlockDefinition* get(BlockType type) const {
+    const BlockDefinition* get(BlockType type) const
+    {
         auto it = m_definitions.find(type);
         return it != m_definitions.end() ? &it->second : nullptr;
     }
     
-    void registerBlock(BlockDefinition def) {
+    void registerBlock(BlockDefinition def)
+    {
         m_definitions[def.type] = std::move(def);
     }
     

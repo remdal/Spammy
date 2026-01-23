@@ -652,9 +652,8 @@ fragment float4 blockFragmentPBR(
     BlockFragIn in [[stage_in]],
     constant BlockUniforms& uniforms [[buffer(0)]],
     texture2d_array<float> textures [[texture(0)]],
-    sampler texSampler [[sampler(0)]]
-) {
-    // Sample texture from array
+    sampler texSampler [[sampler(0)]])
+{
     float4 texColor = textures.sample(texSampler, in.uv, in.textureIndex);
     float3 albedo = texColor.rgb * in.color.rgb;
     

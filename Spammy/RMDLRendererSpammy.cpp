@@ -203,14 +203,15 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
 
     moon.setOrbit(500.0f, 0.1f);
     
-    blocs.addBlock(cube::BlockType::CubeBasic, {0, 2, 0});
-    blocs.addBlock(cube::BlockType::Blender, {1, 2, 0});
+    blocs.addBlock(cube::BlockType::CubeBasic, {0, 5, 0});
+//    blocs.addBlock(cube::BlockType::Blender, {1, 5, 0});
 //    blocs.addBlock(cube::BlockType::CubeBasic, {1, 2, 0});
-    blocs.addBlock(cube::BlockType::RobotHead, {0, 3, 0});
-    blocs.addBlock(cube::BlockType::WheelMedium, {-1, 2, 0}, 8);  // Rotation latérale
-    blocs.addBlock(cube::BlockType::WheelMedium, {2, 2, 0}, 8);
-    blocs.addBlock(cube::BlockType::Cockpit, {0, 2, -1});
-    blocs.addBlock(cube::BlockType::ThrusterSmall, {0, 2, 1});
+    blocs.addBlock(cube::BlockType::RobotHead, {0, 6, 0});
+    blocs.addBlock(cube::BlockType::WTF, {1, 5, 0});
+    blocs.addBlock(cube::BlockType::WheelMedium, {-1, 5, 0}, 8);  // Rotation latérale
+    blocs.addBlock(cube::BlockType::WheelMedium, {2, 5, 0}, 8);
+    blocs.addBlock(cube::BlockType::Cockpit, {0, 5, -1});
+    blocs.addBlock(cube::BlockType::ThrusterSmall, {0, 5, 1});
 //    blocs.setBlockColor(1, {1.0f, 0.3f, 0.3f, 1.0f});
     auto* block = blocs.getBlockAt({1, 2, 0});
     if (block) {
