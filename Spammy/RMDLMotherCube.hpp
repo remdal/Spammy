@@ -105,7 +105,7 @@ enum class BlockType : uint16_t {
 struct BlockDefinition
 {
     BlockType type;
-    uint8_t textureType = 0;
+    uint8_t textureIndex;
     BlockCategory category;
     const char* name;
     const char* description;
@@ -329,7 +329,8 @@ public:
         return reg;
     }
     
-    const BlockDefinition* get(BlockType type) const
+//    [[nodiscard]]
+    const BlockDefinition* get(BlockType type) const // noexcept
     {
         auto it = m_definitions.find(type);
         return it != m_definitions.end() ? &it->second : nullptr;

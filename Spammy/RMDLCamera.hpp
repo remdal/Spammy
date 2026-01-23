@@ -41,6 +41,8 @@ struct RMDLCameraSnapshot
     float           orbitDistance;
     float           yaw;
     float           pitch;
+    simd_quatf      rotation = simd_quaternion(0.f, simd_make_float3(0, 1, 0));
+    bool            useTargetMode = true;          // true = lookAt, false = quaternion
 };
 
 class RMDLCamera

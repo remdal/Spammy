@@ -203,11 +203,12 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
 
     moon.setOrbit(500.0f, 0.1f);
     
+    
     blocs.addBlock(cube::BlockType::CubeBasic, {0, 5, 0});
-//    blocs.addBlock(cube::BlockType::Blender, {1, 5, 0});
+    blocs.addBlock(cube::BlockType::Blender, {1, 5, 0});
 //    blocs.addBlock(cube::BlockType::CubeBasic, {1, 2, 0});
     blocs.addBlock(cube::BlockType::RobotHead, {0, 6, 0});
-    blocs.addBlock(cube::BlockType::WTF, {1, 5, 0});
+//    blocs.addBlock(cube::BlockType::WTF, {1, 5, 0});
     blocs.addBlock(cube::BlockType::WheelMedium, {-1, 5, 0}, 8);  // Rotation latérale
     blocs.addBlock(cube::BlockType::WheelMedium, {2, 5, 0}, 8);
     blocs.addBlock(cube::BlockType::Cockpit, {0, 5, -1});
@@ -606,7 +607,15 @@ void GameCoordinator::update(float dt, const InputState& input)
     m_spaceAudio->setEngineThrottle(throttle);
     
     moon.updateOrbit(dt);
+    
     m_camera.updateTransition(dt);
+//    if (!m_camera.isTransitioning())
+//        m_camera.applyShake(9.0f, 13.f);
+//        m_camera.applyShake(5.f, 8.f, 250.f);
+        // Contrôles joueur actifs seulement hors transition
+//        m_camera.rotateYawPitch(snappedPos.x, snappedPos.y);
+    
+    
 //    planet->applyGravityTo(m_vehicleRigidBody);
 //    if (moon->isOnSurface(m_vehicleRigidBody.position, 50.0f)) {
 //        moon->applyGravityTo(m_vehicleRigidBody);
@@ -790,7 +799,6 @@ void GameCoordinator::draw(MTK::View* view)
 //    renderCommandEncoder->setFragmentBuffer(m_mouseBuffer, 0, 1);
 //    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0UL, 3UL); // NS::UInt
 
-    simd::float2 screenSz = {(float)m_viewport.width, (float)m_viewport.height};
     m_inventoryPanel.render(renderCommandEncoder, screenSz);
 
 
@@ -821,7 +829,6 @@ void GameCoordinator::draw(MTK::View* view)
     commandBuffer->commit();
     commandBuffer->waitUntilCompleted();
     MousePickResult result = mouseAndCursor.getResult();
-    simd::float3 snappedPos;
     snappedPos.x = roundf(result.worldPosition.x);
     snappedPos.y = roundf(result.worldPosition.y);//0.0f;
     snappedPos.z = roundf(result.worldPosition.z);
@@ -848,6 +855,8 @@ void GameCoordinator::draw(MTK::View* view)
 void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
 {
     setViewportWindow(width, height);
+    
+    screenSz = {(float)m_viewport.width, (float)m_viewport.height};
 
     m_depthTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
 //    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);

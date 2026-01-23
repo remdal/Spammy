@@ -160,6 +160,8 @@ public:
     void vehicleMouseUp();
     
     void setInventory();
+    
+    void playCinematic();
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -203,7 +205,7 @@ private:
     NS::SharedPtr<MTL::RenderPassDescriptor>         _gBufferWithLoadPassDesc;
     
     MTL::Buffer*                            m_gpuUniforms[kMaxBuffersInFlight];
-
+    int j = 1;
     
     MTL::DepthStencilState*             _shadowDepthState;
     MTL::DepthStencilState*             _gBufferDepthState;
@@ -251,7 +253,8 @@ private:
     
     skybox::BlackHole   blackHole;
     
-    
+    simd::float3 snappedPos;
+    simd::float2 screenSz;
     
     GridCommandant::VehicleBuildGrid    gridCommandant;
     

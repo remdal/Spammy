@@ -28,6 +28,7 @@
 - (void)jump;
 - (void)inventory:(BOOL)visible;
 - (void)setInventory;
+- (void)boh;
 
 - (void)toggleVehicleMode;
 - (void)toggleVehicleBuildMode;

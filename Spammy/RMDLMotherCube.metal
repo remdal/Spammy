@@ -10,22 +10,6 @@ using namespace metal;
 
 #import "Helpers.metal"
 
-struct alignas(16) BlockGPUInstance
-{
-    simd::float4x4 modelMatrix;
-    simd::float4 color;
-    simd::float4 params;
-};
-
-struct alignas(16) BlockUniforms
-{
-    simd::float4x4 viewProj;
-    simd::float3 camPos;
-    float time;
-    simd::float3 lightDir;
-    float _pad;
-};
-
 struct BlockFragIn {
     float4 position [[position]];
     float3 worldPos;
@@ -44,6 +28,22 @@ struct alignas(16) BlockVertex
     float3 normal   [[attribute(1)]];
     float2 uv       [[attribute(2)]];
     float4 color    [[attribute(3)]];
+};
+
+struct alignas(16) BlockGPUInstance
+{
+    simd::float4x4 modelMatrix;
+    simd::float4 color;
+    simd::float4 params;
+};
+
+struct alignas(16) BlockUniforms
+{
+    simd::float4x4 viewProj;
+    simd::float3 camPos;
+    float time;
+    simd::float3 lightDir;
+    float _pad;
 };
 
 struct BlockInstance
