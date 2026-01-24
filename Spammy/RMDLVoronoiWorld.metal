@@ -125,7 +125,7 @@ float perlinNoise3D_GPU(float3 p)
     float v = fade(pf.y);
     float w = fade(pf.z);
     
-    float c000 = sin(float(hash_gpu(pi.x, pi.y, pi.z) % 360u) * 0.017453292); // * 1 degré into radian
+    float c000 = sin(float(hash_gpu(pi.x, pi.y, pi.z) % 360u) * 0.017453292); // * 1 degré into radian 0.0174532925199433
     float c100 = sin(float(hash_gpu(pi.x+1, pi.y, pi.z) % 360u) * 0.017453292);
     float c010 = sin(float(hash_gpu(pi.x, pi.y+1, pi.z) % 360u) * 0.017453292);
     float c110 = sin(float(hash_gpu(pi.x+1, pi.y+1, pi.z) % 360u) * 0.017453292);

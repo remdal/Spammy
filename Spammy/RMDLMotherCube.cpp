@@ -15,7 +15,7 @@ namespace cube {
 void BlockRegistry::registerDefaults()
 {
     registerBlock({ .type = BlockType::Blender,
-//            .textureIndex = 1,
+            .textureIndex = 1,
             .category = BlockCategory::Cosmetic,
             .name = "Icosphere",
             .description = "Blender import",
@@ -24,6 +24,7 @@ void BlockRegistry::registerDefaults()
         .baseColor = {0.6f, 0.62f, 0.65f, 1.0f}, });
     
     registerBlock({ .type = BlockType::WTF,
+            .textureIndex = 1,
             .name = "WTF",
             .description = "Blender import Script",
             .mass = 1.0f, .health = 100.0f, .cost = 50.0f,
@@ -33,6 +34,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::CubeBasic,
+        .textureIndex = 1,
         .category = BlockCategory::Structure,
         .name = "Basic Cube",
         .description = "Standard structural block",
@@ -51,6 +53,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::CubeArmored,
+        .textureIndex = 1,
         .category = BlockCategory::Structure,
         .name = "Armored Cube",
         .description = "Heavy reinforced block",
@@ -61,6 +64,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::Wedge,
+        .textureIndex = 1,
         .category = BlockCategory::Structure,
         .name = "Wedge",
         .description = "Angled structural block",
@@ -72,6 +76,7 @@ void BlockRegistry::registerDefaults()
     // === PROPULSION ===
     registerBlock({
         .type = BlockType::WheelSmall,
+        .textureIndex = 1,
         .category = BlockCategory::Propulsion,
         .name = "Small Wheel",
         .description = "Compact wheel for light vehicles",
@@ -83,6 +88,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::WheelMedium,
+        .textureIndex = 1,
         .category = BlockCategory::Propulsion,
         .name = "Medium Wheel",
         .description = "Balanced all-terrain wheel",
@@ -94,6 +100,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::WheelLarge,
+        .textureIndex = 1,
         .category = BlockCategory::Propulsion,
         .name = "Large Wheel",
         .description = "Heavy-duty wheel for big vehicles",
@@ -105,6 +112,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::ThrusterSmall,
+        .textureIndex = 1,
         .category = BlockCategory::Propulsion,
         .name = "Small Thruster",
         .description = "Compact jet thruster",
@@ -117,6 +125,7 @@ void BlockRegistry::registerDefaults()
     // === CONTROL ===
     registerBlock({
         .type = BlockType::Cockpit,
+        .textureIndex = 1,
         .category = BlockCategory::Control,
         .name = "Cockpit",
         .description = "Command center with pilot seat",
@@ -128,6 +137,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::CommandSeat,
+        .textureIndex = 1,
         .category = BlockCategory::Control,
         .name = "Command Seat",
         .description = "Exposed command seat",
@@ -139,6 +149,7 @@ void BlockRegistry::registerDefaults()
     // === ROBOT / COSMETIC ===
     registerBlock({
         .type = BlockType::RobotHead,
+        .textureIndex = 1,
         .category = BlockCategory::Cosmetic,
         .name = "Robot Head",
         .description = "Mecha-style head unit with sensors",
@@ -150,6 +161,7 @@ void BlockRegistry::registerDefaults()
     
     registerBlock({
         .type = BlockType::Antenna,
+        .textureIndex = 1,
         .category = BlockCategory::Cosmetic,
         .name = "Antenna",
         .description = "Communication antenna",
@@ -161,6 +173,7 @@ void BlockRegistry::registerDefaults()
     // === UTILITY ===
     registerBlock({
         .type = BlockType::Battery,
+        .textureIndex = 1,
         .category = BlockCategory::Utility,
         .name = "Battery",
         .description = "Energy storage unit",
@@ -211,8 +224,7 @@ void BlockRenderer::createPipeline(MTL::PixelFormat colorFormat, MTL::PixelForma
     auto vertFn = m_library->newFunction(MTLSTR("blockVertexOptimized"));
     auto fragOpaque = m_library->newFunction(MTLSTR("blockFragmentPBR"));
     auto fragTransparent = m_library->newFunction(MTLSTR("blockFragmentTransparent"));
-    
-    // Vertex descriptor
+
     auto vertDesc = MTL::VertexDescriptor::alloc()->init();
     
     // Position
@@ -309,7 +321,8 @@ void BlockRenderer::buildMeshes()
     
     auto& registry = BlockRegistry::instance();
     
-    for (auto& [type, def] : registry.all()) {
+    for (auto& [type, def] : registry.all())
+    {
         MeshRange range;
         range.vertexOffset = (uint32_t)allVerts.size();
         range.indexOffset = (uint32_t)allIndices.size();
@@ -368,7 +381,12 @@ void BlockRenderer::buildMeshes()
         }
         
         // Offset indices
-        for (auto& idx : indices) idx += range.vertexOffset;
+//        for (auto& idx : indices) idx += range.vertexOffset;
+        uint16_t baseVertex = (uint16_t)range.vertexOffset;
+        for (auto& idx : indices)
+        {
+            idx += baseVertex;
+        }
         
         range.indexCount = (uint32_t)indices.size();
         m_meshRanges[type] = range;

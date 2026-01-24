@@ -17,14 +17,15 @@ struct VertexBlender
     float4 weights [[attribute(4)]];
 };
 
-struct AnimatedSpriteBlender {
+struct BlenderUniforms
+{
     float4x4 modelMatrix;
     float4x4 viewProjectionMatrix;
-    float4x4 boneMatrices[3];
-    float time;
+    float4x4 boneMatrices[28];
 };
 
-struct VertexOut {
+struct VertexOut
+{
     float4 position [[position]];
     float3 normal;
     float2 texCoord;
@@ -32,27 +33,34 @@ struct VertexOut {
 };
 
 vertex VertexOut vertexmain(VertexBlender in [[stage_in]],
-    constant AnimatedSpriteBlender& uniforms [[buffer(1)]]
-) {
-    // Skinning (1 bone in your case)
-    float4x4 skinMatrix = uniforms.boneMatrices[in.joints.x] * in.weights.x;
+                            constant BlenderUniforms& uniforms [[buffer(1)]])
+{    // Skinning matrix - combinaison pondérée des bones
+    float4x4 skin = float4x4(0);
     
-    float4 skinnedPos = skinMatrix * float4(in.position, 1.0);
-    float4 skinnedNorm = skinMatrix * float4(in.normal, 0.0);
+    if (in.joints.x >= 0) skin += uniforms.boneMatrices[in.joints.x] * in.weights.x;
+    if (in.joints.y >= 0) skin += uniforms.boneMatrices[in.joints.y] * in.weights.y;
+    if (in.joints.z >= 0) skin += uniforms.boneMatrices[in.joints.z] * in.weights.z;
+    if (in.joints.w >= 0) skin += uniforms.boneMatrices[in.joints.w] * in.weights.w;
     
-    float4 worldPos = uniforms.modelMatrix * skinnedPos;
+    // Fallback si pas de bones
+    float totalWeight = in.weights.x + in.weights.y + in.weights.z + in.weights.w;
+    if (totalWeight < 0.001)
+        skin = float4x4(1);
+    
+    float4 skinnedPos = skin * float4(in.position, 1.0);
+    float3 skinnedNormal = normalize((skin * float4(in.normal, 0.0)).xyz);
     
     VertexOut out;
+    float4 worldPos = uniforms.modelMatrix * skinnedPos;
     out.position = uniforms.viewProjectionMatrix * worldPos;
     out.worldPos = worldPos.xyz;
-    out.normal = normalize((uniforms.modelMatrix * skinnedNorm).xyz);
+    out.normal = normalize((uniforms.modelMatrix * float4(skinnedNormal, 0.0)).xyz);
     out.texCoord = in.texCoord;
-    
     return out;
 }
 
 fragment float4 fragmentmain(VertexOut in [[stage_in]],
-                             constant AnimatedSpriteBlender& uniforms [[buffer(0)]],
+                             constant BlenderUniforms& uniforms [[buffer(0)]],
                              texture2d<float> diffuseTexture [[texture(0)]],
                              texture2d<float> normalTexture [[texture(1)]],
                              texture2d<float> roughnessTexture [[texture(2)]],

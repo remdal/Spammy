@@ -105,7 +105,7 @@ enum class BlockType : uint16_t {
 struct BlockDefinition
 {
     BlockType type;
-    uint8_t textureIndex;
+    uint8_t textureIndex = 0;
     BlockCategory category;
     const char* name;
     const char* description;
@@ -131,7 +131,8 @@ struct BlockDefinition
     } stats;
 };
 
-struct BlockInstance {
+struct BlockInstance
+{
     uint32_t id;
     BlockType type;
     
@@ -164,7 +165,8 @@ public:
     
     void createDefaultTexture()
     {
-        if (!m_stagingTextures.empty()) return;
+//        if (!m_stagingTextures.empty()) return;
+        if (m_textureIndices.count("default")) return;
         
         auto desc = MTL::TextureDescriptor::texture2DDescriptor(
             MTL::PixelFormatRGBA16Unorm, 4, 4, false);
@@ -203,7 +205,6 @@ private:
     
     std::vector<MTL::Texture*> m_stagingTextures;
     std::unordered_map<std::string, uint32_t> m_textureIndices;
-    
     uint32_t m_textureSize = 2048;
 };
 
@@ -226,13 +227,13 @@ inline uint32_t BlockTextureManager::loadTexture(const std::string& path)
     
     if (index == 0)
             m_textureSize = (uint32_t)tex->width();
-    
     return index;
 }
 
 inline void BlockTextureManager::buildTextureArray(MTL::CommandQueue* queue)
 {
-//    createDefaultTexture();
+    if (m_stagingTextures.empty())
+        createDefaultTexture();
     if (m_stagingTextures.empty()) return;
     
     uint32_t size = (uint32_t)m_stagingTextures[0]->width();

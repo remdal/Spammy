@@ -70,9 +70,7 @@ struct NoiseParams {
     uint64_t seed;
 };
 
-// ============================================
 // HASH FUNCTIONS
-// ============================================
 
 inline uint hashPerlin(uint x) {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -93,9 +91,7 @@ inline float hashToFloat(uint h) {
     return float(h) / float(0xFFFFFFFF);
 }
 
-// ============================================
 // GRADIENT NOISE (Perlin-style)
-// ============================================
 
 inline float3 gradient3D(uint hash) {
     uint h = hash & 15;

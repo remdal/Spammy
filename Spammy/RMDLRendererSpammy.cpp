@@ -394,12 +394,8 @@ void GameCoordinator::jump()
 
 void GameCoordinator::moveCamera(simd::float3 translation)
 {
-    simd::float3 newPosition;
-//    for (int i = 0; i < 100; i++)
-    
-        newPosition = m_camera.position() + translation;
-        m_camera.setPosition(newPosition);
-    
+    newPosition = m_camera.position() + translation; // * cursorPosition.y
+    m_camera.setPosition(newPosition);
 }
 
 void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
@@ -741,7 +737,7 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     
     blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
-    blender.updateBlender(0.0f);
+    blender.updateBlender(dt);
 
     skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
@@ -867,7 +863,7 @@ void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, N
     m_gTextureDescriptor->setStorageMode(MTL::StorageModePrivate);
     m_gBuffer0 = m_device->newTexture(m_gTextureDescriptor);
     m_gBuffer1 = m_device->newTexture(m_gTextureDescriptor);
-//    m_camera.setAspectRatio(width / (float)height);
+    m_camera.setAspectRatio(width / height);
     mouseAndCursor.setScreenSize((float)width, (float)height);
     m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget | MTL::TextureUsageShaderRead);
     m_depth = NS::TransferPtr(m_device->newTexture(m_depthTextureDescriptor));

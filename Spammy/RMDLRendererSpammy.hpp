@@ -267,6 +267,7 @@ private:
     std::unique_ptr<PhysicsSystem>     _physicsSystem;
     
 
+    simd::float3 newPosition;
     bool m_editMode;
     bool m_buildMode;
     simd::float3 m_raycastHitPoint;
