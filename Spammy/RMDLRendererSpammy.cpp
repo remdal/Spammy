@@ -129,12 +129,20 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 50000.0f);
     m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
+    m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
+    
+    size_t character = blender.loadModel(resourcePath + "/rosée.glb", "player");
+    size_t tree = blender.loadModel(resourcePath + "/all.glb", "plane");
+    blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
+    blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
+    
+    
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
     
     printf("%f\n%f\n%f\n", fade(0.1), fade(1.1), fade(2.7));
@@ -410,21 +418,21 @@ void GameCoordinator::setInventory()
     if (testTransitionCamera == 0)
         m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInOutCubic);
     if (testTransitionCamera == 1)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::Linear);
+        m_camera.transitionTo(m_cameraOrtho, 1.5f, RMDLCameraEase::Linear);
     if (testTransitionCamera == 2)
         m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::SmoothStep);
     if (testTransitionCamera == 3)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::SmootherStep);
+        m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::SmootherStep);
     if (testTransitionCamera == 4)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInQuad);
+        m_camera.transitionTo(m_cameraOrtho, 15.f, RMDLCameraEase::EaseInQuad);
     if (testTransitionCamera == 5)
         m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseOutQuad);
     if (testTransitionCamera == 6)
         m_camera.transitionTo(m_cameraPNJ, 5.f, RMDLCameraEase::EaseInOutQuad);
     if (testTransitionCamera == 7)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInCubic);
+        m_camera.transitionTo(m_cameraPNJ, 120.f, RMDLCameraEase::EaseInCubic);
     if (testTransitionCamera == 8)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseOutCubic);
+        m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::EaseOutCubic);
     if (testTransitionCamera == 9)
         m_camera.transitionTo(m_cameraPNJ, 5.5f, RMDLCameraEase::EaseInOutBack);
     testTransitionCamera++;
@@ -432,6 +440,7 @@ void GameCoordinator::setInventory()
     {
         m_camera.transitionTo(cinematicView, 15.0f, RMDLCameraEase::SmootherStep);
         testTransitionCamera = 0;
+        m_cameraOrtho.initPerspectiveWithPosition({-300.0f, 89.0f, 45.0f}, {10.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     }
 }
 
@@ -736,7 +745,8 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     
-    blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
+//    blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
+    blender.draw(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
     blender.updateBlender(dt);
 
     skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
