@@ -93,7 +93,8 @@ inline float hashToFloat(uint h) {
 
 // GRADIENT NOISE (Perlin-style)
 
-inline float3 gradient3D(uint hash) {
+inline float3 gradient3D(uint hash)
+{
     uint h = hash & 15;
     float u = h < 8 ? 1.0 : -1.0;
     float v = h < 4 ? 1.0 : (h == 12 || h == 14 ? 1.0 : -1.0);
@@ -101,7 +102,8 @@ inline float3 gradient3D(uint hash) {
     return normalize(float3(u, v, w));
 }
 
-inline float fade(float t) {
+inline float fade(float t)
+{
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 

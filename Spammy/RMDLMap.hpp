@@ -26,7 +26,8 @@ struct TerrainConfigLisse
     simd::float2 center;     // point de référence (0,0)
 };
 
-struct TerrainVertexLisse {
+struct TerrainVertexLisse
+{
     simd::float3 position;
     simd::float3 normal;
     simd::float2 uv;
@@ -34,14 +35,19 @@ struct TerrainVertexLisse {
 };
 
 enum class BiomeTypeLisse : uint32_t {
-    SafeZone = 0,    // centre plat
+    SafeZone = 0,
     Plains,
     Desert,
     Forest,
     Mountains,
     Volcanic,
     Frozen,
-    Ocean
+    Ocean,
+    Canyon,
+    Jungle,
+    Hills,
+    Mars,
+    Moon
 };
 
 class TerrainGeneratorLisse {

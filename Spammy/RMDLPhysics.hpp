@@ -13,7 +13,8 @@
 #include <simd/simd.h>
 #include <vector>
 
-struct RigidBody {
+struct RigidBody
+{
     simd::float3 position;
     simd::float3 velocity;
     simd::float3 angularVelocity;
