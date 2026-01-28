@@ -129,7 +129,7 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 50000.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 80000.0f);
     m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
@@ -420,7 +420,7 @@ void GameCoordinator::setInventory()
     if (testTransitionCamera == 1)
         m_camera.transitionTo(m_cameraOrtho, 1.5f, RMDLCameraEase::Linear);
     if (testTransitionCamera == 2)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::SmoothStep);
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 80000.0f), 1.5f, RMDLCameraEase::SmoothStep);
     if (testTransitionCamera == 3)
         m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::SmootherStep);
     if (testTransitionCamera == 4)
@@ -530,7 +530,7 @@ void GameCoordinator::createCursor(float mouseX, float mouseY, float width, floa
     };
 }
 
-void GameCoordinator::update(float dt, const InputState& input)
+void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuffer* commandBuffer)
 {
 //    constexpr float baseMoveSpeed = 5.0f;  // unités/seconde
 //    constexpr float lookSensitivity = 0.003f;
@@ -550,6 +550,7 @@ void GameCoordinator::update(float dt, const InputState& input)
 //    
 //    // Rotation caméra
 //    m_camera.rotateOnAxis(-input.lookDelta.x * lookSensitivity, -input.lookDelta.y * lookSensitivity);
+    
     switch (m_gamePlayMode)
     {
         case GamePlayMode::FreeCam:
@@ -657,6 +658,7 @@ void GameCoordinator::updateUniforms()
 {
     m_cameraUniforms = m_camera.uniforms();
     
+    
     m_uniforms.cameraUniforms = m_camera.uniforms();
     m_uniforms.mouseState = simd::float3{ cursorPosition.x, cursorPosition.y, float(1.0f) };
     m_uniforms.invScreenSize = simd::float2{ 1.0f / m_depth->width(), 1.0f / m_depth->width() };
@@ -740,7 +742,7 @@ void GameCoordinator::draw(MTK::View* view)
     };
     
     updateUniforms();
-    update(dt, m_input);
+    update(dt, m_input, commandBuffer);
     
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
@@ -763,7 +765,7 @@ void GameCoordinator::draw(MTK::View* view)
 //    world.updateTime(dt);
 //    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 
-    gridCommandant.update(0.016f);
+    gridCommandant.update(dt);
     gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
     gridCommandant.setBlockRotation(m_currentVehicleRotation);
     gridCommandant.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
@@ -808,7 +810,7 @@ void GameCoordinator::draw(MTK::View* view)
     m_inventoryPanel.render(renderCommandEncoder, screenSz);
 
 
-    terrainLisse.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    terrainLisse.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
     
     blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position(), dt);
     
@@ -830,6 +832,14 @@ void GameCoordinator::draw(MTK::View* view)
 //    computeCommandEncoder->dispatchThreadgroups({ 1, 1, 1 }, { 64, 1, 1 });
 //    computeCommandEncoder->endEncoding();
     
+    terrainLisse.requestHeightAt(m_camera.position().x, m_camera.position().z, commandBuffer);
+    // Appliquer la gravité avec le résultat du frame précédent
+    float terrainHeight = terrainLisse.getLastHeight();
+    float minHeight = terrainHeight + 2.0f;
+    
+    if (m_camera.position().y < minHeight)
+        m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
+    
     
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
@@ -839,6 +849,7 @@ void GameCoordinator::draw(MTK::View* view)
     snappedPos.y = roundf(result.worldPosition.y);//0.0f;
     snappedPos.z = roundf(result.worldPosition.z);
     grid.setGridCenter(snappedPos);
+    
     if (result.depth > 0.9)
     {
 //        printf("%f\n", result.depth);
@@ -855,6 +866,7 @@ void GameCoordinator::draw(MTK::View* view)
     {
 //        printf("%llu\n", m_frame);
     }
+    
     autoreleasePool->release();
 }
 

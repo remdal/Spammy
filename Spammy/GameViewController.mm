@@ -270,7 +270,7 @@ enum : Controls
         state.moveDirection /= len;
     
     if ([_pressedKeys containsObject:@(0x80)])
-        state.speedMultiplier = 3.0f; // Shift aze
+        state.speedMultiplier = 6.0f; // Shift aze
     if ([_pressedKeys containsObject:@(0x81)])
         state.speedMultiplier = 0.2f; // Ctrl aze
     

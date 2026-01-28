@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#import "RMDLMainRenderer_shared.h"
+#import "../RMDLMainRenderer_shared.h"
 #import "Helpers.metal"
 
 struct LightingVtxOut

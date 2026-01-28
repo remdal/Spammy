@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#include "RMDLMainRenderer_shared.h"
+#include "../RMDLMainRenderer_shared.h"
 
 struct RasterizerData
 {

@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#include "RMDLMainRenderer_shared.h"
+#include "../RMDLMainRenderer_shared.h"
 
 struct GridVertexIn
 {
@@ -23,7 +23,7 @@ struct GridVertexOut
 };
 
 vertex GridVertexOut gridVertexShader(GridVertexIn in [[stage_in]],
-                                       constant GridUniforms& uniforms [[buffer(1)]])
+                                      constant GridUniforms& uniforms [[buffer(1)]])
 {
     GridVertexOut out;
     

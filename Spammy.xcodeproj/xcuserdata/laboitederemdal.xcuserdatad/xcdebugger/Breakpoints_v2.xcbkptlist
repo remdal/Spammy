@@ -78,8 +78,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "879"
-            endingLineNumber = "879"
+            startingLineNumber = "891"
+            endingLineNumber = "891"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -94,8 +94,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "877"
-            endingLineNumber = "877"
+            startingLineNumber = "889"
+            endingLineNumber = "889"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -110,8 +110,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "866"
-            endingLineNumber = "866"
+            startingLineNumber = "878"
+            endingLineNumber = "878"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -126,8 +126,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "867"
-            endingLineNumber = "867"
+            startingLineNumber = "879"
+            endingLineNumber = "879"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -142,8 +142,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "856"
-            endingLineNumber = "856"
+            startingLineNumber = "867"
+            endingLineNumber = "867"
             landmarkName = "GameCoordinator::draw(view)"
             landmarkType = "7">
          </BreakpointContent>

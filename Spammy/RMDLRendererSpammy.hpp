@@ -122,7 +122,7 @@ public:
     GamePlayMode m_gamePlayMode;
     InputState  m_input;
     
-    void update(float deltaTime, const InputState& input);
+    void update(float deltaTime, const InputState& input, MTL::CommandBuffer* commandBuffer);
 
     void handleMouseMove(float x, float y);
     void handleMouseDown(bool rightClick);

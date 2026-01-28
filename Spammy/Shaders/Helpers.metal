@@ -72,7 +72,9 @@ struct NoiseParams {
 
 // HASH FUNCTIONS
 
-inline uint hashPerlin(uint x) {
+// 3b Chris Wellons, Schechter-Bridson
+inline uint hashPerlin(uint x) // == murmur pareil pour wang's
+{
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = (x >> 16) ^ x;
@@ -87,9 +89,64 @@ inline uint hash3(uint3 v) {
     return hashPerlin(v.x ^ hashPerlin(v.y ^ hashPerlin(v.z)));
 }
 
-inline float hashToFloat(uint h) {
+inline float hashToFloat(uint h)
+{
     return float(h) / float(0xFFFFFFFF);
 }
+
+// 6b Austin Appleby, 35 Thomas Wang, MurmurHash3 finalizer — EXCELLENT
+inline uint murmur(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x85ebca6b;
+    x ^= x >> 13;
+    x *= 0xc2b2ae35;
+    x ^= x >> 16;
+    return x;
+}
+
+// PCG-like — TRÈS BON
+inline uint pcg(uint x)
+{
+    uint state = x * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+// Wang hash — BON
+inline uint wang(uint x)
+{
+    x = (x ^ 61u) ^ (x >> 16u);
+    x *= 9u;
+    x ^= x >> 4u;
+    x *= 0x27d4eb2du;
+    x ^= x >> 15u;
+    return x;
+}
+
+inline uint wang_hash(uint seed)
+{
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+
+// Simple LCG — MÉDIOCRE
+inline uint lcg(uint x)
+{
+    return x * 1664525u + 1013904223u; // Patterns en diagonale !
+}
+
+//## Visualisation de l'avalanche
+
+//Input:  00000000000000000000000000000001
+//Output: 10110101011010010011010110101011  ← ~50% des bits changent
+
+//Input:  00000000000000000000000000000010  (1 bit décalé)
+//Output: 01101010110100100110101101010110  ← complètement différent
 
 // GRADIENT NOISE (Perlin-style)
 
@@ -377,14 +434,4 @@ inline BrdfProperties UnpackBrdfProperties(float4 gBuffer0, float4 gBuffer1)
 inline float3 UnpackNormal(float2 gBuffer1)
 {
     return DecodeNormal(gBuffer1.xy);
-}
-
-inline uint wang_hash(uint seed)
-{
-    seed = (seed ^ 61) ^ (seed >> 16);
-    seed *= 9;
-    seed = seed ^ (seed >> 4);
-    seed *= 0x27d4eb2d;
-    seed = seed ^ (seed >> 15);
-    return seed;
 }

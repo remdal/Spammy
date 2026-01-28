@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#include "RMDLMainRenderer_shared.h" // RMDLCameraUniforms
+#include "../RMDLMainRenderer_shared.h" // RMDLCameraUniforms
 #import "Helpers.metal" // PBR functions & Noises
 
 // COMMON STRUCTURES

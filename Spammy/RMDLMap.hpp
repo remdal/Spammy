@@ -32,6 +32,7 @@ struct TerrainVertexLisse
     simd::float3 normal;
     simd::float2 uv;
     uint32_t biomeID;
+//    simd::float3 biomeColor;
 };
 
 enum class BiomeTypeLisse : uint32_t {
@@ -85,18 +86,28 @@ struct ChunkCoord {
     }
 };
 
-struct ChunkCoordHashLisse {
+struct ChunkCoordHashLisse
+{
     size_t operator()(const ChunkCoord& c) const {
         return std::hash<int64_t>{}((int64_t(c.x) << 32) | uint32_t(c.z));
     }
 };
 
-struct TerrainChunkLisse {
+struct TerrainChunkLisse
+{
     MTL::Buffer* vertexBuffer;
     MTL::Buffer* indexBuffer;
     uint32_t indexCount;
     simd::float3 worldOrigin;
     bool ready;
+};
+
+struct PhysicsSample
+{
+    float height;
+    simd::float3 normal;
+    uint biomeID;
+    float friction;
 };
 
 class InfiniteTerrainManager {
@@ -105,11 +116,15 @@ public:
     ~InfiniteTerrainManager();
     
     void update(simd::float3 playerPos, MTL::CommandBuffer* cmd);
-    void render(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProjection);
+    void render(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProjection, const simd::float3& cameraPosition);
     
     void setViewDistance(uint32_t chunks) { m_viewDistance = chunks; }
     void setChunkSize(uint32_t size) { m_chunkSize = size; }
     void setFlatRadius(float radius) { m_config.flatRadius = radius; }
+    
+    float getHeightAt(float x, float z, MTL::CommandBuffer* cmd);
+    void requestHeightAt(float x, float z, MTL::CommandBuffer* cmd);
+    float getLastHeight() const { return m_lastHeight; }
     
 private:
     ChunkCoord worldToChunk(simd::float3 pos) const;
@@ -132,6 +147,15 @@ private:
     uint32_t m_chunkSize = 64;      // vertices par côté
     uint32_t m_viewDistance = 8;    // chunks autour du joueur
     float m_chunkWorldSize = 64.0f; // taille monde par chunk
+    float totalTime = 0;
+    float dayTime = 0;
+    
+    MTL::ComputePipelineState* m_heightSamplePipeline = nullptr;
+    MTL::Buffer* m_queryBuffer[2] = {nullptr, nullptr};
+    MTL::Buffer* m_resultBuffer[2] = {nullptr, nullptr};
+    uint32_t m_currentBuffer = 0;
+    float m_lastHeight = 0.0f;  // Résultat du frame précédent
+    bool m_heightReady = false;
 };
 
 

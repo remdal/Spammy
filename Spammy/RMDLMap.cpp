@@ -7,112 +7,6 @@
 
 #include "RMDLMap.hpp"
 
-TerrainGeneratorLisse::TerrainGeneratorLisse(MTL::Device* device, const TerrainConfigLisse& config)
-    : m_device(device)
-    , m_config(config)
-    , m_terrainPipeline(nullptr)
-    , m_normalsPipeline(nullptr)
-    , m_vertexBuffer(nullptr)
-    , m_indexBuffer(nullptr)
-    , m_indexCount(0)
-{
-    m_configBuffer = m_device->newBuffer(sizeof(TerrainConfigLisse), MTL::ResourceStorageModeShared);
-    memcpy(m_configBuffer->contents(), &m_config, sizeof(TerrainConfigLisse));
-    
-    buildComputePipeline();
-    buildNormalsPipeline();
-}
-
-TerrainGeneratorLisse::~TerrainGeneratorLisse() {
-    if (m_terrainPipeline) m_terrainPipeline->release();
-    if (m_normalsPipeline) m_normalsPipeline->release();
-    if (m_vertexBuffer) m_vertexBuffer->release();
-    if (m_indexBuffer) m_indexBuffer->release();
-    if (m_configBuffer) m_configBuffer->release();
-}
-
-void TerrainGeneratorLisse::buildComputePipeline() {
-    NS::Error* error = nullptr;
-    auto library = m_device->newDefaultLibrary();
-    
-    auto terrainFunc = library->newFunction(NS::String::string("terrainGenerateKernel", NS::UTF8StringEncoding));
-    m_terrainPipeline = m_device->newComputePipelineState(terrainFunc, &error);
-    terrainFunc->release();
-    library->release();
-}
-
-void TerrainGeneratorLisse::buildNormalsPipeline() {
-    NS::Error* error = nullptr;
-    auto library = m_device->newDefaultLibrary();
-    
-    auto normalsFunc = library->newFunction(NS::String::string("computeNormalsKernel", NS::UTF8StringEncoding));
-    m_normalsPipeline = m_device->newComputePipelineState(normalsFunc, &error);
-    normalsFunc->release();
-    library->release();
-}
-
-void TerrainGeneratorLisse::generate(MTL::CommandBuffer* cmd, simd::float2 chunkOrigin, uint32_t chunkSize) {
-    uint32_t vertexCount = (chunkSize + 1) * (chunkSize + 1);
-    uint32_t quadCount = chunkSize * chunkSize;
-    m_indexCount = quadCount * 6;
-    
-    // Allocate buffers
-    if (m_vertexBuffer) m_vertexBuffer->release();
-    if (m_indexBuffer) m_indexBuffer->release();
-    
-    m_vertexBuffer = m_device->newBuffer(vertexCount * sizeof(TerrainVertexLisse), MTL::ResourceStorageModeShared);
-    m_indexBuffer = m_device->newBuffer(m_indexCount * sizeof(uint32_t), MTL::ResourceStorageModeShared);
-    
-    // Generate indices (CPU side, simple grid)
-    uint32_t* indices = static_cast<uint32_t*>(m_indexBuffer->contents());
-    uint32_t idx = 0;
-    for (uint32_t z = 0; z < chunkSize; z++) {
-        for (uint32_t x = 0; x < chunkSize; x++) {
-            uint32_t topLeft = z * (chunkSize + 1) + x;
-            uint32_t topRight = topLeft + 1;
-            uint32_t bottomLeft = (z + 1) * (chunkSize + 1) + x;
-            uint32_t bottomRight = bottomLeft + 1;
-            
-            indices[idx++] = topLeft;
-            indices[idx++] = bottomLeft;
-            indices[idx++] = topRight;
-            indices[idx++] = topRight;
-            indices[idx++] = bottomLeft;
-            indices[idx++] = bottomRight;
-        }
-    }
-    
-    // Chunk params
-    struct ChunkParams {
-        simd::float2 origin;
-        uint32_t size;
-        uint32_t padding;
-    } chunkParams = { chunkOrigin, chunkSize, 0 };
-    
-    auto paramsBuffer = m_device->newBuffer(sizeof(ChunkParams), MTL::ResourceStorageModeShared);
-    memcpy(paramsBuffer->contents(), &chunkParams, sizeof(ChunkParams));
-    
-    // Pass 1: Generate heightmap + biomes
-    auto encoder = cmd->computeCommandEncoder();
-    encoder->setComputePipelineState(m_terrainPipeline);
-    encoder->setBuffer(m_vertexBuffer, 0, 0);
-    encoder->setBuffer(m_configBuffer, 0, 1);
-    encoder->setBuffer(paramsBuffer, 0, 2);
-    
-    MTL::Size gridSize = MTL::Size(chunkSize + 1, chunkSize + 1, 1);
-    MTL::Size threadGroupSize = MTL::Size(16, 16, 1);
-    encoder->dispatchThreads(gridSize, threadGroupSize);
-    
-    // Pass 2: Compute normals
-    encoder->setComputePipelineState(m_normalsPipeline);
-    encoder->setBuffer(m_vertexBuffer, 0, 0);
-    encoder->setBuffer(paramsBuffer, 0, 1);
-    encoder->dispatchThreads(gridSize, threadGroupSize);
-    
-    encoder->endEncoding();
-    paramsBuffer->release();
-}
-
 InfiniteTerrainManager::InfiniteTerrainManager(MTL::Device* device, uint32_t seed)
     : m_device(device)
 {
@@ -136,6 +30,17 @@ InfiniteTerrainManager::InfiniteTerrainManager(MTL::Device* device, uint32_t see
     auto normalsFunc = library->newFunction(NS::String::string("computeNormalsKernel", NS::UTF8StringEncoding));
     m_normalsPipeline = m_device->newComputePipelineState(normalsFunc, &error);
     normalsFunc->release();
+    
+    // AJOUT : Height sample pipeline
+    auto heightFunc = library->newFunction(NS::String::string("sampleTerrainPhysics", NS::UTF8StringEncoding));
+    m_heightSamplePipeline = m_device->newComputePipelineState(heightFunc, &error);
+    heightFunc->release();
+    
+    for (int i = 0; i < 2; i++)
+    {
+        m_queryBuffer[i] = m_device->newBuffer(sizeof(simd::float2), MTL::ResourceStorageModeShared);
+        m_resultBuffer[i] = m_device->newBuffer(sizeof(PhysicsSample), MTL::ResourceStorageModeShared);
+    }
     
     library->release();
     buildRenderPipeline(MTL::PixelFormatRGBA16Float, MTL::PixelFormatDepth32Float);
@@ -180,7 +85,7 @@ void InfiniteTerrainManager::buildRenderPipeline(MTL::PixelFormat colorFormat, M
     
     // BiomeID: uint at offset 32
     vertexDesc->attributes()->object(3)->setFormat(MTL::VertexFormatUInt);
-    vertexDesc->attributes()->object(3)->setOffset(sizeof(simd::float3) * 2 + sizeof(simd::float2));
+    vertexDesc->attributes()->object(3)->setOffset(offsetof(TerrainVertexLisse, biomeID));//sizeof(simd::float3) * 2 + sizeof(simd::float2));
     vertexDesc->attributes()->object(3)->setBufferIndex(0);
     
     // Layout
@@ -238,8 +143,10 @@ void InfiniteTerrainManager::update(simd::float3 playerPos, MTL::CommandBuffer* 
             }
         }
     }
-    
+    dayTime += 0.0002f;//= fmod(totalTime * 0.11f, 1.0f); // ~100 sec -> 0.01f
     unloadDistantChunks(playerChunk);
+    if (dayTime > 1.5f)
+        dayTime = 0.f;
 }
 
 void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer* cmd) {
@@ -306,8 +213,10 @@ void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer*
     
     // Pass 2: normals
     encoder->setComputePipelineState(m_normalsPipeline);
+    encoder->setBuffer(chunk.vertexBuffer, 0, 0);
+    encoder->setBuffer(paramsBuffer, 0, 1);
+    encoder->setBuffer(m_configBuffer, 0, 2);  // AJOUT
     encoder->dispatchThreads(gridSize, threadGroup);
-    
     encoder->endEncoding();
     
     chunk.ready = true;
@@ -319,27 +228,24 @@ void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer*
             m_chunks[coord].ready = true;
         }
     });
-//    cmd->addCompletedHandler([paramsBuffer](MTL::CommandBuffer*) {
-//            paramsBuffer->release();
-//        });
-    
-//    m_chunks[coord] = chunk;
 }
 
-void InfiniteTerrainManager::unloadDistantChunks(ChunkCoord playerChunk) {
+void InfiniteTerrainManager::unloadDistantChunks(ChunkCoord playerChunk)
+{
     uint32_t unloadDist = m_viewDistance + 2;
     
     std::vector<ChunkCoord> toRemove;
-    for (auto& [coord, chunk] : m_chunks) {
+    for (auto& [coord, chunk] : m_chunks)
+    {
         int32_t dx = coord.x - playerChunk.x;
         int32_t dz = coord.z - playerChunk.z;
         
-        if (dx * dx + dz * dz > int32_t(unloadDist * unloadDist)) {
+        if (dx * dx + dz * dz > int32_t(unloadDist * unloadDist))
             toRemove.push_back(coord);
-        }
     }
     
-    for (auto& coord : toRemove) {
+    for (auto& coord : toRemove)
+    {
         auto& chunk = m_chunks[coord];
         if (chunk.vertexBuffer) chunk.vertexBuffer->release();
         if (chunk.indexBuffer) chunk.indexBuffer->release();
@@ -347,25 +253,94 @@ void InfiniteTerrainManager::unloadDistantChunks(ChunkCoord playerChunk) {
     }
 }
 
-void InfiniteTerrainManager::render(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProjection)
+void InfiniteTerrainManager::requestHeightAt(float x, float z, MTL::CommandBuffer* cmd)
+{
+    // Lire le résultat du frame PRÉCÉDENT (buffer opposé)
+    if (m_heightReady) {
+        uint32_t readBuffer = 1 - m_currentBuffer;
+        PhysicsSample* result = static_cast<PhysicsSample*>(m_resultBuffer[readBuffer]->contents());
+        m_lastHeight = result->height;
+    }
+    
+    // Écrire la nouvelle query dans le buffer COURANT
+    simd::float2* query = static_cast<simd::float2*>(m_queryBuffer[m_currentBuffer]->contents());
+    *query = simd::float2{x, z};
+    
+    // Dispatch
+    auto encoder = cmd->computeCommandEncoder();
+    encoder->setComputePipelineState(m_heightSamplePipeline);
+    encoder->setBuffer(m_queryBuffer[m_currentBuffer], 0, 0);
+    encoder->setBuffer(m_resultBuffer[m_currentBuffer], 0, 1);
+    encoder->setBuffer(m_configBuffer, 0, 2);
+    encoder->dispatchThreads(MTL::Size(1, 1, 1), MTL::Size(1, 1, 1));
+    encoder->endEncoding();
+    
+    // Swap buffers
+    m_currentBuffer = 1 - m_currentBuffer;
+    m_heightReady = true;
+}
+
+float InfiniteTerrainManager::getHeightAt(float x, float z, MTL::CommandBuffer* cmd)
+{
+//    // Lazy init des buffers
+//    if (!m_singleQueryBuffer) {
+//        m_singleQueryBuffer = m_device->newBuffer(sizeof(simd::float2), MTL::ResourceStorageModeShared);
+//        m_singleResultBuffer = m_device->newBuffer(sizeof(PhysicsSample), MTL::ResourceStorageModeShared);
+//        
+//        // Build pipeline si pas fait
+//        NS::Error* error = nullptr;
+//        auto library = m_device->newDefaultLibrary();
+//        auto func = library->newFunction(NS::String::string("sampleTerrainPhysics", NS::UTF8StringEncoding));
+//        m_heightSamplePipeline = m_device->newComputePipelineState(func, &error);
+//        if (error) {
+//            printf("Height sample pipeline error: %s\n", error->localizedDescription()->utf8String());
+//        }
+//        func->release();
+//        library->release();
+//    }
+//    
+//    // Écrire la query
+//    simd::float2* query = static_cast<simd::float2*>(m_singleQueryBuffer->contents());
+//    *query = simd::float2{x, z};
+//    
+//    // Dispatch
+//    auto encoder = cmd->computeCommandEncoder();
+//    encoder->setComputePipelineState(m_heightSamplePipeline);
+//    encoder->setBuffer(m_singleQueryBuffer, 0, 0);
+//    encoder->setBuffer(m_singleResultBuffer, 0, 1);
+//    encoder->setBuffer(m_configBuffer, 0, 2);
+//    encoder->dispatchThreads(MTL::Size(1, 1, 1), MTL::Size(1, 1, 1));
+//    encoder->endEncoding();
+//    
+//    // Lire le résultat (après commit + waitUntilCompleted)
+//    cmd->commit();
+//    cmd->waitUntilCompleted();
+//    
+//    PhysicsSample* result = static_cast<PhysicsSample*>(m_singleResultBuffer->contents());
+//    return result->height;
+    return 0.0f;
+}
+
+void InfiniteTerrainManager::render(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProjection, const simd::float3& cameraPosition)
 {
     if (m_chunks.empty()) return;
         
-        encoder->setRenderPipelineState(m_renderPipeline);
-        encoder->setDepthStencilState(m_depthState);
-        encoder->setVertexBytes(&viewProjection, sizeof(simd::float4x4), 1);
+    encoder->setRenderPipelineState(m_renderPipeline);
+    encoder->setDepthStencilState(m_depthState);
+    encoder->setVertexBytes(&viewProjection, sizeof(simd::float4x4), 1);
+    encoder->setFragmentBytes(&cameraPosition, sizeof(simd::float3), 0);
+    encoder->setFragmentBytes(&dayTime, sizeof(float), 1);
+    
+    for (auto& [coord, chunk] : m_chunks)
+    {
+        if (!chunk.ready) continue;
         
-        for (auto& [coord, chunk] : m_chunks)
-        {
-            if (!chunk.ready) continue;
-            
-            encoder->setVertexBuffer(chunk.vertexBuffer, 0, 0);
-            encoder->drawIndexedPrimitives(
-                MTL::PrimitiveTypeTriangle,
-                chunk.indexCount,
-                MTL::IndexTypeUInt32,
-                chunk.indexBuffer,
-                0
-            );
-        }
+        encoder->setVertexBuffer(chunk.vertexBuffer, 0, 0);
+        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
+                                       chunk.indexCount,
+                                       MTL::IndexTypeUInt32,
+                                       chunk.indexBuffer,
+                                       0);
+    }
 }
+
