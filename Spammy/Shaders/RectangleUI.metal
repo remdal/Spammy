@@ -21,9 +21,7 @@ vertex RasterizerData vertexShaderRectangle(uint vertexID [[vertex_id]],
                                            constant simd_uint2 *viewportSizePointer [[buffer(1)]])
 {
     RasterizerData out;
-
     simd_float2 pixelSpacePosition = vertexData[vertexID].position.xy;
-
     simd_float2 viewportSize = simd_float2(*viewportSizePointer);
 
     out.position.xy = pixelSpacePosition / (viewportSize / 2.0);

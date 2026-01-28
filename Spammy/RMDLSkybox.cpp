@@ -9,8 +9,8 @@
 
 namespace sky {
 
-RMDLSkybox::RMDLSkybox(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary) :
-m_device(device->retain())
+RMDLSkybox::RMDLSkybox(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+: m_device(device->retain())
 {
     _pUniformBuffer = m_device->newBuffer(sizeof(RMDLSkyboxUniforms), MTL::ResourceStorageModeShared);
     createPipeline(shaderLibrary, pixelFormat, depthPixelFormat);

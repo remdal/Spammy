@@ -117,9 +117,9 @@ gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
 m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
-moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
-sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
+//planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
+//moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
+//sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
 terrainLisse(m_device, 89),
 blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
 {
@@ -141,6 +141,8 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     size_t tree = blender.loadModel(resourcePath + "/all.glb", "plane");
     blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
     blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
+    size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
+    blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20});
     
     
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
@@ -209,7 +211,7 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     terrainLisse.setViewDistance(10);
     terrainLisse.setFlatRadius(100.0f);
 
-    moon.setOrbit(500.0f, 0.1f);
+//    moon.setOrbit(500.0f, 0.1f);
     
     
     blocs.addBlock(cube::BlockType::CubeBasic, {0, 5, 0});
@@ -441,6 +443,7 @@ void GameCoordinator::setInventory()
         m_camera.transitionTo(cinematicView, 15.0f, RMDLCameraEase::SmootherStep);
         testTransitionCamera = 0;
         m_cameraOrtho.initPerspectiveWithPosition({-300.0f, 89.0f, 45.0f}, {10.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
+        blender.getModel("player")->transform = math::makeZRotate(90.0f) + math::makeTranslate({-100, 60, 20});
     }
 }
 
@@ -612,14 +615,13 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
     float throttle = simd::length(input.moveDirection);
     m_spaceAudio->setEngineThrottle(throttle);
     
-    moon.updateOrbit(dt);
+//    moon.updateOrbit(dt);
     
     m_camera.updateTransition(dt);
 //    if (!m_camera.isTransitioning())
 //        m_camera.applyShake(9.0f, 13.f);
 //        m_camera.applyShake(5.f, 8.f, 250.f);
-        // Contrôles joueur actifs seulement hors transition
-//        m_camera.rotateYawPitch(snappedPos.x, snappedPos.y);
+
     
     
 //    planet->applyGravityTo(m_vehicleRigidBody);
@@ -753,9 +755,12 @@ void GameCoordinator::draw(MTK::View* view)
 
     skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
 //    snow.render(enc, modelMatrix2, {0,0,0});
-//    skybox.updateUniforms(modelMatrix, cameraUniforms.viewProjectionMatrix * modelMatrix, {0,0,0});
-    blackHole.update(0.016f);
+    skybox.updateUniforms(math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), {0,0,0});
+    float time = dt * 0.5f;
+    skybox.setTimeOfDay(fmod(time, 1.0f));
+    blackHole.update(dt);//0.016f);
     blackHole.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_cameraUniforms.invViewProjectionMatrix, m_camera.position());
+
     
     renderCommandEncoder->setVertexBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
@@ -833,12 +838,11 @@ void GameCoordinator::draw(MTK::View* view)
 //    computeCommandEncoder->endEncoding();
     
     terrainLisse.requestHeightAt(m_camera.position().x, m_camera.position().z, commandBuffer);
-    // Appliquer la gravité avec le résultat du frame précédent
     float terrainHeight = terrainLisse.getLastHeight();
     float minHeight = terrainHeight + 2.0f;
-    
     if (m_camera.position().y < minHeight)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
+//    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);
     
     
     commandBuffer->presentDrawable(view->currentDrawable());

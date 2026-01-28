@@ -75,15 +75,18 @@ uint hashWithSeed(uint x, uint seed)
     return x;
 }
 
-uint hash2(int2 p, uint seed) {
+uint hash2(int2 p, uint seed)
+{
     return hashWithSeed(uint(p.x) + hashWithSeed(uint(p.y), seed), seed);
 }
 
-float hashFloat(int2 p, uint seed) {
+float hashFloat(int2 p, uint seed)
+{
     return float(hash2(p, seed)) / float(0xFFFFFFFF);
 }
 
-float smoothNoise(float2 p, uint seed) {
+float smoothNoise(float2 p, uint seed)
+{
     float2 i = floor(p);
     float2 f = fract(p);
     
@@ -100,13 +103,15 @@ float smoothNoise(float2 p, uint seed) {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-float fbm(float2 p, uint seed, int octaves) {
+float fbm(float2 p, uint seed, int octaves)
+{
     float value = 0.0;
     float amplitude = 0.5;
     float frequency = 1.0;
     float maxValue = 0.0;
     
-    for (int i = 0; i < octaves; i++) {
+    for (int i = 0; i < octaves; i++)
+    {
         value += amplitude * smoothNoise(p * frequency, seed + uint(i) * 1337);
         maxValue += amplitude;
         amplitude *= 0.5;
@@ -123,7 +128,8 @@ struct VoronoiResult
     float2 cellCenter;
 };
 
-VoronoiResult voronoiCell(float2 p, uint seed) {
+VoronoiResult voronoiCell(float2 p, uint seed)
+{
     float2 i = floor(p);
     float2 f = fract(p);
     
@@ -132,8 +138,10 @@ VoronoiResult voronoiCell(float2 p, uint seed) {
     result.cellRandom = 0.0;
     result.cellCenter = float2(0);
     
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
             float2 neighbor = float2(x, y);
             int2 cellPos = int2(i) + int2(x, y);
             
@@ -217,11 +225,8 @@ uint classifyBiome(float2 worldPos, float2 center, float flatRadius, uint seed)
     return biome;
 }
 
-// ============================================================================
-// CALCUL DE HAUTEUR
-// ============================================================================
-
-float getTerrainHeight(float2 worldPos, uint biome, uint seed, float maxHeight) {
+float getTerrainHeight(float2 worldPos, uint biome, uint seed, float maxHeight)
+{
     BiomeParams params = biomeTable[min(biome, 8u)];
     
     // Bruit de base multi-octave
@@ -253,10 +258,8 @@ kernel void terrainGenerateKernel(device TerrainVertexLisse* vertices [[buffer(0
     float2 localPos = float2(gid);
     float2 worldPos = chunk.origin + localPos;
     
-    // Classification biome
     uint biome = classifyBiome(worldPos, config.center, config.flatRadius, config.seed);
     
-    // Hauteur selon biome
     float height = getTerrainHeight(worldPos, biome, config.seed, config.maxHeight);
     
     // Transition douce vers zone plate centrale
@@ -270,10 +273,6 @@ kernel void terrainGenerateKernel(device TerrainVertexLisse* vertices [[buffer(0
     vertices[idx].biomeID = biome;
     vertices[idx].normal = float3(0, 1, 0); // Placeholder
 }
-
-// ============================================================================
-// KERNEL CALCUL NORMALES
-// ============================================================================
 
 kernel void computeNormalsKernel(device TerrainVertexLisse* vertices [[buffer(0)]],
                                  constant ChunkParams& chunk [[buffer(1)]],
@@ -307,35 +306,10 @@ kernel void computeNormalsKernel(device TerrainVertexLisse* vertices [[buffer(0)
     float3 normal = normalize(float3(hL - hR, 2.0 * eps, hU - hD));
     
     vertices[idx].normal = normal;
-    
-    
-//    uint stride = chunk.size + 1;
-//    
-//    float3 center = vertices[idx].position;
-//    
-//    // Échantillonner les voisins (avec clamp aux bords)
-//    float3 left   = (gid.x > 0)          ? vertices[idx - 1].position      : center;
-//    float3 right  = (gid.x < chunk.size) ? vertices[idx + 1].position      : center;
-//    float3 up     = (gid.y > 0)          ? vertices[idx - stride].position : center;
-//    float3 down   = (gid.y < chunk.size) ? vertices[idx + stride].position : center;
-//    
-//    // Calcul par différences finies
-//    float3 dx = right - left;
-//    float3 dz = down - up;
-//    
-//    float3 normal = normalize(cross(dz, dx));
-//    
-//    // Garantir que la normale pointe vers le haut
-//    if (normal.y < 0.0) normal = -normal;
-//    
-//    vertices[idx].normal = normal;
 }
 
-// ============================================================================
-// RENDER SHADERS
-// ============================================================================
-
-struct TerrainVertexIn {
+struct TerrainVertexIn
+{
     float3 position [[attribute(0)]];
     float3 normal   [[attribute(1)]];
     float2 uv       [[attribute(2)]];
@@ -353,27 +327,23 @@ struct TerrainVertexOut
     uint biomeID;
 };
 
-struct TerrainUniforms {
+struct TerrainUniforms
+{
     float4x4 viewProjection;
     float3 cameraPos;
     float time;
 };
 
-vertex TerrainVertexOut terrainVertexShader(
-    TerrainVertexIn in [[stage_in]],
-    constant float4x4& viewProjection [[buffer(1)]])
+vertex TerrainVertexOut terrainVertexShader(TerrainVertexIn in [[stage_in]],
+                                            constant float4x4& viewProjection [[buffer(1)]])
 {
     TerrainVertexOut out;
-    
     out.worldPos = in.position;
     out.position = viewProjection * float4(in.position, 1.0);
     out.normal = in.normal;
     out.uv = in.uv;
     uint biomeIdx = min(in.biomeID, 8u);
     out.biomeColor = biomeColors[biomeIdx];
-//    out.biomeID = in.biomeID;
-//    out.biomeBlend = 1.0;
-    
     return out;
 }
 
@@ -381,9 +351,7 @@ fragment float4 terrainFragmentShader(TerrainVertexOut in [[stage_in]],
                                       constant float3& cameraPos [[buffer(0)]],
                                       constant float& dayTime [[buffer(1)]])
 {
-    // Couleur de base du biome
     uint biomeIdx = min(in.biomeID, 8u);
-//    float3 baseColor = biomeColors[biomeIdx];
     float3 baseColor = in.biomeColor;
     
     // Variation de couleur selon la hauteur
@@ -395,7 +363,6 @@ fragment float4 terrainFragmentShader(TerrainVertexOut in [[stage_in]],
     float3 rockColor = float3(0.45, 0.42, 0.40);
     baseColor = mix(baseColor, rockColor, smoothstep(0.3, 0.7, slope));
     
-    // Éclairage
     float3 lightDir = normalize(float3(0.4, 0.8, 0.3));
     float ndotl = max(dot(in.normal, lightDir), 0.0);
     
@@ -408,7 +375,6 @@ fragment float4 terrainFragmentShader(TerrainVertexOut in [[stage_in]],
     
     float3 litColor = baseColor * (ambient + diffuse);
     
-    // Fog atmosphérique
     float dist = length(in.worldPos - cameraPos - 50);
     float fogStart = 350.0;
     float fogEnd = 800.0;
@@ -421,55 +387,24 @@ fragment float4 terrainFragmentShader(TerrainVertexOut in [[stage_in]],
     float b = 0.3 + 0.6 * max(0.0, sin(sunAngle - 1.57));
 
     float3 fogColor = float3(r, g, b);
-    
-//    float3 fogOrange = float3(1.0, 0.5, 0.1);
-//    float3 fogBlue   = float3(0.65, 0.80, 0.95);
-//    float3 fogGrey   = float3(0.25, 0.28, 0.35);
-    
-//    if (dayTime < 0.20) {
-//        // Nuit → lever (gris → orange)
-//        fogColor = mix(fogGrey, fogOrange, smoothstep(0.15, 0.20, dayTime));
-//    }
-//    else if (dayTime < 0.40) {
-//        // Lever → jour (orange → bleu)
-//        fogColor = mix(fogOrange, fogBlue, smoothstep(0.20, 0.30, dayTime));
-//    }
-//    else if (dayTime < 0.60) {
-//        // Journée (bleu)
-//        fogColor = fogBlue;
-//    }
-//    else if (dayTime < 0.80) {
-//        // Jour → coucher (bleu → orange)
-//        fogColor = mix(fogBlue, fogOrange, smoothstep(0.70, 0.80, dayTime));
-//    }
-//    else if (dayTime < 1.0) {
-//        // Coucher → nuit (orange → gris)
-//        fogColor = mix(fogOrange, fogGrey, smoothstep(0.80, 0.90, dayTime));
-//    }
-//    else
-//        fogColor = fogGrey;
 
     litColor = mix(litColor, fogColor, fogFactor);
     
     return float4(litColor, 1.0);
 }
 
-// ============================================================================
-// KERNEL PHYSIQUE - Sampling terrain pour collisions
-// ============================================================================
-
-struct PhysicsSample {
+struct PhysicsSample
+{
     float height;
     float3 normal;
     uint biomeID;
     float friction;
 };
 
-kernel void sampleTerrainPhysics(
-    device const float2* queryPositions [[buffer(0)]],
-    device PhysicsSample* results [[buffer(1)]],
-    constant TerrainConfigLisse& config [[buffer(2)]],
-    uint gid [[thread_position_in_grid]])
+kernel void sampleTerrainPhysics(device const float2* queryPositions [[buffer(0)]],
+                                 device PhysicsSample* results [[buffer(1)]],
+                                 constant TerrainConfigLisse& config [[buffer(2)]],
+                                 uint gid [[thread_position_in_grid]])
 {
     float2 worldPos = queryPositions[gid];
     

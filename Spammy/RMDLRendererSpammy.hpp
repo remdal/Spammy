@@ -43,7 +43,7 @@
 #include "RMDLInventory.hpp"
 
 #include "RMDLMap.hpp"
-#include "RMDLPhysics.hpp"
+//#include "RMDLPhysics.hpp"
 
 #include "RMDLMotherCube.hpp"
 
@@ -279,9 +279,9 @@ private:
     TerrainConfigLisse  configLisse;
     InfiniteTerrainManager   terrainLisse;
     
-    Moon    moon;
-    Sea     sea;
-    Planet  planet;
+//    Moon    moon;
+//    Sea     sea;
+//    Planet  planet;
     
     cube::BlockSystem   blocs;
     

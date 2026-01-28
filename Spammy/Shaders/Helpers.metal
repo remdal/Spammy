@@ -210,16 +210,14 @@ inline float perlinNoise3D(float3 p, constant uint* perm) {
     return mix(nxy0, nxy1, u.z);
 }
 
-// ============================================
-// SIMPLEX NOISE 2D
-// ============================================
-
-inline float2 simplexGrad2D(uint hash) {
+inline float2 simplexGrad2D(uint hash)
+{
     float angle = float(hash) / float(0xFFFFFFFF) * 2.0 * M_PI_F;
     return float2(cos(angle), sin(angle));
 }
 
-inline float simplexNoise2D(float2 p, uint seed) {
+inline float simplexNoise2D(float2 p, uint seed)
+{
     const float F2 = 0.5 * (sqrt(3.0) - 1.0);
     const float G2 = (3.0 - sqrt(3.0)) / 6.0;
     
@@ -245,38 +243,41 @@ inline float simplexNoise2D(float2 p, uint seed) {
     float n0 = 0.0, n1 = 0.0, n2 = 0.0;
     
     float t0 = 0.5 - dot(p0, p0);
-    if (t0 > 0.0) {
+    
+    if (t0 > 0.0)
+    {
         t0 *= t0;
         n0 = t0 * t0 * dot(g0, p0);
     }
     
     float t1 = 0.5 - dot(p1, p1);
-    if (t1 > 0.0) {
+    
+    if (t1 > 0.0)
+    {
         t1 *= t1;
         n1 = t1 * t1 * dot(g1, p1);
     }
     
     float t2 = 0.5 - dot(p2, p2);
-    if (t2 > 0.0) {
+    
+    if (t2 > 0.0)
+    {
         t2 *= t2;
         n2 = t2 * t2 * dot(g2, p2);
     }
-    
     return 70.0 * (n0 + n1 + n2);
 }
 
-// ============================================
-// VORONOI NOISE
-// ============================================
-
-struct VoronoiResult {
+struct VoronoiResult
+{
     float distance1;
     float distance2;
     float2 cellPoint;
     uint cellId;
 };
 
-inline VoronoiResult voronoi2D(float2 p, uint seed) {
+inline VoronoiResult voronoi2D(float2 p, uint seed)
+{
     float2 pi = floor(p);
     float2 pf = fract(p);
     
@@ -284,25 +285,27 @@ inline VoronoiResult voronoi2D(float2 p, uint seed) {
     result.distance1 = 100.0;
     result.distance2 = 100.0;
     
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
             float2 neighbor = float2(x, y);
             uint h = hash2(uint2(pi + neighbor) + seed);
             float2 point = neighbor + float2(hashToFloat(h), hashToFloat(hashPerlin(h)));
             
             float dist = length(pf - point);
             
-            if (dist < result.distance1) {
+            if (dist < result.distance1)
+            {
                 result.distance2 = result.distance1;
                 result.distance1 = dist;
                 result.cellPoint = pi + point;
                 result.cellId = h;
-            } else if (dist < result.distance2) {
-                result.distance2 = dist;
             }
+            else if (dist < result.distance2)
+                result.distance2 = dist;
         }
     }
-    
     return result;
 }
 

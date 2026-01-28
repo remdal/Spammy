@@ -21,7 +21,6 @@ struct VertexOut
     float3 viewRay;
 };
 
-// Hash function pour gradient
 float2 hash22(float2 p)
 {
     float3 p3 = fract(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
@@ -291,6 +290,26 @@ float3 atmosphericScattering(float3 ro, float3 rd, float3 sunDir, constant RMDLS
     return scatter;
 }
 
+float3 renderSun(float3 rd, float3 sunDir, float intensity)
+{
+    float sunDot = dot(rd, sunDir);
+    float3 sunColor = float3(0.0);
+    
+    // Hard sun disk
+    float sunDisk = smoothstep(0.9997, 0.9999, sunDot);
+    sunColor += float3(1.0, 0.95, 0.9) * sunDisk * 50.0;
+    
+    // Sun glow / corona
+    float glow = pow(max(sunDot, 0.0), 256.0);
+    sunColor += float3(1.0, 0.9, 0.7) * glow * 2.0;
+    
+    // Larger halo
+    float halo = pow(max(sunDot, 0.0), 8.0);
+    sunColor += float3(1.0, 0.8, 0.6) * halo * 0.15;
+    
+    return sunColor;
+}
+
 vertex VertexOut skybox_vertex(Vertex in [[stage_in]],
                                constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
 {
@@ -305,6 +324,7 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
                                 constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
 {
     float3 rd = normalize(in.viewRay);
+    float3 sunDir = normalize(uniforms.rmdlSun.sunDirection);
     float3 color = perlinFBMColor3D(rd);
     // effet pastel
     color = color * 0.5 + 0.7;
@@ -319,6 +339,8 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
         color += float3(1.0) * uniforms.sunIntensity * 0.1;
     float sunHalo = pow(max(0.0, sunDot), 32.0);
     color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
+    float3 sun = renderSun(rd, sunDir, uniforms.sunIntensity);
+    color += sun;
     
     return float4(color, 1.0);
 }
@@ -569,7 +591,8 @@ float4 rayMarchBlackHole(float3 rayOrigin, float3 rayDir, constant skybox::Black
 }
 
 fragment float4 blackHoleFragment(VertexOutBox in [[stage_in]],
-                                   constant skybox::BlackHoleUniforms& u [[buffer(0)]]) {
+                                  constant skybox::BlackHoleUniforms& u [[buffer(0)]])
+{
     float3 rayOrigin = u.cameraPosition;
     float3 rayDir = normalize(in.worldPos - rayOrigin);
     

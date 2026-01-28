@@ -147,13 +147,14 @@ struct BlackHoleUniforms
     float    rotationSpeed;
 };
 
-// Vertex INPUT (ce qui vient du buffer)
-struct BlackHoleVertexIn {
+struct BlackHoleVertexIn
+{
     simd_float3 position;
 };
 }
 
-struct RMDLSnowUniforms {
+struct RMDLSnowUniforms
+{
     float deltaTime;
     float time;
     simd::float3 cameraPos;

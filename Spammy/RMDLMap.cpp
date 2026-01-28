@@ -8,7 +8,7 @@
 #include "RMDLMap.hpp"
 
 InfiniteTerrainManager::InfiniteTerrainManager(MTL::Device* device, uint32_t seed)
-    : m_device(device)
+: m_device(device)
 {
     m_config.seed = seed;
     m_config.flatRadius = 50.0f;
@@ -105,7 +105,6 @@ void InfiniteTerrainManager::buildRenderPipeline(MTL::PixelFormat colorFormat, M
         printf("Terrain pipeline error: %s\n", error->localizedDescription()->utf8String());
     }
     
-    // Depth state
     auto depthDesc = MTL::DepthStencilDescriptor::alloc()->init();
     depthDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
     depthDesc->setDepthWriteEnabled(true);
@@ -119,11 +118,9 @@ void InfiniteTerrainManager::buildRenderPipeline(MTL::PixelFormat colorFormat, M
     library->release();
 }
 
-ChunkCoord InfiniteTerrainManager::worldToChunk(simd::float3 pos) const {
-    return ChunkCoord{
-        int32_t(floorf(pos.x / m_chunkWorldSize)),
-        int32_t(floorf(pos.z / m_chunkWorldSize))
-    };
+ChunkCoord InfiniteTerrainManager::worldToChunk(simd::float3 pos) const
+{
+    return ChunkCoord{ int32_t(floorf(pos.x / m_chunkWorldSize)), int32_t(floorf(pos.z / m_chunkWorldSize)) };
 }
 
 void InfiniteTerrainManager::update(simd::float3 playerPos, MTL::CommandBuffer* cmd) {
@@ -149,7 +146,8 @@ void InfiniteTerrainManager::update(simd::float3 playerPos, MTL::CommandBuffer* 
         dayTime = 0.f;
 }
 
-void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer* cmd) {
+void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer* cmd)
+{
     TerrainChunkLisse chunk;
     chunk.worldOrigin = simd::float3{
         float(coord.x) * m_chunkWorldSize,
@@ -232,7 +230,7 @@ void InfiniteTerrainManager::generateChunk(ChunkCoord coord, MTL::CommandBuffer*
 
 void InfiniteTerrainManager::unloadDistantChunks(ChunkCoord playerChunk)
 {
-    uint32_t unloadDist = m_viewDistance + 2;
+    uint32_t unloadDist = m_viewDistance + 15;
     
     std::vector<ChunkCoord> toRemove;
     for (auto& [coord, chunk] : m_chunks)
@@ -255,8 +253,8 @@ void InfiniteTerrainManager::unloadDistantChunks(ChunkCoord playerChunk)
 
 void InfiniteTerrainManager::requestHeightAt(float x, float z, MTL::CommandBuffer* cmd)
 {
-    // Lire le résultat du frame PRÉCÉDENT (buffer opposé)
-    if (m_heightReady) {
+    if (m_heightReady)
+    {
         uint32_t readBuffer = 1 - m_currentBuffer;
         PhysicsSample* result = static_cast<PhysicsSample*>(m_resultBuffer[readBuffer]->contents());
         m_lastHeight = result->height;
