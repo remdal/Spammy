@@ -47,12 +47,14 @@
 
 #include "RMDLMotherCube.hpp"
 
+#include "RMDLFab3DUI.hpp"
+
 #define kMaxBuffersInFlight 3
 
 static const uint32_t NumLights = 256;
 
 enum class GamePlayMode {
-    FreeCam, Driving, Building, DEV, Flight
+    FreeCam, Driving, Building, DEV, Flight, FAB
 };
 
 struct VertexCursor
@@ -287,6 +289,8 @@ private:
     
     
     inventoryWindow::InventoryPanel m_inventoryPanel;
+    
+    FabUI  fabUI;
 //    NASAAtTheHelm::VehicleManager vehicleManager;
 //    NASAAtTheHelm::InventoryUIRenderer inventoryUI;
 //    GameMode m_gameMode = GameMode::FreeCam;

@@ -89,6 +89,7 @@ enum : Controls
                 [self.gameCoordinator toggleVehicleBuildMode];
                 break;
             case 0x22: [self.gameCoordinator setInventory]; break; // i
+            case 0x30: [self.gameCoordinator toggleVehicleMode]; break; // tab?? 0x75 nok
             
             case 0x12: [self.gameCoordinator selectVehicleSlot:0]; break;
             case 0x13: [self.gameCoordinator selectVehicleSlot:1]; break;
@@ -397,10 +398,10 @@ enum : Controls
 
 - (void)toggleVehicleMode
 {
-    if (_pGameCoordinator->m_gamePlayMode == GamePlayMode::FreeCam || _pGameCoordinator->m_gamePlayMode == GamePlayMode::DEV)
-        _pGameCoordinator->setGamePlayMode(GamePlayMode::Driving);
+    if (_pGameCoordinator->m_gamePlayMode == GamePlayMode::FAB || _pGameCoordinator->m_gamePlayMode == GamePlayMode::Building)
+        _pGameCoordinator->setGamePlayMode(GamePlayMode::DEV);
     else
-        _pGameCoordinator->setGamePlayMode(GamePlayMode::FreeCam);
+        _pGameCoordinator->setGamePlayMode(GamePlayMode::FAB);
 }
 
 - (void)toggleVehicleBuildMode

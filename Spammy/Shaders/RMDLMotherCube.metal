@@ -10,7 +10,8 @@ using namespace metal;
 
 #import "Helpers.metal"
 
-struct BlockFragIn {
+struct BlockFragIn
+{
     float4 position [[position]];
     float3 worldPos;
     float3 worldNormal;

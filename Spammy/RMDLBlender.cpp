@@ -593,7 +593,8 @@ void RMDLBlender::printMemoryStats() const
     size_t staticCount = 0, skinnedCount = 0;
     
     printf("\n=== RMDLBlender Memory Stats ===\n");
-    for (const auto& m : m_models) {
+    for (const auto& m : m_models)
+{
         size_t vertMem, unifMem;
         if (m.hasAnimation) {
             vertMem = m.verticesFull.size() * sizeof(VertexBlenderFull);

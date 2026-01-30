@@ -115,13 +115,14 @@ grid(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::Building),
+vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::FAB),
 m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 //planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
 //moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
 //sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
 terrainLisse(m_device, 89),
-blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
+blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue),
+fabUI(m_device)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -142,7 +143,7 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
     blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
     size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
-    blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20});
+    blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20}) + math::makeScale({10, 10, 10});
     
     
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
@@ -819,6 +820,13 @@ void GameCoordinator::draw(MTK::View* view)
     
     blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position(), dt);
     
+    if (m_gamePlayMode == GamePlayMode::FAB)
+    {
+        if (fabUI.isOpen) fabUI.close();
+        fabUI.open();
+        fabUI.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, simd::float3{ m_camera.position().x + 1.5f, m_camera.position().y + 1.5f, m_camera.position().z + 7.f });//simd::float3{0, 1.5f, -3});
+//        printf("%i\n", m_gamePlayMode);
+    }
     
     renderCommandEncoder->endEncoding();
 
