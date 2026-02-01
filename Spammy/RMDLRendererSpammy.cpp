@@ -121,8 +121,7 @@ m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 //moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
 //sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
 terrainLisse(m_device, 89),
-blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue),
-fabUI(m_device)
+blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -200,8 +199,8 @@ fabUI(m_device)
 //    if (vehicleManager.activeVehicle)
 //        vehicleManager.activeVehicle->position = {0.0f, 5.0f, 0.0f};
     
-//    m_inventoryPanel.setSlotData(1, 2, 20, {0.5f, 0.5f, 0.55f, 1.f});
-//    m_inventoryPanel.setSlotData(2, 3, 4, {0.8f, 0.4f, 0.2f, 1.f});
+    m_inventoryPanel.setSlotItem(1, 2, 20, {0.5f, 0.5f, 0.55f, 1.f});
+    m_inventoryPanel.setSlotItem(2, 3, 4, {0.8f, 0.4f, 0.2f, 1.f});
     
     configLisse.seed = seed;
     configLisse.flatRadius = 50.0f;      // 50 unités de zone plate
@@ -231,6 +230,70 @@ fabUI(m_device)
     } else {
         printf("Block NOT FOUND!\n");
     }
+
+    m_fabPanel = new inventoryWindow::FabPanel3D(
+        m_device,
+        MTL::PixelFormatRGBA16Float,  // Ton color format
+        MTL::PixelFormatDepth32Float, // Ton depth format
+        m_shaderLibrary
+    );
+    
+    m_fabPanel->show();
+    
+    // Configuration visuelle
+    m_fabPanel->panelPosition = {0.5f, 0.5f};  // Centre de l'écran
+    m_fabPanel->panelSize = {680.f, 520.f};
+    m_fabPanel->inventoryWidth = 200.f;
+    m_fabPanel->headerHeight = 40.f;
+    
+    // Style personnalisé
+    m_fabPanel->style.panelBg = {0.07f, 0.08f, 0.11f, 0.95f};
+    m_fabPanel->style.panelBorder = {0.3f, 0.4f, 0.6f, 1.0f};
+    m_fabPanel->style.headerBg = {0.1f, 0.12f, 0.18f, 1.0f};
+    m_fabPanel->style.axisX = {0.95f, 0.2f, 0.2f, 1.0f};   // Rouge vif
+    m_fabPanel->style.axisY = {0.2f, 0.9f, 0.25f, 1.0f};   // Vert vif
+    m_fabPanel->style.axisZ = {0.25f, 0.45f, 0.95f, 1.0f}; // Bleu vif
+    m_fabPanel->style.cornerRadius = 14.f;
+    m_fabPanel->style.slotScale = 0.4f;
+    m_fabPanel->style.slotSpacing = 1.0f;
+    m_fabPanel->style.axisLength = 3.5f;
+    m_fabPanel->style.axisThickness = 0.1f;
+    
+    // Vue initiale
+    m_fabPanel->rotationY = 0.75f;
+    m_fabPanel->rotationX = 0.5f;
+    m_fabPanel->targetRotationY = 0.75f;
+    m_fabPanel->targetRotationX = 0.5f;
+    m_fabPanel->zoom = 1.0f;
+    
+    // Callback couleur des items
+    m_fabPanel->getItemColor = [](inventoryWindow::FabItemID id) -> simd::float4 {
+        switch (id) {
+            case 0:  return {0.2f, 0.22f, 0.28f, 0.2f};    // Vide
+            case 1:  return {0.75f, 0.75f, 0.8f, 1.0f};    // Fer
+            case 2:  return {1.0f, 0.85f, 0.25f, 1.0f};    // Or
+            case 3:  return {0.35f, 0.9f, 0.95f, 1.0f};    // Diamant
+            case 4:  return {0.6f, 0.42f, 0.28f, 1.0f};    // Bois
+            case 5:  return {0.55f, 0.55f, 0.5f, 1.0f};    // Pierre
+            case 6:  return {0.9f, 0.15f, 0.15f, 1.0f};    // Redstone
+            case 7:  return {0.15f, 0.8f, 0.3f, 1.0f};     // Émeraude
+            case 8:  return {0.3f, 0.3f, 0.35f, 1.0f};     // Charbon
+            case 9:  return {0.9f, 0.5f, 0.2f, 1.0f};      // Cuivre
+            case 10: return {0.7f, 0.4f, 0.9f, 1.0f};      // Améthyste
+            default: {
+                // Couleur générée pour les autres IDs
+                float r = fmodf(id * 0.618034f, 1.f) * 0.5f + 0.45f;
+                float g = fmodf(id * 0.381966f + 0.2f, 1.f) * 0.5f + 0.4f;
+                float b = fmodf(id * 0.723607f + 0.5f, 1.f) * 0.55f + 0.4f;
+                return {r, g, b, 1.f};
+            }
+        }
+    };
+    m_fabPanel->grid.placeItem(0, 0, 0, 1);  // Fer
+    m_fabPanel->grid.placeItem(2, 2, 2, 2);  // Or au centre
+    m_fabPanel->grid.placeItem(4, 4, 4, 3);  // Diamant
+    m_fabPanel->grid.placeItem(1, 3, 2, 4);  // Bois
+    m_fabPanel->grid.placeItem(3, 1, 3, 6);  // Redstone
 }
 
 GameCoordinator::~GameCoordinator()
@@ -497,6 +560,11 @@ void GameCoordinator::vehicleMouseUp()
     m_terraVehicle.onMouseUp(normPos, screenSize);
 }
 
+void GameCoordinator::onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button)
+{
+    m_fabPanel->onMouseDragged(screenPos, screenSize, delta, button);
+}
+
 void GameCoordinator::handleMouseDown(bool rightClick)
 {
     m_inventoryPanel.onMouseDown(cursorPosition, simd::make_float2(m_viewport.width, m_viewport.height));
@@ -511,6 +579,8 @@ void GameCoordinator::handleScroll(float deltaY)
 {
     if (m_gamePlayMode == GamePlayMode::Driving || m_gamePlayMode == GamePlayMode::Building || m_gamePlayMode == GamePlayMode::DEV)
         m_terraVehicle.zoomCamera(deltaY * 0.5f);
+//    if (deltaY != 0.f)
+    m_inventoryPanel.onMouseScroll(deltaY);
 }
 
 void GameCoordinator::setMousePosition(float x, float y)
@@ -630,6 +700,8 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
 //        moon->applyGravityTo(m_vehicleRigidBody);
 //    }
     blocs.update(dt);
+    
+    m_fabPanel->update(dt);
 }
 
 void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
@@ -822,10 +894,8 @@ void GameCoordinator::draw(MTK::View* view)
     
     if (m_gamePlayMode == GamePlayMode::FAB)
     {
-        if (fabUI.isOpen) fabUI.close();
-        fabUI.open();
-        fabUI.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, simd::float3{ m_camera.position().x + 1.5f, m_camera.position().y + 1.5f, m_camera.position().z + 7.f });//simd::float3{0, 1.5f, -3});
-//        printf("%i\n", m_gamePlayMode);
+        m_fabPanel->render(renderCommandEncoder, screenSz);
+
     }
     
     renderCommandEncoder->endEncoding();

@@ -163,6 +163,8 @@ public:
     
     void setInventory();
     
+    void onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button);
+    
     void playCinematic();
 
     void playSoundTestY();
@@ -290,7 +292,8 @@ private:
     
     inventoryWindow::InventoryPanel m_inventoryPanel;
     
-    FabUI  fabUI;
+//    FabUI  fabUI;
+    inventoryWindow::FabPanel3D* m_fabPanel = nullptr;
 //    NASAAtTheHelm::VehicleManager vehicleManager;
 //    NASAAtTheHelm::InventoryUIRenderer inventoryUI;
 //    GameMode m_gameMode = GameMode::FreeCam;

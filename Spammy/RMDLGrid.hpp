@@ -56,6 +56,67 @@ private:
     int                         m_gridSize;
 };
 
+
+namespace Fabience {
+
+struct have
+{
+    int score;
+    
+    
+    
+    uint8_t item;
+    void reset();
+};
+
+class NotSoClassy
+{
+public:
+    NotSoClassy(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    ~NotSoClassy();
+
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float2 screenSize);
+    const have* update(float deltaTime);
+    void drawUI(MTL::RenderCommandEncoder* renderCommandEncoder);
+    
+    void onMouseDown(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseUp(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseMoved(simd::float2 screenPosition, simd::float2 screenSize);
+    void onMouseScroll(float deltaY);
+    
+    void setVisible(bool visible) { m_visible = visible; }
+    bool isVisible() const { return m_visible; }
+    
+    void setCellSize(float size) { m_cellSize = size; }
+    
+    void setColorXY(simd::float4 color) { m_colorXY = color; }
+    void setColorXZ(simd::float4 color) { m_colorXZ = color; }
+    void setColorYZ(simd::float4 color) { m_colorYZ = color; }
+    void setAllColors(simd::float4 color) { m_colorXY = m_colorXZ = m_colorYZ = color; }
+    
+private:
+    MTL::RenderPipelineState*   m_renderPipelineState;
+    MTL::DepthStencilState*     m_depthStencilState;
+    MTL::Buffer*                m_vertexBuffer;
+    MTL::Buffer*                m_indexBuffer;
+    MTL::Buffer*                m_uniformBuffer;
+    
+    have                        m_have;
+    bool                        m_showXY = true;
+    bool                        m_showXZ = true;
+    bool                        m_showYZ = true;
+    bool                        m_visible = true;
+    float                       m_cellSize = 1.0f;
+    simd::float4                m_colorXY = {0.2f, 0.6f, 1.0f, 0.6f};
+    simd::float4                m_colorXZ = {0.2f, 1.0f, 0.4f, 0.6f};
+    simd::float4                m_colorYZ = {1.0f, 0.4f, 0.2f, 0.6f};
+    
+    void buildPipeline(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    
+};
+
+}
+
 namespace GridCommandant {
 
 class VehicleBuildGrid

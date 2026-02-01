@@ -723,7 +723,33 @@ void BuildGrid::setVisible(bool visible)
 //    
 //    encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_indexCount, MTL::IndexTypeUInt32, m_meshIndexBuffer, 0);
 //}
+namespace Fabience {
 
+NotSoClassy::NotSoClassy(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+{
+    
+}
+
+NotSoClassy::~NotSoClassy()
+{
+    m_renderPipelineState->release();
+    m_depthStencilState->release();
+    m_vertexBuffer->release();
+    m_indexBuffer->release();
+    m_uniformBuffer->release();
+}
+
+const have* NotSoClassy::update(float deltaTime)
+{
+    return &m_have;
+}
+
+void NotSoClassy::render(MTL::RenderCommandEncoder *renderCommandEncoder, simd::float2 screenSize)
+{
+    
+}
+
+}
 
 namespace GridCommandant {
 

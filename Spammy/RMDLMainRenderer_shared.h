@@ -202,6 +202,7 @@ struct GridUniforms
 };
 
 namespace GridCommandant {
+
 struct VehicleGridUniforms
 {
     simd::float4x4 viewProjectionMatrix;

@@ -264,21 +264,16 @@ bool bsp(Point const a, Point const b, Point const c, Point const point)
     std::cout << "\033[32mPoint p1 (5, 5) is inside: " << bsp(aaaa, bbbb, cccc, p1) << "\033[0m" << std::endl;
     std::cout << "\033[32mPoint p2 (10, 5) is outside: " << bsp(aaaa, bbbb, cccc, p2) << "\033[0m" << std::endl;
 
-    // True, Thus, if the point is a vertex or on edge, it will return False
-    if (bsp(Point(0, 0), Point(10, 30), Point(20, 0), Point(30, 15)) == true )
-    {
+    if (bsp(Point(0, 0), Point(10, 30), Point(20, 0), Point(30, 15)) == true)
         std::cout << "Point1 is in the triangle" << std::endl;
-    } else {
+    else
         std::cout << "Point1 is not in the triangle" << std::endl;
-    }
 
-    if (bsp(Point(0, 0), Point(10, 30), Point(20, 0), Point(10, 15)) == true )
-    {
+    if (bsp(Point(0, 0), Point(10, 30), Point(20, 0), Point(10, 15)) == true)
         std::cout << "Point2 is in the triangle" << std::endl;
-    } else {
+    else
         std::cout << "Point2 is not in the triangle" << std::endl;
-    }
-
+ 
     return (0);
 }*/
 /*

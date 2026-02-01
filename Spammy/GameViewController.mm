@@ -177,13 +177,16 @@ enum : Controls
     float deltaY = [event deltaY] * sensitivity;
 
     [self.gameCoordinator rotateCameraYaw : deltaX Pitch : deltaY];
+    
+//    [self.gameCoordinator mouseFab :  ,,,];
+//    (pos, screenSize, delta, button);
 }
 
 - (void)scrollWheel:(NSEvent *)event
 {
     float delta = [event scrollingDeltaY];
     if ([event hasPreciseScrollingDeltas]) delta *= 0.1f;
-    [self.gameCoordinator handleScroll:delta];
+    [self.gameCoordinator handleScroll:delta / 4];
 }
 
 //- (void)mouseEntered:(NSEvent *)event
@@ -447,6 +450,11 @@ enum : Controls
     float mouseY = (float)(boundsSize.height - cursorPos.y) * scaleY;
     
 //    mouseX += event.deltaY;
+    
+//    float delta = [event scrollingDeltaY];
+//    if ([event hasPreciseScrollingDeltas]) delta *= 0.1f;
+//    [self rightMouseDown:event];
+//    _pGameCoordinator->onMouseDragged(simd::float2{static_cast<float>(cursorPos.x), static_cast<float>(cursorPos.y)}, drawableSize.width, delta, YES);
     
     _pGameCoordinator->setMousePosition(mouseX, mouseY);
 }

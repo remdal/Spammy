@@ -53,6 +53,10 @@ fragment float4 gridFragmentShader(GridVertexOut in [[stage_in]],
     return color;
 }
 
+
+
+
+
 struct VertexIn
 {
     float3 position [[attribute(0)]];
@@ -70,6 +74,34 @@ struct VertexOut
     float  distToCamera;
     uint   planeIndex;
 };
+
+
+struct Fabience
+{
+    float time;
+    float4x4 projectionMatrix;
+};
+
+struct VertexInFabience
+{
+    float3 position [[attribute(0)]];
+    float3 normal   [[attribute(1)]];
+    float2 uv       [[attribute(2)]];
+    uchar  planeIdx [[attribute(3)]];
+};
+
+struct VertexOutFabience
+{
+    float4 position [[position]];
+};
+
+vertex VertexOutFabience fabienceVertex(VertexInFabience in [[stage_in]],
+                                        constant Fabience& uniforms [[buffer(1)]])
+{
+    VertexOutFabience out;
+    out.position = uniforms.projectionMatrix * float4(in.position, 1.0);
+    return out;
+}
 
 vertex VertexOut vehicleGridVertex(VertexIn in [[stage_in]],
                                    constant GridCommandant::VehicleGridUniforms& u [[buffer(1)]])

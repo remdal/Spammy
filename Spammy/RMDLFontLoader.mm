@@ -382,7 +382,7 @@ Font createFont(MTL::Device* device)
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef ctx = CGBitmapContextCreate(bitmap, bitmapW, bitmapH, 8, bytesPerRow, colorSpace, kCGImageAlphaPremultipliedLast);
     CGFloat margin = (CGFloat)bitmapW * 0.120/2.0;
-    CGColorRef color = CGColorCreateGenericRGB(1.0, 0.0, 0.0, 1.0);
+    CGColorRef color = CGColorCreateGenericRGB(1.0, 1.0, 0.0, 1.0);
     CGFloat fontSize = (CGFloat)bitmapW * 0.05;
     CFStringRef fontName = CFSTR("PT Mono"); // Fira Code, Helvetica,
     CTFontRef font = CTFontCreateWithName(fontName, fontSize, nullptr);
