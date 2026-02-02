@@ -129,8 +129,8 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 80000.0f);
-    m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f);
+    m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f);
     m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -235,65 +235,61 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
         m_device,
         MTL::PixelFormatRGBA16Float,  // Ton color format
         MTL::PixelFormatDepth32Float, // Ton depth format
-        m_shaderLibrary
+        m_shaderLibrary, width, height
     );
-    
     m_fabPanel->show();
     
-    // Configuration visuelle
-    m_fabPanel->panelPosition = {0.5f, 0.5f};  // Centre de l'écran
-    m_fabPanel->panelSize = {680.f, 520.f};
-    m_fabPanel->inventoryWidth = 200.f;
-    m_fabPanel->headerHeight = 40.f;
+
+    m_fabPanel->panelCenter = {0.5f, 0.5f};     // Centre de l'écran
+    m_fabPanel->panelPixelSize = {800.f, 600.f}; // Taille du panel
+    m_fabPanel->sidebarWidth = 220.f;            // Largeur inventaire
+    m_fabPanel->headerHeight = 44.f;
     
-    // Style personnalisé
-    m_fabPanel->style.panelBg = {0.07f, 0.08f, 0.11f, 0.95f};
-    m_fabPanel->style.panelBorder = {0.3f, 0.4f, 0.6f, 1.0f};
-    m_fabPanel->style.headerBg = {0.1f, 0.12f, 0.18f, 1.0f};
-    m_fabPanel->style.axisX = {0.95f, 0.2f, 0.2f, 1.0f};   // Rouge vif
-    m_fabPanel->style.axisY = {0.2f, 0.9f, 0.25f, 1.0f};   // Vert vif
-    m_fabPanel->style.axisZ = {0.25f, 0.45f, 0.95f, 1.0f}; // Bleu vif
-    m_fabPanel->style.cornerRadius = 14.f;
-    m_fabPanel->style.slotScale = 0.4f;
-    m_fabPanel->style.slotSpacing = 1.0f;
-    m_fabPanel->style.axisLength = 3.5f;
-    m_fabPanel->style.axisThickness = 0.1f;
+    // Caméra initiale
+    m_fabPanel->cameraYaw = 0.8f;
+    m_fabPanel->cameraPitch = 0.5f;
+    m_fabPanel->cameraZoom = 1.0f;
     
-    // Vue initiale
-    m_fabPanel->rotationY = 0.75f;
-    m_fabPanel->rotationX = 0.5f;
-    m_fabPanel->targetRotationY = 0.75f;
-    m_fabPanel->targetRotationX = 0.5f;
-    m_fabPanel->zoom = 1.0f;
+    // Style visuel
+    m_fabPanel->style.panelBg = {0.05f, 0.06f, 0.09f, 0.95f};
+    m_fabPanel->style.panelBorder = {0.30f, 0.40f, 0.60f, 1.0f};
+    m_fabPanel->style.headerBg = {0.08f, 0.10f, 0.15f, 1.0f};
+    m_fabPanel->style.axisX = {0.95f, 0.15f, 0.15f, 1.0f};  // Rouge
+    m_fabPanel->style.axisY = {0.15f, 0.95f, 0.20f, 1.0f};  // Vert
+    m_fabPanel->style.axisZ = {0.20f, 0.45f, 0.95f, 1.0f};  // Bleu
+    m_fabPanel->style.selection = {1.0f, 0.85f, 0.15f, 1.0f}; // Jaune
+    m_fabPanel->style.cubeSize = 0.40f;
+    m_fabPanel->style.cubeSpacing = 1.1f;
+    m_fabPanel->style.axisLength = 3.8f;
     
-    // Callback couleur des items
-    m_fabPanel->getItemColor = [](inventoryWindow::FabItemID id) -> simd::float4 {
+    // Callback pour les couleurs des items
+    m_fabPanel->itemColorCallback = [](inventoryWindow::FabItemID id) -> simd::float4 {
         switch (id) {
-            case 0:  return {0.2f, 0.22f, 0.28f, 0.2f};    // Vide
-            case 1:  return {0.75f, 0.75f, 0.8f, 1.0f};    // Fer
-            case 2:  return {1.0f, 0.85f, 0.25f, 1.0f};    // Or
-            case 3:  return {0.35f, 0.9f, 0.95f, 1.0f};    // Diamant
-            case 4:  return {0.6f, 0.42f, 0.28f, 1.0f};    // Bois
-            case 5:  return {0.55f, 0.55f, 0.5f, 1.0f};    // Pierre
-            case 6:  return {0.9f, 0.15f, 0.15f, 1.0f};    // Redstone
-            case 7:  return {0.15f, 0.8f, 0.3f, 1.0f};     // Émeraude
-            case 8:  return {0.3f, 0.3f, 0.35f, 1.0f};     // Charbon
-            case 9:  return {0.9f, 0.5f, 0.2f, 1.0f};      // Cuivre
-            case 10: return {0.7f, 0.4f, 0.9f, 1.0f};      // Améthyste
+            case 1:  return {0.75f, 0.75f, 0.80f, 1.0f}; // Fer
+            case 2:  return {1.00f, 0.85f, 0.20f, 1.0f}; // Or
+            case 3:  return {0.30f, 0.90f, 0.95f, 1.0f}; // Diamant
+            case 4:  return {0.60f, 0.45f, 0.30f, 1.0f}; // Bois
+            case 5:  return {0.55f, 0.55f, 0.52f, 1.0f}; // Pierre
+            case 6:  return {0.90f, 0.20f, 0.20f, 1.0f}; // Redstone
+            case 7:  return {0.20f, 0.85f, 0.35f, 1.0f}; // Émeraude
+            case 8:  return {0.25f, 0.25f, 0.28f, 1.0f}; // Charbon
+            case 9:  return {0.90f, 0.55f, 0.25f, 1.0f}; // Cuivre
+            case 10: return {0.70f, 0.40f, 0.90f, 1.0f}; // Améthyste
             default: {
-                // Couleur générée pour les autres IDs
                 float r = fmodf(id * 0.618034f, 1.f) * 0.5f + 0.45f;
-                float g = fmodf(id * 0.381966f + 0.2f, 1.f) * 0.5f + 0.4f;
-                float b = fmodf(id * 0.723607f + 0.5f, 1.f) * 0.55f + 0.4f;
+                float g = fmodf(id * 0.381966f + 0.25f, 1.f) * 0.5f + 0.40f;
+                float b = fmodf(id * 0.723607f + 0.50f, 1.f) * 0.5f + 0.45f;
                 return {r, g, b, 1.f};
             }
         }
     };
-    m_fabPanel->grid.placeItem(0, 0, 0, 1);  // Fer
-    m_fabPanel->grid.placeItem(2, 2, 2, 2);  // Or au centre
-    m_fabPanel->grid.placeItem(4, 4, 4, 3);  // Diamant
-    m_fabPanel->grid.placeItem(1, 3, 2, 4);  // Bois
-    m_fabPanel->grid.placeItem(3, 1, 3, 6);  // Redstone
+    
+    // Ajouter quelques items de test
+    m_fabPanel->grid.place(0, 0, 0, 1);  // Fer en bas à gauche
+    m_fabPanel->grid.place(4, 4, 4, 2);  // Or en haut à droite
+    m_fabPanel->grid.place(2, 2, 2, 3);  // Diamant au centre
+    m_fabPanel->grid.place(1, 3, 2, 4);  // Bois
+    m_fabPanel->grid.place(3, 1, 4, 6);  // Redstone
 }
 
 GameCoordinator::~GameCoordinator()
@@ -474,8 +470,11 @@ void GameCoordinator::moveCamera(simd::float3 translation)
 
 void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
 {
-    m_camera.rotateOnAxis({0.0f, 1.0f, 0.0f}, deltaYaw);
-    m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
+    if (m_gamePlayMode != GamePlayMode::FAB)
+    {
+        m_camera.rotateOnAxis({0.0f, 1.0f, 0.0f}, deltaYaw);
+        m_camera.rotateOnAxis(m_camera.right(), deltaPitch);
+    }
 }
 
 void GameCoordinator::setInventory()
@@ -486,7 +485,7 @@ void GameCoordinator::setInventory()
     if (testTransitionCamera == 1)
         m_camera.transitionTo(m_cameraOrtho, 1.5f, RMDLCameraEase::Linear);
     if (testTransitionCamera == 2)
-        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 80000.0f), 1.5f, RMDLCameraEase::SmoothStep);
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f), 150.0f, RMDLCameraEase::SmoothStep);
     if (testTransitionCamera == 3)
         m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::SmootherStep);
     if (testTransitionCamera == 4)
@@ -562,12 +561,13 @@ void GameCoordinator::vehicleMouseUp()
 
 void GameCoordinator::onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button)
 {
-    m_fabPanel->onMouseDragged(screenPos, screenSize, delta, button);
+//    m_fabPanel->onMouseDragged(screenPos, screenSize, delta, button);
 }
 
 void GameCoordinator::handleMouseDown(bool rightClick)
 {
     m_inventoryPanel.onMouseDown(cursorPosition, simd::make_float2(m_viewport.width, m_viewport.height));
+
 }
 
 void GameCoordinator::handleMouseUp()
@@ -844,9 +844,9 @@ void GameCoordinator::draw(MTK::View* view)
 //    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 
     gridCommandant.update(dt);
-    gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
-    gridCommandant.setBlockRotation(m_currentVehicleRotation);
-    gridCommandant.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
+//    gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
+//    gridCommandant.setBlockRotation(m_currentVehicleRotation);
+    gridCommandant.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());//simd::float3{0, 50, 0});
     
 //    grid.setGridCenter({0.0f, 0.0f, 0.0f});
     grid.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());
@@ -955,6 +955,9 @@ void GameCoordinator::draw(MTK::View* view)
 void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, NS::UInteger height)
 {
     setViewportWindow(width, height);
+    
+    if (m_fabPanel)
+        m_fabPanel->setViewportWindow(width, height);
     
     screenSz = {(float)m_viewport.width, (float)m_viewport.height};
 

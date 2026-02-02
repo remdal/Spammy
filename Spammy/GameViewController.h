@@ -38,4 +38,8 @@
 - (void)vehicleMouseUp;
 - (void)handleScroll:(float)delta;
 
+- (void)fabPanelKey:(uint16_t)keyCode;
+- (void)fabPanelDrag:(float)dx deltaY:(float)dy;
+- (void)fabPanelScroll:(float)delta;
+
 @end

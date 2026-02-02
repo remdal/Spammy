@@ -227,6 +227,7 @@ struct GridVertex3D {
     uint8_t      planeIndex; // 0=XY, 1=XZ, 2=YZ
     uint8_t      padding[3];
 };
+
 }
 
 #endif /* RMDLMAINRENDERER_SHARED_H */

@@ -75,7 +75,7 @@ public:
     NotSoClassy(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
     ~NotSoClassy();
 
-    void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float2 screenSize);
+    void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float2 screenSize, NS::UInteger width, NS::UInteger height);
     const have* update(float deltaTime);
     void drawUI(MTL::RenderCommandEncoder* renderCommandEncoder);
     

@@ -744,7 +744,7 @@ const have* NotSoClassy::update(float deltaTime)
     return &m_have;
 }
 
-void NotSoClassy::render(MTL::RenderCommandEncoder *renderCommandEncoder, simd::float2 screenSize)
+void NotSoClassy::render(MTL::RenderCommandEncoder *renderCommandEncoder, simd::float2 screenSize, NS::UInteger width, NS::UInteger height)
 {
     
 }
@@ -830,8 +830,7 @@ void VehicleBuildGrid::generatePlaneGrid(std::vector<GridVertex3D>& vertices, st
         float offset = i * m_cellSize;
         simd::float3 lineStart = bitangent * offset - tangent * halfSize;
         simd::float3 lineEnd = bitangent * offset + tangent * halfSize;
-        
-        // Quad pour la ligne (4 vertices)
+    
         uint32_t vi = (uint32_t)vertices.size();
         float t = m_lineThickness * 0.5f;
         

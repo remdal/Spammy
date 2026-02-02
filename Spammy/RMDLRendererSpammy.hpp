@@ -166,6 +166,25 @@ public:
     void onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button);
     
     void playCinematic();
+    
+    void fabPanelKey(uint16_t keyCode) {
+        if (m_fabPanel && m_fabPanel->visible) {
+            m_fabPanel->handleKey(keyCode);
+        }
+    }
+
+    void fabPanelDrag(float dx, float dy) {
+        if (m_fabPanel && m_fabPanel->visible) {
+            m_fabPanel->cameraYaw += dx;
+            m_fabPanel->cameraPitch = std::clamp(m_fabPanel->cameraPitch + dy, -1.5f, 1.5f);
+        }
+    }
+
+    void fabPanelScroll(float delta) {
+        if (m_fabPanel && m_fabPanel->visible) {
+            m_fabPanel->cameraZoom = std::clamp(m_fabPanel->cameraZoom + delta * 0.1f, 0.3f, 3.0f);
+        }
+    }
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);

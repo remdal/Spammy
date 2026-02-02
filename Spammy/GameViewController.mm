@@ -101,6 +101,14 @@ enum : Controls
             case 0x1C: [self.gameCoordinator selectVehicleSlot:7]; break;
             case 0x19: [self.gameCoordinator selectVehicleSlot:8]; break;
             case 0x1D: [self.gameCoordinator selectVehicleSlot:9]; break;
+                
+                
+            case 0x0D: [self.gameCoordinator fabPanelKey:0x0D]; break; // W
+            case 0x00: [self.gameCoordinator fabPanelKey:0x00]; break; // A
+            case 0x01: [self.gameCoordinator fabPanelKey:0x01]; break; // S
+            case 0x02: [self.gameCoordinator fabPanelKey:0x02]; break; // D
+            case 0x0C: [self.gameCoordinator fabPanelKey:0x0C]; break; // Q
+            case 0x0E: [self.gameCoordinator fabPanelKey:0x06]; break; // Z
         }
     }
     NSString* chars = [event charactersIgnoringModifiers];
@@ -178,8 +186,7 @@ enum : Controls
 
     [self.gameCoordinator rotateCameraYaw : deltaX Pitch : deltaY];
     
-//    [self.gameCoordinator mouseFab :  ,,,];
-//    (pos, screenSize, delta, button);
+    [self.gameCoordinator fabPanelDrag:deltaX deltaY:deltaY];
 }
 
 - (void)scrollWheel:(NSEvent *)event
@@ -187,6 +194,8 @@ enum : Controls
     float delta = [event scrollingDeltaY];
     if ([event hasPreciseScrollingDeltas]) delta *= 0.1f;
     [self.gameCoordinator handleScroll:delta / 4];
+    
+    [self.gameCoordinator fabPanelScroll:delta / 4];
 }
 
 //- (void)mouseEntered:(NSEvent *)event
@@ -430,6 +439,21 @@ enum : Controls
 - (void)vehicleMouseUp
 {
     _pGameCoordinator->vehicleMouseUp();
+}
+
+- (void)fabPanelKey:(uint16_t)keyCode
+{
+    _pGameCoordinator->fabPanelKey(keyCode);
+}
+
+- (void)fabPanelDrag:(float)dx deltaY:(float)dy
+{
+    _pGameCoordinator->fabPanelDrag(dx, dy);
+}
+
+- (void)fabPanelScroll:(float)delta
+{
+    _pGameCoordinator->fabPanelScroll(delta);
 }
 
 - (void)handleScroll:(float)delta

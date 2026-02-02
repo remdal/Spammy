@@ -21,313 +21,353 @@
 #include <cmath>
 #include <algorithm>
 
+#include "RMDLMathUtils.hpp"
+
 namespace inventoryWindow {
 
-constexpr uint32_t FAB_GRID_SIZE = 5;
-constexpr uint32_t FAB_GRID_TOTAL = FAB_GRID_SIZE * FAB_GRID_SIZE * FAB_GRID_SIZE;
+static constexpr uint32_t FAB_GRID_SIZE = 5;
+static constexpr uint32_t FAB_GRID_TOTAL = FAB_GRID_SIZE * FAB_GRID_SIZE * FAB_GRID_SIZE;
 
 using FabItemID = uint32_t;
-constexpr FabItemID FAB_ITEM_EMPTY = 0;
+static constexpr FabItemID FAB_EMPTY = 0;
 
-// ============================================================================
-// Structures de données
-// ============================================================================
-
-struct FabSlot {
-    FabItemID itemId = FAB_ITEM_EMPTY;
+struct FabSlot
+{
+    FabItemID itemId = FAB_EMPTY;
     uint32_t quantity = 0;
     
-    bool isEmpty() const { return itemId == FAB_ITEM_EMPTY || quantity == 0; }
-    void clear() { itemId = FAB_ITEM_EMPTY; quantity = 0; }
+    bool isEmpty() const { return itemId == FAB_EMPTY || quantity == 0; }
+    void clear() { itemId = FAB_EMPTY; quantity = 0; }
 };
 
-struct FabGrid3D {
+class FabGrid3D {
+public:
     std::array<FabSlot, FAB_GRID_TOTAL> slots;
     
     FabGrid3D() { clear(); }
-    void clear() { for (auto& s : slots) s.clear(); }
     
-    static size_t index(uint32_t x, uint32_t y, uint32_t z) {
-        return z * FAB_GRID_SIZE * FAB_GRID_SIZE + y * FAB_GRID_SIZE + x;
+    void clear() {
+        for (auto& s : slots) s.clear();
     }
     
-    FabSlot& at(uint32_t x, uint32_t y, uint32_t z) { return slots[index(x, y, z)]; }
-    const FabSlot& at(uint32_t x, uint32_t y, uint32_t z) const { return slots[index(x, y, z)]; }
+    static inline size_t toIndex(uint32_t x, uint32_t y, uint32_t z) {
+        return z * (FAB_GRID_SIZE * FAB_GRID_SIZE) + y * FAB_GRID_SIZE + x;
+    }
     
-    bool placeItem(uint32_t x, uint32_t y, uint32_t z, FabItemID itemId, uint32_t qty = 1) {
+    FabSlot& at(uint32_t x, uint32_t y, uint32_t z) {
+        return slots[toIndex(x, y, z)];
+    }
+    
+    const FabSlot& at(uint32_t x, uint32_t y, uint32_t z) const {
+        return slots[toIndex(x, y, z)];
+    }
+    
+    bool place(uint32_t x, uint32_t y, uint32_t z, FabItemID id, uint32_t qty = 1) {
         if (x >= FAB_GRID_SIZE || y >= FAB_GRID_SIZE || z >= FAB_GRID_SIZE) return false;
         auto& slot = at(x, y, z);
-        if (slot.isEmpty()) { slot.itemId = itemId; slot.quantity = qty; return true; }
-        if (slot.itemId == itemId) { slot.quantity += qty; return true; }
+        if (slot.isEmpty()) {
+            slot.itemId = id;
+            slot.quantity = qty;
+            return true;
+        }
+        if (slot.itemId == id) {
+            slot.quantity += qty;
+            return true;
+        }
         return false;
     }
     
-    FabSlot removeItem(uint32_t x, uint32_t y, uint32_t z) {
+    FabSlot take(uint32_t x, uint32_t y, uint32_t z) {
         if (x >= FAB_GRID_SIZE || y >= FAB_GRID_SIZE || z >= FAB_GRID_SIZE) return {};
-        auto& slot = at(x, y, z);
-        FabSlot removed = slot;
-        slot.clear();
-        return removed;
+        FabSlot result = at(x, y, z);
+        at(x, y, z).clear();
+        return result;
     }
 };
 
 // ============================================================================
-// GPU Structures
+// STRUCTURES GPU (doivent matcher les shaders Metal)
 // ============================================================================
 
+// Vertex pour les quads 2D (panel background)
+struct FabPanelVertex {
+    simd::float2 position;
+    simd::float2 uv;
+};
+
+// Uniforms pour le panel 2D
+struct FabPanelUniforms {
+    simd::float2 screenSize;
+    simd::float2 panelPosition;   // Centre en pixels
+    simd::float2 panelSize;       // Taille totale en pixels
+    simd::float4 backgroundColor;
+    simd::float4 borderColor;
+    simd::float4 headerColor;
+    float cornerRadius;
+    float borderWidth;
+    float headerHeight;
+    float time;
+    int32_t showInventory;
+    float inventoryWidth;
+    float padding[2];
+};
+
+// Vertex pour les cubes 3D
 struct FabCubeVertex {
     simd::float3 position;
     simd::float3 normal;
     simd::float2 uv;
 };
 
-struct FabSlotInstanceData {
-    simd::float3 position;
+// Instance data pour chaque slot
+struct FabSlotInstance {
+    simd::float3 worldPosition;
     float scale;
     simd::float4 color;
-    uint32_t flags;      // bit0: empty, bit1: selected, bit2: hovered
-    uint32_t slotX;
-    uint32_t slotY;
-    uint32_t slotZ;
+    uint32_t flags;  // bit0=empty, bit1=selected, bit2=hovered
+    uint32_t _pad[3];
 };
 
-struct FabGridUniforms {
-    simd::float4x4 viewProjection;
-    simd::float4x4 model;
-    simd::float3 cameraPos;
+// Uniforms pour le rendu 3D
+struct Fab3DUniforms {
+    simd::float4x4 viewProjectionMatrix;
+    simd::float3 cameraPosition;
     float time;
-    simd::float3 selectedSlot;
-    float slotSpacing;
-    simd::float4 emptySlotColor;
-    simd::float4 selectedColor;
-    simd::float4 hoveredColor;
-    float gridSize;
-    float padding[3];
+    simd::float3 lightDirection;
+    float gridHalfSize;
+    simd::float4 selectionColor;
 };
 
+// Vertex pour les axes (position + couleur)
 struct FabAxisVertex {
     simd::float3 position;
     simd::float4 color;
 };
 
-struct FabAxisUniforms {
-    simd::float4x4 viewProjection;
-    float time;
-    float axisLength;
-    float axisThickness;
-    float padding;
-};
-
-struct FabPanelVertex {
-    simd::float2 position;
-    simd::float2 uv;
-};
-
-struct FabPanelUniforms {
-    simd::float2 screenSize;
-    simd::float2 panelPos;
-    simd::float2 panelSize;
-    simd::float4 bgColor;
-    simd::float4 borderColor;
-    simd::float4 headerColor;
-    simd::float4 shadowColor;
-    float cornerRadius;
-    float borderWidth;
-    float headerHeight;
-    float time;
-    float shadowBlur;
-    float shadowOffsetY;
-    int isInventoryOpen;
-    float inventoryWidth;
-};
-
 // ============================================================================
-// FabPanel3D - Classe principale
+// CLASSE PRINCIPALE
 // ============================================================================
 
 class FabPanel3D {
 public:
-    FabPanel3D(MTL::Device* device, MTL::PixelFormat colorFormat,
-               MTL::PixelFormat depthFormat, MTL::Library* shaderLibrary);
+    // ===== Constructeur / Destructeur =====
+    FabPanel3D(MTL::Device* device,
+               MTL::PixelFormat colorFormat,
+               MTL::PixelFormat depthFormat,
+               MTL::Library* shaderLibrary, NS::UInteger width, NS::UInteger height);
     ~FabPanel3D();
     
     // ===== État =====
-    bool isVisible = false;
-    bool isInventoryOpen = true;
+    bool visible = false;
+    bool inventoryOpen = true;
     
-    void show() { isVisible = true; }
-    void hide() { isVisible = false; }
-    void toggle() { isVisible = !isVisible; }
-    void toggleInventory() { isInventoryOpen = !isInventoryOpen; }
+    void show() { visible = true; }
+    void hide() { visible = false; }
+    void toggleVisible() { visible = !visible; }
+    void toggleInventory() { inventoryOpen = !inventoryOpen; }
     
-    // ===== Grille 3D =====
+    // ===== Données =====
     FabGrid3D grid;
-    simd::uint3 selectedSlot = {2, 2, 2};
-    simd::uint3 hoveredSlot = {255, 255, 255};
+    simd::uint3 cursor = {2, 2, 2};  // Position sélectionnée
     
-    // ===== Vue 3D =====
-    float rotationY = 0.75f;
-    float rotationX = 0.5f;
-    float zoom = 1.0f;
-    float targetRotationY = 0.75f;
-    float targetRotationX = 0.5f;
-    float targetZoom = 1.0f;
+    // ===== Caméra 3D =====
+    float cameraYaw = 0.8f;      // Rotation horizontale (radians)
+    float cameraPitch = 0.5f;    // Rotation verticale (radians)
+    float cameraZoom = 1.0f;     // Niveau de zoom
     
-    // ===== Position du panel =====
-    simd::float2 panelPosition = {0.5f, 0.5f};
-    simd::float2 panelSize = {700.f, 500.f};
-    float inventoryWidth = 220.f;
-    float headerHeight = 38.f;
+    // ===== Layout =====
+    simd::float2 panelCenter = {0.5f, 0.5f};  // Position normalisée (0-1)
+    simd::float2 panelPixelSize = {500.f, 500};
+    float sidebarWidth = 220.f;
+    float headerHeight = 44.f;
     
-    // ===== Couleurs et style =====
-    struct Style {
-        simd::float4 panelBg = {0.08f, 0.09f, 0.12f, 0.96f};
-        simd::float4 panelBorder = {0.25f, 0.32f, 0.48f, 1.0f};
-        simd::float4 headerBg = {0.12f, 0.14f, 0.20f, 1.0f};
-        simd::float4 shadow = {0.0f, 0.0f, 0.0f, 0.5f};
-        simd::float4 inventoryBg = {0.06f, 0.07f, 0.10f, 0.95f};
-        simd::float4 emptySlot = {0.18f, 0.20f, 0.26f, 0.25f};
-        simd::float4 selectedSlot = {1.0f, 0.85f, 0.25f, 1.0f};
-        simd::float4 hoveredSlot = {0.5f, 0.7f, 1.0f, 0.8f};
-        simd::float4 axisX = {0.95f, 0.25f, 0.25f, 1.0f};
-        simd::float4 axisY = {0.25f, 0.9f, 0.3f, 1.0f};
-        simd::float4 axisZ = {0.3f, 0.5f, 0.95f, 1.0f};
-        float cornerRadius = 12.f;
-        float borderWidth = 2.f;
-        float shadowBlur = 25.f;
-        float shadowOffsetY = 8.f;
-        float slotScale = 0.42f;
-        float slotSpacing = 1.0f;
-        float axisLength = 3.2f;
-        float axisThickness = 0.08f;
+    // ===== Style visuel =====
+    struct {
+        simd::float4 panelBg      = {0.05f, 0.06f, 0.09f, 0.95f};
+        simd::float4 panelBorder  = {0.30f, 0.40f, 0.60f, 1.0f};
+        simd::float4 headerBg     = {0.08f, 0.10f, 0.15f, 1.0f};
+        simd::float4 emptySlot    = {0.20f, 0.22f, 0.28f, 0.35f};
+        simd::float4 selection    = {1.0f, 0.85f, 0.15f, 1.0f};
+        simd::float4 axisX        = {0.95f, 0.15f, 0.15f, 1.0f};
+        simd::float4 axisY        = {0.15f, 0.95f, 0.20f, 1.0f};
+        simd::float4 axisZ        = {0.20f, 0.45f, 0.95f, 1.0f};
+        float cornerRadius = 16.f;
+        float borderWidth = 3.f;
+        float cubeSize = 0.40f;
+        float cubeSpacing = 1.1f;
+        float axisLength = 3.8f;
+        float axisThickness = 0.07f;
     } style;
     
-    // ===== Callback couleur items =====
-    std::function<simd::float4(FabItemID)> getItemColor = nullptr;
+    // ===== Callback pour couleur des items =====
+    std::function<simd::float4(FabItemID)> itemColorCallback = nullptr;
     
     // ===== Input =====
-    void onMouseDown(simd::float2 screenPos, simd::float2 screenSize, int button);
-    void onMouseUp(simd::float2 screenPos, simd::float2 screenSize, int button);
-    void onMouseMoved(simd::float2 screenPos, simd::float2 screenSize);
-    void onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button);
-    void onMouseScroll(float delta);
-    void onKeyPressed(int keyCode);
+    bool handleMouseDown(simd::float2 mousePos, simd::float2 screenSize, int button);
+    bool handleMouseUp(simd::float2 mousePos, simd::float2 screenSize, int button);
+    bool handleMouseDrag(simd::float2 mousePos, simd::float2 delta, simd::float2 screenSize, int button);
+    bool handleScroll(simd::float2 mousePos, float scrollDelta, simd::float2 screenSize);
+    bool handleKey(uint16_t keyCode);
     
-    void moveSelection(int dx, int dy, int dz);
-    void placeItem(FabItemID itemId, uint32_t qty = 1);
-    FabSlot removeItem();
+    void moveCursor(int dx, int dy, int dz);
+    void placeAtCursor(FabItemID id, uint32_t qty = 1);
+    FabSlot takeFromCursor();
     
     // ===== Update & Render =====
     void update(float deltaTime);
     void render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize);
-    
-    // ===== Hit testing =====
-    bool hitTestPanel(simd::float2 screenPos, simd::float2 screenSize) const;
-    bool hitTestHeader(simd::float2 screenPos, simd::float2 screenSize) const;
-    bool hitTest3DView(simd::float2 screenPos, simd::float2 screenSize) const;
-    bool hitTestInventoryToggle(simd::float2 screenPos, simd::float2 screenSize) const;
+    void setViewportWindow(NS::UInteger width, NS::UInteger height);
     
 private:
-    MTL::Device* m_device;
+    MTL::Device* m_device = nullptr;
     
     // Pipelines
     MTL::RenderPipelineState* m_panelPipeline = nullptr;
-    MTL::RenderPipelineState* m_gridPipeline = nullptr;
+    MTL::RenderPipelineState* m_cubePipeline = nullptr;
     MTL::RenderPipelineState* m_axisPipeline = nullptr;
-    MTL::RenderPipelineState* m_gridLinesPipeline = nullptr;
-    MTL::DepthStencilState* m_depthStateOn = nullptr;
-    MTL::DepthStencilState* m_depthStateOff = nullptr;
+    MTL::RenderPipelineState* m_linePipeline = nullptr;
+    
+    // Depth states
+    MTL::DepthStencilState* m_depthEnabled = nullptr;
+    MTL::DepthStencilState* m_depthDisabled = nullptr;
     
     // Buffers
-    MTL::Buffer* m_panelVertexBuffer = nullptr;
-    MTL::Buffer* m_panelUniformBuffer = nullptr;
-    MTL::Buffer* m_cubeVertexBuffer = nullptr;
-    MTL::Buffer* m_cubeIndexBuffer = nullptr;
+    MTL::Buffer* m_panelQuadVB = nullptr;
+    MTL::Buffer* m_panelUniforms = nullptr;
+    MTL::Buffer* m_cubeVB = nullptr;
+    MTL::Buffer* m_cubeIB = nullptr;
     MTL::Buffer* m_instanceBuffer = nullptr;
-    MTL::Buffer* m_gridUniformBuffer = nullptr;
-    MTL::Buffer* m_axisVertexBuffer = nullptr;
-    MTL::Buffer* m_axisUniformBuffer = nullptr;
-    MTL::Buffer* m_gridLinesVertexBuffer = nullptr;
+    MTL::Buffer* m_3dUniforms = nullptr;
+    MTL::Buffer* m_axisVB = nullptr;
+    MTL::Buffer* m_gridLinesVB = nullptr;
     
-    float m_time = 0.f;
-    bool m_isDraggingPanel = false;
-    bool m_isDraggingRotation = false;
-    simd::float2 m_dragOffset = {0.f, 0.f};
+    MTL::Viewport m_viewport3D;
+    MTL::ScissorRect m_scissor;
+    float aspect = 1;
     
+    // Counts
     uint32_t m_cubeIndexCount = 0;
     uint32_t m_axisVertexCount = 0;
-    uint32_t m_gridLinesVertexCount = 0;
+    uint32_t m_gridLineCount = 0;
     
-    void buildPipelines(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library);
-    void buildGeometry();
+    // État interne
+    float m_time = 0.f;
+    bool m_draggingPanel = false;
+    bool m_draggingCamera = false;
+    simd::float2 m_panelDragOffset = {0, 0};
+    
+    // Construction
+    void createBuffers();
+    void createPipelines(MTL::PixelFormat colorFmt, MTL::PixelFormat depthFmt, MTL::Library* lib);
+    void buildCubeGeometry();
     void buildAxisGeometry();
-    void buildGridLinesGeometry();
-    void updateInstanceData();
+    void buildGridLines();
     
-    simd::float4x4 createViewMatrix() const;
-    simd::float4x4 createProjectionMatrix(float aspect) const;
-    simd::float4 defaultItemColor(FabItemID id) const;
+    // Mise à jour
+    void updateInstanceBuffer();
     
-    simd::float2 getPanelScreenPos(simd::float2 screenSize) const;
+    // Matrices
+    simd::float4x4 computeViewMatrix() const;
+    simd::float4x4 computeProjectionMatrix(float aspectRatio) const;
+    
+    // Couleurs
+    simd::float4 getColorForItem(FabItemID id) const;
+    
+    // Hit testing
+    bool isInsidePanel(simd::float2 pos, simd::float2 screenSize) const;
+    bool isInsideHeader(simd::float2 pos, simd::float2 screenSize) const;
+    bool isInside3DView(simd::float2 pos, simd::float2 screenSize) const;
+    
+    // Viewport 3D
+    void get3DViewportRect(simd::float2 screenSize, float& outX, float& outY, float& outW, float& outH) const;
 };
 
 // ============================================================================
-// Implémentation
+// IMPLEMENTATION
 // ============================================================================
 
-inline FabPanel3D::FabPanel3D(MTL::Device* device, MTL::PixelFormat colorFormat,
-                              MTL::PixelFormat depthFormat, MTL::Library* shaderLibrary)
+inline FabPanel3D::FabPanel3D(MTL::Device* device,
+                              MTL::PixelFormat colorFormat,
+                              MTL::PixelFormat depthFormat,
+                              MTL::Library* shaderLibrary, NS::UInteger width, NS::UInteger height)
     : m_device(device)
 {
-    buildGeometry();
+//    setViewportWindow(width, height);
+    createBuffers();
+    buildCubeGeometry();
     buildAxisGeometry();
-    buildGridLinesGeometry();
-    buildPipelines(colorFormat, depthFormat, shaderLibrary);
+    buildGridLines();
+    createPipelines(colorFormat, depthFormat, shaderLibrary);
+    
+    // Ajouter quelques items de test
+    grid.place(0, 0, 0, 1);
+    grid.place(4, 4, 4, 2);
+    grid.place(2, 2, 2, 3);
+    grid.place(1, 3, 2, 4);
+    grid.place(3, 1, 4, 5);
+    
+    setViewportWindow(width, height);
 }
 
-inline FabPanel3D::~FabPanel3D() {
+inline FabPanel3D::~FabPanel3D()
+{
     if (m_panelPipeline) m_panelPipeline->release();
-    if (m_gridPipeline) m_gridPipeline->release();
+    if (m_cubePipeline) m_cubePipeline->release();
     if (m_axisPipeline) m_axisPipeline->release();
-    if (m_gridLinesPipeline) m_gridLinesPipeline->release();
-    if (m_depthStateOn) m_depthStateOn->release();
-    if (m_depthStateOff) m_depthStateOff->release();
-    if (m_panelVertexBuffer) m_panelVertexBuffer->release();
-    if (m_panelUniformBuffer) m_panelUniformBuffer->release();
-    if (m_cubeVertexBuffer) m_cubeVertexBuffer->release();
-    if (m_cubeIndexBuffer) m_cubeIndexBuffer->release();
+    if (m_linePipeline) m_linePipeline->release();
+    if (m_depthEnabled) m_depthEnabled->release();
+    if (m_depthDisabled) m_depthDisabled->release();
+    if (m_panelQuadVB) m_panelQuadVB->release();
+    if (m_panelUniforms) m_panelUniforms->release();
+    if (m_cubeVB) m_cubeVB->release();
+    if (m_cubeIB) m_cubeIB->release();
     if (m_instanceBuffer) m_instanceBuffer->release();
-    if (m_gridUniformBuffer) m_gridUniformBuffer->release();
-    if (m_axisVertexBuffer) m_axisVertexBuffer->release();
-    if (m_axisUniformBuffer) m_axisUniformBuffer->release();
-    if (m_gridLinesVertexBuffer) m_gridLinesVertexBuffer->release();
+    if (m_3dUniforms) m_3dUniforms->release();
+    if (m_axisVB) m_axisVB->release();
+    if (m_gridLinesVB) m_gridLinesVB->release();
 }
 
-inline void FabPanel3D::buildGeometry() {
-    // Panel quad
-    FabPanelVertex panelVerts[] = {
-        {{-1,-1}, {0,1}}, {{1,-1}, {1,1}}, {{1,1}, {1,0}},
-        {{-1,-1}, {0,1}}, {{1,1}, {1,0}}, {{-1,1}, {0,0}}
+inline void FabPanel3D::createBuffers() {
+    // Quad pour le panel (2 triangles)
+    FabPanelVertex quadVerts[6] = {
+        {{-1, -1}, {0, 1}},
+        {{ 1, -1}, {1, 1}},
+        {{ 1,  1}, {1, 0}},
+        {{-1, -1}, {0, 1}},
+        {{ 1,  1}, {1, 0}},
+        {{-1,  1}, {0, 0}}
     };
-    m_panelVertexBuffer = m_device->newBuffer(panelVerts, sizeof(panelVerts), MTL::ResourceStorageModeShared);
-    m_panelUniformBuffer = m_device->newBuffer(sizeof(FabPanelUniforms), MTL::ResourceStorageModeShared);
+    m_panelQuadVB = m_device->newBuffer(quadVerts, sizeof(quadVerts), MTL::ResourceStorageModeShared);
+    m_panelUniforms = m_device->newBuffer(sizeof(FabPanelUniforms), MTL::ResourceStorageModeShared);
     
-    // Cube avec normales et UVs
-    float s = 0.5f;
-    std::vector<FabCubeVertex> cubeVerts;
-    std::vector<uint16_t> cubeIndices;
+    // Buffers 3D
+    m_instanceBuffer = m_device->newBuffer(sizeof(FabSlotInstance) * FAB_GRID_TOTAL, MTL::ResourceStorageModeShared);
+    m_3dUniforms = m_device->newBuffer(sizeof(Fab3DUniforms), MTL::ResourceStorageModeShared);
+}
+
+inline void FabPanel3D::buildCubeGeometry() {
+    std::vector<FabCubeVertex> vertices;
+    std::vector<uint16_t> indices;
     
-    auto addFace = [&](simd::float3 n, simd::float3 right, simd::float3 up) {
-        uint16_t base = (uint16_t)cubeVerts.size();
-        simd::float3 center = n * s;
-        cubeVerts.push_back({center - right * s - up * s, n, {0, 0}});
-        cubeVerts.push_back({center + right * s - up * s, n, {1, 0}});
-        cubeVerts.push_back({center + right * s + up * s, n, {1, 1}});
-        cubeVerts.push_back({center - right * s + up * s, n, {0, 1}});
-        cubeIndices.insert(cubeIndices.end(), {base, uint16_t(base+1), uint16_t(base+2),
-                                               base, uint16_t(base+2), uint16_t(base+3)});
+    // Helper pour ajouter une face
+    auto addFace = [&](simd::float3 normal, simd::float3 right, simd::float3 up) {
+        uint16_t base = static_cast<uint16_t>(vertices.size());
+        simd::float3 center = normal * 0.5f;
+        
+        vertices.push_back({center - right * 0.5f - up * 0.5f, normal, {0, 0}});
+        vertices.push_back({center + right * 0.5f - up * 0.5f, normal, {1, 0}});
+        vertices.push_back({center + right * 0.5f + up * 0.5f, normal, {1, 1}});
+        vertices.push_back({center - right * 0.5f + up * 0.5f, normal, {0, 1}});
+        
+        indices.push_back(base + 0);
+        indices.push_back(base + 1);
+        indices.push_back(base + 2);
+        indices.push_back(base + 0);
+        indices.push_back(base + 2);
+        indices.push_back(base + 3);
     };
     
+    // 6 faces du cube
     addFace(simd::float3{ 0, 0, 1}, simd::float3{ 1, 0, 0}, simd::float3{0, 1, 0});
     addFace(simd::float3{ 0, 0,-1}, simd::float3{-1, 0, 0}, simd::float3{0, 1, 0});
     addFace(simd::float3{ 0, 1, 0}, simd::float3{ 1, 0, 0}, simd::float3{0, 0,-1});
@@ -335,607 +375,1653 @@ inline void FabPanel3D::buildGeometry() {
     addFace(simd::float3{ 1, 0, 0}, simd::float3{ 0, 0,-1}, simd::float3{0, 1, 0});
     addFace(simd::float3{-1, 0, 0}, simd::float3{ 0, 0, 1}, simd::float3{0, 1, 0});
     
-    m_cubeVertexBuffer = m_device->newBuffer(cubeVerts.data(), cubeVerts.size() * sizeof(FabCubeVertex), MTL::ResourceStorageModeShared);
-    m_cubeIndexBuffer = m_device->newBuffer(cubeIndices.data(), cubeIndices.size() * sizeof(uint16_t), MTL::ResourceStorageModeShared);
-    m_cubeIndexCount = (uint32_t)cubeIndices.size();
-    
-    m_instanceBuffer = m_device->newBuffer(sizeof(FabSlotInstanceData) * FAB_GRID_TOTAL, MTL::ResourceStorageModeShared);
-    m_gridUniformBuffer = m_device->newBuffer(sizeof(FabGridUniforms), MTL::ResourceStorageModeShared);
+    m_cubeVB = m_device->newBuffer(vertices.data(), vertices.size() * sizeof(FabCubeVertex), MTL::ResourceStorageModeShared);
+    m_cubeIB = m_device->newBuffer(indices.data(), indices.size() * sizeof(uint16_t), MTL::ResourceStorageModeShared);
+    m_cubeIndexCount = static_cast<uint32_t>(indices.size());
 }
 
 inline void FabPanel3D::buildAxisGeometry() {
-    std::vector<FabAxisVertex> axisVerts;
+    std::vector<FabAxisVertex> verts;
     
     float len = style.axisLength;
-    float t = style.axisThickness;
+    float thick = style.axisThickness;
     
-    auto addAxisBox = [&](simd::float3 dir, simd::float4 color, float length, float thickness) {
-        simd::float3 end = dir * length;
+    // Fonction pour créer un cylindre (axe)
+    auto addCylinder = [&](simd::float3 direction, simd::float4 color, float length, float radius) {
+        // Trouver des vecteurs perpendiculaires
         simd::float3 perp1, perp2;
-        
-        if (fabsf(dir.x) < 0.9f) {
-            perp1 = simd::normalize(simd::cross(dir, simd::float3{1, 0, 0}));
+        if (std::abs(direction.y) < 0.9f) {
+            perp1 = simd::normalize(simd::cross(direction, simd::float3{0, 1, 0}));
         } else {
-            perp1 = simd::normalize(simd::cross(dir, simd::float3{0, 1, 0}));
+            perp1 = simd::normalize(simd::cross(direction, simd::float3{1, 0, 0}));
         }
-        perp2 = simd::cross(dir, perp1);
+        perp2 = simd::cross(direction, perp1);
         
-        perp1 = perp1 * thickness;
-        perp2 = perp2 * thickness;
-        
-        simd::float3 v[8] = {
-            -perp1 - perp2, perp1 - perp2, perp1 + perp2, -perp1 + perp2,
-            end - perp1 - perp2, end + perp1 - perp2, end + perp1 + perp2, end - perp1 + perp2
-        };
-        
-        int faces[6][4] = {{0,1,2,3}, {4,5,6,7}, {0,1,5,4}, {2,3,7,6}, {1,2,6,5}, {3,0,4,7}};
-        
-        for (int f = 0; f < 6; f++) {
-            axisVerts.push_back({v[faces[f][0]], color});
-            axisVerts.push_back({v[faces[f][1]], color});
-            axisVerts.push_back({v[faces[f][2]], color});
-            axisVerts.push_back({v[faces[f][0]], color});
-            axisVerts.push_back({v[faces[f][2]], color});
-            axisVerts.push_back({v[faces[f][3]], color});
+        constexpr int segments = 8;
+        for (int i = 0; i < segments; i++) {
+            float angle1 = static_cast<float>(i) / segments * M_PI * 2.0f;
+            float angle2 = static_cast<float>(i + 1) / segments * M_PI * 2.0f;
+            
+            simd::float3 p1 = perp1 * (radius * std::cos(angle1)) + perp2 * (radius * std::sin(angle1));
+            simd::float3 p2 = perp1 * (radius * std::cos(angle2)) + perp2 * (radius * std::sin(angle2));
+            simd::float3 endOffset = direction * length;
+            
+            // Face latérale (2 triangles)
+            verts.push_back({p1, color});
+            verts.push_back({p2, color});
+            verts.push_back({p2 + endOffset, color});
+            
+            verts.push_back({p1, color});
+            verts.push_back({p2 + endOffset, color});
+            verts.push_back({p1 + endOffset, color});
         }
     };
     
-    // Axes positifs
-    addAxisBox(simd::float3{1, 0, 0}, style.axisX, len, t);
-    addAxisBox(simd::float3{0, 1, 0}, style.axisY, len, t);
-    addAxisBox(simd::float3{0, 0, 1}, style.axisZ, len, t);
-    
-    // Axes négatifs (plus fins, plus transparents)
-    simd::float4 xNeg = style.axisX; xNeg.w = 0.35f;
-    simd::float4 yNeg = style.axisY; yNeg.w = 0.35f;
-    simd::float4 zNeg = style.axisZ; zNeg.w = 0.35f;
-    
-    addAxisBox(simd::float3{-1, 0, 0}, xNeg, len * 0.5f, t * 0.6f);
-    addAxisBox(simd::float3{0, -1, 0}, yNeg, len * 0.5f, t * 0.6f);
-    addAxisBox(simd::float3{0, 0, -1}, zNeg, len * 0.5f, t * 0.6f);
-    
-    // Sphère centrale
-    float r = t * 3.0f;
-    simd::float4 centerColor = {0.92f, 0.93f, 0.97f, 1.0f};
-    int segments = 16;
-    
-    for (int i = 0; i < segments; i++) {
-        for (int j = 0; j < segments; j++) {
-            float theta1 = (float)i / segments * M_PI * 2.f;
-            float theta2 = (float)(i + 1) / segments * M_PI * 2.f;
-            float phi1 = (float)j / segments * M_PI - M_PI / 2.f;
-            float phi2 = (float)(j + 1) / segments * M_PI - M_PI / 2.f;
-            
-            simd::float3 p1 = {r * cosf(phi1) * cosf(theta1), r * sinf(phi1), r * cosf(phi1) * sinf(theta1)};
-            simd::float3 p2 = {r * cosf(phi1) * cosf(theta2), r * sinf(phi1), r * cosf(phi1) * sinf(theta2)};
-            simd::float3 p3 = {r * cosf(phi2) * cosf(theta2), r * sinf(phi2), r * cosf(phi2) * sinf(theta2)};
-            simd::float3 p4 = {r * cosf(phi2) * cosf(theta1), r * sinf(phi2), r * cosf(phi2) * sinf(theta1)};
-            
-            axisVerts.push_back({p1, centerColor});
-            axisVerts.push_back({p2, centerColor});
-            axisVerts.push_back({p3, centerColor});
-            axisVerts.push_back({p1, centerColor});
-            axisVerts.push_back({p3, centerColor});
-            axisVerts.push_back({p4, centerColor});
-        }
-    }
-    
-    // Cônes aux extrémités des axes
-    auto addCone = [&](simd::float3 pos, simd::float3 dir, simd::float4 color) {
-        float coneH = 0.25f;
-        float coneR = 0.12f;
-        simd::float3 tip = pos + dir * coneH;
+    // Fonction pour créer un cône (flèche)
+    auto addCone = [&](simd::float3 basePos, simd::float3 direction, simd::float4 color) {
+        float height = 0.35f;
+        float radius = 0.14f;
+        simd::float3 tip = basePos + direction * height;
         
         simd::float3 perp1, perp2;
-        if (fabsf(dir.x) < 0.9f) {
-            perp1 = simd::normalize(simd::cross(dir, simd::float3{1, 0, 0}));
+        if (std::abs(direction.y) < 0.9f) {
+            perp1 = simd::normalize(simd::cross(direction, simd::float3{0, 1, 0}));
         } else {
-            perp1 = simd::normalize(simd::cross(dir, simd::float3{0, 1, 0}));
+            perp1 = simd::normalize(simd::cross(direction, simd::float3{1, 0, 0}));
         }
-        perp2 = simd::cross(dir, perp1);
+        perp2 = simd::cross(direction, perp1);
         
-        int segs = 12;
-        for (int i = 0; i < segs; i++) {
-            float a1 = (float)i / segs * M_PI * 2.f;
-            float a2 = (float)(i + 1) / segs * M_PI * 2.f;
+        constexpr int segments = 12;
+        for (int i = 0; i < segments; i++) {
+            float angle1 = static_cast<float>(i) / segments * M_PI * 2.0f;
+            float angle2 = static_cast<float>(i + 1) / segments * M_PI * 2.0f;
             
-            simd::float3 p1 = pos + perp1 * (coneR * cosf(a1)) + perp2 * (coneR * sinf(a1));
-            simd::float3 p2 = pos + perp1 * (coneR * cosf(a2)) + perp2 * (coneR * sinf(a2));
+            simd::float3 p1 = basePos + perp1 * (radius * std::cos(angle1)) + perp2 * (radius * std::sin(angle1));
+            simd::float3 p2 = basePos + perp1 * (radius * std::cos(angle2)) + perp2 * (radius * std::sin(angle2));
             
-            axisVerts.push_back({tip, color});
-            axisVerts.push_back({p1, color});
-            axisVerts.push_back({p2, color});
+            // Côté du cône
+            verts.push_back({tip, color});
+            verts.push_back({p2, color});
+            verts.push_back({p1, color});
             
-            // Base
-            axisVerts.push_back({pos, color});
-            axisVerts.push_back({p2, color});
-            axisVerts.push_back({p1, color});
+            // Base du cône
+            verts.push_back({basePos, color});
+            verts.push_back({p1, color});
+            verts.push_back({p2, color});
         }
     };
     
+    // Fonction pour créer une sphère
+    auto addSphere = [&](simd::float3 center, float radius, simd::float4 color) {
+        constexpr int stacks = 10;
+        constexpr int slices = 14;
+        
+        for (int i = 0; i < stacks; i++) {
+            float phi1 = static_cast<float>(i) / stacks * M_PI - M_PI / 2.0f;
+            float phi2 = static_cast<float>(i + 1) / stacks * M_PI - M_PI / 2.0f;
+            
+            for (int j = 0; j < slices; j++) {
+                float theta1 = static_cast<float>(j) / slices * M_PI * 2.0f;
+                float theta2 = static_cast<float>(j + 1) / slices * M_PI * 2.0f;
+                
+                simd::float3 p1 = center + simd::float3{
+                    radius * std::cos(phi1) * std::cos(theta1),
+                    radius * std::sin(phi1),
+                    radius * std::cos(phi1) * std::sin(theta1)
+                };
+                simd::float3 p2 = center + simd::float3{
+                    radius * std::cos(phi1) * std::cos(theta2),
+                    radius * std::sin(phi1),
+                    radius * std::cos(phi1) * std::sin(theta2)
+                };
+                simd::float3 p3 = center + simd::float3{
+                    radius * std::cos(phi2) * std::cos(theta2),
+                    radius * std::sin(phi2),
+                    radius * std::cos(phi2) * std::sin(theta2)
+                };
+                simd::float3 p4 = center + simd::float3{
+                    radius * std::cos(phi2) * std::cos(theta1),
+                    radius * std::sin(phi2),
+                    radius * std::cos(phi2) * std::sin(theta1)
+                };
+                
+                verts.push_back({p1, color});
+                verts.push_back({p2, color});
+                verts.push_back({p3, color});
+                
+                verts.push_back({p1, color});
+                verts.push_back({p3, color});
+                verts.push_back({p4, color});
+            }
+        }
+    };
+    
+    // === Construire les axes ===
+    
+    // Axes positifs (cylindres épais)
+    addCylinder(simd::float3{1, 0, 0}, style.axisX, len, thick);
+    addCylinder(simd::float3{0, 1, 0}, style.axisY, len, thick);
+    addCylinder(simd::float3{0, 0, 1}, style.axisZ, len, thick);
+    
+    // Axes négatifs (plus fins, semi-transparents)
+    simd::float4 xNeg = style.axisX; xNeg.w = 0.4f;
+    simd::float4 yNeg = style.axisY; yNeg.w = 0.4f;
+    simd::float4 zNeg = style.axisZ; zNeg.w = 0.4f;
+    addCylinder(simd::float3{-1, 0, 0}, xNeg, len * 0.4f, thick * 0.5f);
+    addCylinder(simd::float3{0, -1, 0}, yNeg, len * 0.4f, thick * 0.5f);
+    addCylinder(simd::float3{0, 0, -1}, zNeg, len * 0.4f, thick * 0.5f);
+    
+    // Cônes aux extrémités (flèches)
     addCone(simd::float3{len, 0, 0}, simd::float3{1, 0, 0}, style.axisX);
     addCone(simd::float3{0, len, 0}, simd::float3{0, 1, 0}, style.axisY);
     addCone(simd::float3{0, 0, len}, simd::float3{0, 0, 1}, style.axisZ);
     
-    m_axisVertexCount = (uint32_t)axisVerts.size();
-    m_axisVertexBuffer = m_device->newBuffer(axisVerts.data(), axisVerts.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
-    m_axisUniformBuffer = m_device->newBuffer(sizeof(FabAxisUniforms), MTL::ResourceStorageModeShared);
+    // Sphère centrale blanche
+    addSphere(simd::float3{0, 0, 0}, thick * 3.0f, simd::float4{0.95f, 0.95f, 0.98f, 1.0f});
+    
+    m_axisVertexCount = static_cast<uint32_t>(verts.size());
+    m_axisVB = m_device->newBuffer(verts.data(), verts.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
 }
 
-inline void FabPanel3D::buildGridLinesGeometry() {
-    std::vector<FabAxisVertex> lines;
+inline void FabPanel3D::buildGridLines() {
+    std::vector<FabAxisVertex> verts;
     
-    float halfSize = (FAB_GRID_SIZE - 1) * style.slotSpacing * 0.5f;
-    float step = style.slotSpacing;
-    simd::float4 lineColor = {0.35f, 0.4f, 0.5f, 0.2f};
-    simd::float4 cornerColor = {0.3f, 0.35f, 0.45f, 0.12f};
+    float halfSize = (FAB_GRID_SIZE - 1) * style.cubeSpacing * 0.5f;
+    float step = style.cubeSpacing;
+    simd::float4 lineColor = {0.35f, 0.40f, 0.50f, 0.30f};
+    simd::float4 pillarColor = {0.30f, 0.35f, 0.45f, 0.20f};
     
-    // Grille au sol
-    float y = -halfSize - 0.02f;
-    for (int i = 0; i <= FAB_GRID_SIZE; i++) {
+    // Lignes au sol (grille XZ à Y = -halfSize)
+    float groundY = -halfSize - 0.05f;
+    for (uint32_t i = 0; i <= FAB_GRID_SIZE; i++) {
         float t = -halfSize + i * step;
-        lines.push_back({{-halfSize - 0.3f, y, t}, lineColor});
-        lines.push_back({{ halfSize + 0.3f, y, t}, lineColor});
-        lines.push_back({{t, y, -halfSize - 0.3f}, lineColor});
-        lines.push_back({{t, y,  halfSize + 0.3f}, lineColor});
+        
+        // Lignes parallèles à X
+        verts.push_back({{-halfSize - 0.5f, groundY, t}, lineColor});
+        verts.push_back({{ halfSize + 0.5f, groundY, t}, lineColor});
+        
+        // Lignes parallèles à Z
+        verts.push_back({{t, groundY, -halfSize - 0.5f}, lineColor});
+        verts.push_back({{t, groundY,  halfSize + 0.5f}, lineColor});
     }
     
-    // Piliers aux coins
-    float corners[4][2] = {{-halfSize, -halfSize}, {halfSize, -halfSize},
-                           {halfSize, halfSize}, {-halfSize, halfSize}};
+    // Piliers verticaux aux 4 coins
+    float corners[4][2] = {
+        {-halfSize, -halfSize},
+        { halfSize, -halfSize},
+        { halfSize,  halfSize},
+        {-halfSize,  halfSize}
+    };
     for (int c = 0; c < 4; c++) {
-        lines.push_back({{corners[c][0], -halfSize - 0.3f, corners[c][1]}, cornerColor});
-        lines.push_back({{corners[c][0],  halfSize + 0.3f, corners[c][1]}, cornerColor});
+        verts.push_back({{corners[c][0], -halfSize - 0.4f, corners[c][1]}, pillarColor});
+        verts.push_back({{corners[c][0],  halfSize + 0.4f, corners[c][1]}, pillarColor});
     }
     
-    // Grille du haut (plus légère)
-    simd::float4 topLineColor = {0.3f, 0.35f, 0.45f, 0.08f};
-    y = halfSize + 0.02f;
-    for (int i = 0; i <= FAB_GRID_SIZE; i++) {
+    // Lignes en haut (grille XZ à Y = +halfSize, plus transparentes)
+    simd::float4 topLineColor = {0.30f, 0.35f, 0.45f, 0.12f};
+    float topY = halfSize + 0.05f;
+    for (uint32_t i = 0; i <= FAB_GRID_SIZE; i++) {
         float t = -halfSize + i * step;
-        lines.push_back({{-halfSize, y, t}, topLineColor});
-        lines.push_back({{ halfSize, y, t}, topLineColor});
-        lines.push_back({{t, y, -halfSize}, topLineColor});
-        lines.push_back({{t, y,  halfSize}, topLineColor});
+        
+        verts.push_back({{-halfSize, topY, t}, topLineColor});
+        verts.push_back({{ halfSize, topY, t}, topLineColor});
+        
+        verts.push_back({{t, topY, -halfSize}, topLineColor});
+        verts.push_back({{t, topY,  halfSize}, topLineColor});
     }
     
-    m_gridLinesVertexCount = (uint32_t)lines.size();
-    m_gridLinesVertexBuffer = m_device->newBuffer(lines.data(), lines.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
+    m_gridLineCount = static_cast<uint32_t>(verts.size());
+    m_gridLinesVB = m_device->newBuffer(verts.data(), verts.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
 }
 
-inline void FabPanel3D::buildPipelines(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat,
-                                        MTL::Library* library) {
+inline void FabPanel3D::createPipelines(MTL::PixelFormat colorFmt, MTL::PixelFormat depthFmt, MTL::Library* lib) {
     NS::Error* error = nullptr;
     
-    // ===== Panel Pipeline =====
+    // ===== Pipeline pour le panel 2D =====
     {
-        MTL::Function* vert = library->newFunction(MTLSTR("fabPanelVertexShader"));
-        MTL::Function* frag = library->newFunction(MTLSTR("fabPanelFragmentShader"));
-        if (vert && frag) {
-            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+        auto* vsFunc = lib->newFunction(MTLSTR("fabPanelVertexShader"));
+        auto* fsFunc = lib->newFunction(MTLSTR("fabPanelFragmentShader"));
+        
+        if (vsFunc && fsFunc) {
+            auto* vd = MTL::VertexDescriptor::alloc()->init();
             vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat2);
             vd->attributes()->object(0)->setOffset(0);
             vd->attributes()->object(0)->setBufferIndex(0);
             vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
-            vd->attributes()->object(1)->setOffset(8);
+            vd->attributes()->object(1)->setOffset(offsetof(FabPanelVertex, uv));
             vd->attributes()->object(1)->setBufferIndex(0);
             vd->layouts()->object(0)->setStride(sizeof(FabPanelVertex));
             
-            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
-            pd->setVertexFunction(vert);
-            pd->setFragmentFunction(frag);
-            pd->setVertexDescriptor(vd);
-            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
-            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
-            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
-            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-            pd->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
-            pd->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-            pd->setDepthAttachmentPixelFormat(depthFormat);
+            auto* desc = MTL::RenderPipelineDescriptor::alloc()->init();
+            desc->setVertexFunction(vsFunc);
+            desc->setFragmentFunction(fsFunc);
+            desc->setVertexDescriptor(vd);
+            desc->colorAttachments()->object(0)->setPixelFormat(colorFmt);
+            desc->colorAttachments()->object(0)->setBlendingEnabled(true);
+            desc->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+            desc->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+            desc->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->setDepthAttachmentPixelFormat(depthFmt);
             
-            m_panelPipeline = m_device->newRenderPipelineState(pd, &error);
-            vd->release(); pd->release();
+            m_panelPipeline = m_device->newRenderPipelineState(desc, &error);
+            if (error) {
+                printf("FabPanel3D: Panel pipeline error: %s\n", error->localizedDescription()->utf8String());
+            }
+            
+            vd->release();
+            desc->release();
+        } else {
+            printf("FabPanel3D: Could not find panel shaders (fabPanelVertexShader / fabPanelFragmentShader)\n");
         }
-        if (vert) vert->release();
-        if (frag) frag->release();
+        
+        if (vsFunc) vsFunc->release();
+        if (fsFunc) fsFunc->release();
     }
     
-    // ===== Grid Pipeline =====
+    // ===== Pipeline pour les cubes 3D =====
     {
-        MTL::Function* vert = library->newFunction(MTLSTR("fabGridVertexShader"));
-        MTL::Function* frag = library->newFunction(MTLSTR("fabGridFragmentShader"));
-        if (vert && frag) {
-            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+        auto* vsFunc = lib->newFunction(MTLSTR("fabCubeVertexShader"));
+        auto* fsFunc = lib->newFunction(MTLSTR("fabCubeFragmentShader"));
+        
+        if (vsFunc && fsFunc) {
+            auto* vd = MTL::VertexDescriptor::alloc()->init();
             vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
             vd->attributes()->object(0)->setOffset(0);
             vd->attributes()->object(0)->setBufferIndex(0);
             vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
-            vd->attributes()->object(1)->setOffset(12);
+            vd->attributes()->object(1)->setOffset(offsetof(FabCubeVertex, normal));
             vd->attributes()->object(1)->setBufferIndex(0);
             vd->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
-            vd->attributes()->object(2)->setOffset(24);
+            vd->attributes()->object(2)->setOffset(offsetof(FabCubeVertex, uv));
             vd->attributes()->object(2)->setBufferIndex(0);
             vd->layouts()->object(0)->setStride(sizeof(FabCubeVertex));
             
-            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
-            pd->setVertexFunction(vert);
-            pd->setFragmentFunction(frag);
-            pd->setVertexDescriptor(vd);
-            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
-            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
-            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
-            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-            pd->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
-            pd->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-            pd->setDepthAttachmentPixelFormat(depthFormat);
+            auto* desc = MTL::RenderPipelineDescriptor::alloc()->init();
+            desc->setVertexFunction(vsFunc);
+            desc->setFragmentFunction(fsFunc);
+            desc->setVertexDescriptor(vd);
+            desc->colorAttachments()->object(0)->setPixelFormat(colorFmt);
+            desc->colorAttachments()->object(0)->setBlendingEnabled(true);
+            desc->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+            desc->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+            desc->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->setDepthAttachmentPixelFormat(depthFmt);
             
-            m_gridPipeline = m_device->newRenderPipelineState(pd, &error);
-            vd->release(); pd->release();
+            m_cubePipeline = m_device->newRenderPipelineState(desc, &error);
+            if (error) {
+                printf("FabPanel3D: Cube pipeline error: %s\n", error->localizedDescription()->utf8String());
+            }
+            
+            vd->release();
+            desc->release();
+        } else {
+            printf("FabPanel3D: Could not find cube shaders (fabCubeVertexShader / fabCubeFragmentShader)\n");
         }
-        if (vert) vert->release();
-        if (frag) frag->release();
+        
+        if (vsFunc) vsFunc->release();
+        if (fsFunc) fsFunc->release();
     }
     
-    // ===== Axis Pipeline =====
+    // ===== Pipeline pour les axes et lignes =====
     {
-        MTL::Function* vert = library->newFunction(MTLSTR("fabAxisVertexShader"));
-        MTL::Function* frag = library->newFunction(MTLSTR("fabAxisFragmentShader"));
-        if (vert && frag) {
-            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+        auto* vsFunc = lib->newFunction(MTLSTR("fabAxisVertexShader"));
+        auto* fsFunc = lib->newFunction(MTLSTR("fabAxisFragmentShader"));
+        
+        if (vsFunc && fsFunc) {
+            auto* vd = MTL::VertexDescriptor::alloc()->init();
             vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
             vd->attributes()->object(0)->setOffset(0);
             vd->attributes()->object(0)->setBufferIndex(0);
             vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat4);
-            vd->attributes()->object(1)->setOffset(12);
+            vd->attributes()->object(1)->setOffset(offsetof(FabAxisVertex, color));
             vd->attributes()->object(1)->setBufferIndex(0);
             vd->layouts()->object(0)->setStride(sizeof(FabAxisVertex));
             
-            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
-            pd->setVertexFunction(vert);
-            pd->setFragmentFunction(frag);
-            pd->setVertexDescriptor(vd);
-            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
-            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
-            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
-            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-            pd->setDepthAttachmentPixelFormat(depthFormat);
+            auto* desc = MTL::RenderPipelineDescriptor::alloc()->init();
+            desc->setVertexFunction(vsFunc);
+            desc->setFragmentFunction(fsFunc);
+            desc->setVertexDescriptor(vd);
+            desc->colorAttachments()->object(0)->setPixelFormat(colorFmt);
+            desc->colorAttachments()->object(0)->setBlendingEnabled(true);
+            desc->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+            desc->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+            desc->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+            desc->setDepthAttachmentPixelFormat(depthFmt);
             
-            m_axisPipeline = m_device->newRenderPipelineState(pd, &error);
-            m_gridLinesPipeline = m_axisPipeline;
-            if (m_gridLinesPipeline) m_gridLinesPipeline->retain();
-            vd->release(); pd->release();
+            m_axisPipeline = m_device->newRenderPipelineState(desc, &error);
+            if (error) {
+                printf("FabPanel3D: Axis pipeline error: %s\n", error->localizedDescription()->utf8String());
+            }
+            
+            // Réutiliser le même pipeline pour les lignes
+            m_linePipeline = m_axisPipeline;
+            if (m_linePipeline) m_linePipeline->retain();
+            
+            vd->release();
+            desc->release();
+        } else {
+            printf("FabPanel3D: Could not find axis shaders (fabAxisVertexShader / fabAxisFragmentShader)\n");
         }
-        if (vert) vert->release();
-        if (frag) frag->release();
+        
+        if (vsFunc) vsFunc->release();
+        if (fsFunc) fsFunc->release();
     }
     
-    // Depth States
-    MTL::DepthStencilDescriptor* dsd = MTL::DepthStencilDescriptor::alloc()->init();
-    dsd->setDepthCompareFunction(MTL::CompareFunctionLess);
-    dsd->setDepthWriteEnabled(true);
-    m_depthStateOn = m_device->newDepthStencilState(dsd);
-    
-    dsd->setDepthCompareFunction(MTL::CompareFunctionAlways);
-    dsd->setDepthWriteEnabled(false);
-    m_depthStateOff = m_device->newDepthStencilState(dsd);
-    dsd->release();
+    // ===== Depth stencil states =====
+    {
+        auto* dsd = MTL::DepthStencilDescriptor::alloc()->init();
+        
+        dsd->setDepthCompareFunction(MTL::CompareFunctionLess);
+        dsd->setDepthWriteEnabled(true);
+        m_depthEnabled = m_device->newDepthStencilState(dsd);
+        
+        dsd->setDepthCompareFunction(MTL::CompareFunctionAlways);
+        dsd->setDepthWriteEnabled(false);
+        m_depthDisabled = m_device->newDepthStencilState(dsd);
+        
+        dsd->release();
+    }
 }
 
-inline simd::float4x4 FabPanel3D::createViewMatrix() const {
-    float dist = 9.0f / zoom;
-    float cx = cosf(rotationX), sx = sinf(rotationX);
-    float cy = cosf(rotationY), sy = sinf(rotationY);
+inline simd::float4x4 FabPanel3D::computeViewMatrix() const {
+    float distance = 12.0f / cameraZoom;
+    float cosP = std::cos(cameraPitch);
+    float sinP = std::sin(cameraPitch);
+    float cosY = std::cos(cameraYaw);
+    float sinY = std::sin(cameraYaw);
     
-    simd::float3 eye = {dist * sy * cx, dist * sx, dist * cy * cx};
-    simd::float3 center = {0, 0, 0};
+    simd::float3 eye = {
+        distance * cosP * sinY,
+        distance * sinP,
+        distance * cosP * cosY
+    };
+    simd::float3 target = {0, 0, 0};
     simd::float3 up = {0, 1, 0};
     
-    simd::float3 f = simd::normalize(center - eye);
+    simd::float3 f = simd::normalize(target - eye);
     simd::float3 s = simd::normalize(simd::cross(f, up));
     simd::float3 u = simd::cross(s, f);
     
     return simd::float4x4{
-        simd::float4{s.x, u.x, -f.x, 0},
-        simd::float4{s.y, u.y, -f.y, 0},
-        simd::float4{s.z, u.z, -f.z, 0},
+        simd::float4{ s.x,  u.x, -f.x, 0},
+        simd::float4{ s.y,  u.y, -f.y, 0},
+        simd::float4{ s.z,  u.z, -f.z, 0},
         simd::float4{-simd::dot(s, eye), -simd::dot(u, eye), simd::dot(f, eye), 1}
     };
 }
 
-inline simd::float4x4 FabPanel3D::createProjectionMatrix(float aspect) const {
-    float size = 4.0f / zoom;
-    float l = -size * aspect, r = size * aspect;
-    float b = -size, t = size;
-    float n = 0.1f, f = 100.f;
-    
+inline simd::float4x4 FabPanel3D::computeProjectionMatrix(float aspectRatio) const
+{
+    float near = 0.1f;
+    float far = 100.0f;
+    float fov = M_PI / 3.0f; // 60 degrés
+    float yScale = 1.0f / std::tan(fov * 0.5f);
+    float xScale = yScale / aspectRatio;
+    float zRange = far - near;
+        
     return simd::float4x4{
-        simd::float4{2.f/(r-l), 0, 0, 0},
-        simd::float4{0, 2.f/(t-b), 0, 0},
-        simd::float4{0, 0, -2.f/(f-n), 0},
-        simd::float4{-(r+l)/(r-l), -(t+b)/(t-b), -(f+n)/(f-n), 1}
+        simd::float4{xScale, 0, 0, 0},
+        simd::float4{0, yScale, 0, 0},
+        simd::float4{0, 0, -far / zRange, -1},
+        simd::float4{0, 0, -far * near / zRange, 0}
     };
+//    // Projection orthographique
+//    float size = 5.0f / cameraZoom;
+//    float left = -size * aspectRatio;
+//    float right = size * aspectRatio;
+//    float bottom = -size;
+//    float top = size;
+//    
+//    return simd::float4x4{
+//        simd::float4{2.0f / (right - left), 0, 0, 0},
+//        simd::float4{0, 2.0f / (top - bottom), 0, 0},
+//        simd::float4{0, 0, -2.0f / (far - near), 0},
+//        simd::float4{-(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1}
+//    };
 }
 
-inline simd::float4 FabPanel3D::defaultItemColor(FabItemID id) const {
-    if (id == FAB_ITEM_EMPTY) return style.emptySlot;
-    float r = fmodf(id * 0.618034f, 1.f) * 0.4f + 0.55f;
-    float g = fmodf(id * 0.381966f + 0.25f, 1.f) * 0.4f + 0.45f;
-    float b = fmodf(id * 0.723607f + 0.5f, 1.f) * 0.5f + 0.45f;
-    return {r, g, b, 1.f};
-}
-
-inline void FabPanel3D::updateInstanceData() {
-    auto* data = static_cast<FabSlotInstanceData*>(m_instanceBuffer->contents());
-    float offset = (FAB_GRID_SIZE - 1) * style.slotSpacing * 0.5f;
+inline simd::float4 FabPanel3D::getColorForItem(FabItemID id) const {
+    if (id == FAB_EMPTY) return style.emptySlot;
+    if (itemColorCallback) return itemColorCallback(id);
     
-    for (uint32_t z = 0; z < FAB_GRID_SIZE; ++z) {
-        for (uint32_t y = 0; y < FAB_GRID_SIZE; ++y) {
-            for (uint32_t x = 0; x < FAB_GRID_SIZE; ++x) {
-                size_t idx = FabGrid3D::index(x, y, z);
+    // Couleurs par défaut basées sur l'ID
+    switch (id) {
+        case 1: return {0.75f, 0.75f, 0.80f, 1.0f}; // Fer/métal
+        case 2: return {1.00f, 0.85f, 0.20f, 1.0f}; // Or
+        case 3: return {0.30f, 0.90f, 0.95f, 1.0f}; // Diamant
+        case 4: return {0.60f, 0.45f, 0.30f, 1.0f}; // Bois
+        case 5: return {0.55f, 0.55f, 0.52f, 1.0f}; // Pierre
+        case 6: return {0.90f, 0.20f, 0.20f, 1.0f}; // Redstone
+        case 7: return {0.20f, 0.85f, 0.35f, 1.0f}; // Émeraude
+        case 8: return {0.25f, 0.25f, 0.28f, 1.0f}; // Charbon
+        case 9: return {0.90f, 0.55f, 0.25f, 1.0f}; // Cuivre
+        default: {
+            // Génération pseudo-aléatoire basée sur l'ID
+            float r = std::fmod(id * 0.618034f, 1.0f) * 0.5f + 0.45f;
+            float g = std::fmod(id * 0.381966f + 0.25f, 1.0f) * 0.5f + 0.40f;
+            float b = std::fmod(id * 0.723607f + 0.50f, 1.0f) * 0.5f + 0.45f;
+            return {r, g, b, 1.0f};
+        }
+    }
+}
+
+inline void FabPanel3D::updateInstanceBuffer()
+{
+    auto* instances = static_cast<FabSlotInstance*>(m_instanceBuffer->contents());
+    
+    float halfExtent = (FAB_GRID_SIZE - 1) * style.cubeSpacing * 0.5f;
+    
+    for (uint32_t z = 0; z < FAB_GRID_SIZE; z++) {
+        for (uint32_t y = 0; y < FAB_GRID_SIZE; y++) {
+            for (uint32_t x = 0; x < FAB_GRID_SIZE; x++) {
+                size_t idx = FabGrid3D::toIndex(x, y, z);
                 const FabSlot& slot = grid.slots[idx];
                 
-                data[idx].position = {
-                    x * style.slotSpacing - offset,
-                    y * style.slotSpacing - offset,
-                    z * style.slotSpacing - offset
+                bool isEmpty = slot.isEmpty();
+                bool isSelected = (x == cursor.x && y == cursor.y && z == cursor.z);
+                
+                instances[idx].worldPosition = {
+                    static_cast<float>(x) * style.cubeSpacing - halfExtent,
+                    static_cast<float>(y) * style.cubeSpacing - halfExtent,
+                    static_cast<float>(z) * style.cubeSpacing - halfExtent
                 };
                 
-                bool isEmpty = slot.isEmpty();
-                bool isSelected = (x == selectedSlot.x && y == selectedSlot.y && z == selectedSlot.z);
-                bool isHovered = (x == hoveredSlot.x && y == hoveredSlot.y && z == hoveredSlot.z);
-                
-                data[idx].scale = isEmpty ? style.slotScale * 0.45f : style.slotScale;
-                data[idx].color = getItemColor ? getItemColor(slot.itemId) : defaultItemColor(slot.itemId);
-                
-                uint32_t flags = 0;
-                if (isEmpty) flags |= 1;
-                if (isSelected) flags |= 2;
-                if (isHovered) flags |= 4;
-                data[idx].flags = flags;
-                data[idx].slotX = x;
-                data[idx].slotY = y;
-                data[idx].slotZ = z;
+                instances[idx].scale = isEmpty ? style.cubeSize * 0.5f : style.cubeSize;
+                instances[idx].color = getColorForItem(slot.itemId);
+                instances[idx].flags = (isEmpty ? 1u : 0u) | (isSelected ? 2u : 0u);
             }
         }
     }
 }
 
-inline simd::float2 FabPanel3D::getPanelScreenPos(simd::float2 screenSize) const {
-    return {panelPosition.x * screenSize.x, panelPosition.y * screenSize.y};
+inline void FabPanel3D::get3DViewportRect(simd::float2 screenSize, float& outX, float& outY, float& outW, float& outH) const
+{
+    float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
+    float panelX = panelCenter.x * screenSize.x;
+    float panelY = panelCenter.y * screenSize.y;
+    
+    // La zone 3D est à droite de l'inventaire (si ouvert)
+    float viewLeft = panelX - totalWidth * 0.5f + (inventoryOpen ? sidebarWidth : 0.0f) + 10.0f;
+    float viewTop = panelY - panelPixelSize.y * 0.5f + headerHeight + 10.0f;
+    float viewWidth = panelPixelSize.x - 20.0f;
+    float viewHeight = panelPixelSize.y - headerHeight - 20.0f;
+    
+    // Convertir en coordonnées Metal (Y inversé)
+    outX = viewLeft;
+    outY = screenSize.y - (viewTop + viewHeight);
+//    outY = screenSize.y - viewTop - viewHeight;
+    outW = viewWidth;
+    outH = viewHeight;
 }
 
-inline void FabPanel3D::update(float deltaTime) {
+inline void FabPanel3D::update(float deltaTime)
+{
     m_time += deltaTime;
-    
-    float smoothing = 1.f - powf(0.001f, deltaTime);
-    rotationX += (targetRotationX - rotationX) * smoothing;
-    rotationY += (targetRotationY - rotationY) * smoothing;
-    zoom += (targetZoom - zoom) * smoothing;
 }
 
-inline void FabPanel3D::render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize) {
-    if (!isVisible) return;
+inline void FabPanel3D::setViewportWindow(NS::UInteger width, NS::UInteger height)
+{
+    float vpX, vpY, vpW, vpH;
+    get3DViewportRect(simd::float2{static_cast<float>(width), static_cast<float>(height)}, vpX, vpY, vpW, vpH);
     
-    updateInstanceData();
+    m_viewport3D.originX = vpX;
+    m_viewport3D.originY = vpY;
+    m_viewport3D.width = (double)vpW;
+    m_viewport3D.height = (double)vpH;
+    m_viewport3D.znear = 0.0;
+    m_viewport3D.zfar = 1.0;
     
-    simd::float2 panelPos = getPanelScreenPos(screenSize);
-    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+    m_scissor.x = static_cast<NS::UInteger>(std::max(0.0f, vpX));
+    m_scissor.y = static_cast<NS::UInteger>(std::max(0.0f, vpY));
+    m_scissor.width = static_cast<NS::UInteger>(vpW);
+    m_scissor.height = static_cast<NS::UInteger>(vpH);
     
-    // ===== 1. Panel Background =====
+    aspect = vpW / vpH;
+}
+
+inline void FabPanel3D::render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize)
+{
+    if (!visible) return;
+    
+    // Calculer les dimensions
+    float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
+    float panelX = panelCenter.x * screenSize.x;
+    float panelY = panelCenter.y * screenSize.y;
+    
+    updateInstanceBuffer();
+    
+    // ========================================
+    // PASS 1: Panel 2D (fond)
+    // ========================================
     if (m_panelPipeline) {
-        auto* u = static_cast<FabPanelUniforms*>(m_panelUniformBuffer->contents());
-        u->screenSize = screenSize;
-        u->panelPos = panelPos;
-        u->panelSize = {totalWidth, panelSize.y};
-        u->bgColor = style.panelBg;
-        u->borderColor = style.panelBorder;
-        u->headerColor = style.headerBg;
-        u->shadowColor = style.shadow;
-        u->cornerRadius = style.cornerRadius;
-        u->borderWidth = style.borderWidth;
-        u->headerHeight = headerHeight;
-        u->time = m_time;
-        u->shadowBlur = style.shadowBlur;
-        u->shadowOffsetY = style.shadowOffsetY;
-        u->isInventoryOpen = isInventoryOpen ? 1 : 0;
-        u->inventoryWidth = inventoryWidth;
+        auto* uniforms = static_cast<FabPanelUniforms*>(m_panelUniforms->contents());
+        uniforms->screenSize = screenSize;
+        uniforms->panelPosition = {panelX, panelY};
+        uniforms->panelSize = {totalWidth, panelPixelSize.y};
+        uniforms->backgroundColor = style.panelBg;
+        uniforms->borderColor = style.panelBorder;
+        uniforms->headerColor = style.headerBg;
+        uniforms->cornerRadius = style.cornerRadius;
+        uniforms->borderWidth = style.borderWidth;
+        uniforms->headerHeight = headerHeight;
+        uniforms->time = m_time;
+        uniforms->showInventory = inventoryOpen ? 1 : 0;
+        uniforms->inventoryWidth = sidebarWidth;
         
         encoder->setRenderPipelineState(m_panelPipeline);
-        encoder->setDepthStencilState(m_depthStateOff);
-        encoder->setVertexBuffer(m_panelVertexBuffer, 0, 0);
-        encoder->setVertexBuffer(m_panelUniformBuffer, 0, 1);
-        encoder->setFragmentBuffer(m_panelUniformBuffer, 0, 0);
+        encoder->setDepthStencilState(m_depthDisabled);
+        encoder->setVertexBuffer(m_panelQuadVB, 0, 0);
+        encoder->setVertexBuffer(m_panelUniforms, 0, 1);
+        encoder->setFragmentBuffer(m_panelUniforms, 0, 0);
         encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6));
     }
+    encoder->setViewport(m_viewport3D);
+    encoder->setScissorRect(m_scissor);
+
+    simd::float4x4 viewMat = computeViewMatrix();
+    simd::float4x4 projMat = computeProjectionMatrix(aspect);
+    simd::float4x4 viewProjMat = simd_mul(projMat, viewMat);
     
-    // ===== 2. Grille 3D =====
-    float viewW = panelSize.x;
-    float viewH = panelSize.y - headerHeight;
-    float aspect = viewW / viewH;
-    
-    simd::float4x4 view = createViewMatrix();
-    simd::float4x4 proj = createProjectionMatrix(aspect);
-    simd::float4x4 vp = simd_mul(proj, view);
-    
-    // Grid uniforms
-    auto* gu = static_cast<FabGridUniforms*>(m_gridUniformBuffer->contents());
-    gu->viewProjection = vp;
-    gu->model = simd::float4x4{
-        simd::float4{1,0,0,0}, simd::float4{0,1,0,0},
-        simd::float4{0,0,1,0}, simd::float4{0,0,0,1}
+    float dist = 12.0f / cameraZoom;
+    simd::float3 camPos = {
+        dist * std::cos(cameraPitch) * std::sin(cameraYaw),
+        dist * std::sin(cameraPitch),
+        dist * std::cos(cameraPitch) * std::cos(cameraYaw)
     };
-    float dist = 9.0f / zoom;
-    float cx = cosf(rotationX), sx = sinf(rotationX);
-    float cy = cosf(rotationY), sy = sinf(rotationY);
-    gu->cameraPos = {dist * sy * cx, dist * sx, dist * cy * cx};
-    gu->time = m_time;
-    gu->selectedSlot = {(float)selectedSlot.x, (float)selectedSlot.y, (float)selectedSlot.z};
-    gu->slotSpacing = style.slotSpacing;
-    gu->emptySlotColor = style.emptySlot;
-    gu->selectedColor = style.selectedSlot;
-    gu->hoveredColor = style.hoveredSlot;
-    gu->gridSize = FAB_GRID_SIZE;
     
-    // Axis uniforms
-    auto* au = static_cast<FabAxisUniforms*>(m_axisUniformBuffer->contents());
-    au->viewProjection = vp;
-    au->time = m_time;
-    au->axisLength = style.axisLength;
-    au->axisThickness = style.axisThickness;
+    // Uniforms 3D
+    auto* uniforms3D = static_cast<Fab3DUniforms*>(m_3dUniforms->contents());
+    uniforms3D->viewProjectionMatrix = viewProjMat;
+    uniforms3D->cameraPosition = camPos;
+    uniforms3D->time = m_time;
+    uniforms3D->lightDirection = simd::normalize(simd::float3{0.4f, 0.8f, 0.4f});
+    uniforms3D->gridHalfSize = (FAB_GRID_SIZE - 1) * style.cubeSpacing * 0.5f;
+    uniforms3D->selectionColor = style.selection;
     
-    // Grid Lines
-    if (m_gridLinesPipeline && m_gridLinesVertexCount > 0) {
-        encoder->setRenderPipelineState(m_gridLinesPipeline);
-        encoder->setDepthStencilState(m_depthStateOn);
-        encoder->setVertexBuffer(m_gridLinesVertexBuffer, 0, 0);
-        encoder->setVertexBuffer(m_axisUniformBuffer, 0, 1);
-        encoder->setFragmentBuffer(m_axisUniformBuffer, 0, 0);
-        encoder->drawPrimitives(MTL::PrimitiveTypeLine, NS::UInteger(0), NS::UInteger(m_gridLinesVertexCount));
+    // ----- Lignes de grille -----
+    if (m_linePipeline && m_gridLineCount > 0) {
+        encoder->setRenderPipelineState(m_linePipeline);
+        encoder->setDepthStencilState(m_depthEnabled);
+        encoder->setVertexBuffer(m_gridLinesVB, 0, 0);
+        encoder->setVertexBuffer(m_3dUniforms, 0, 1);
+        encoder->setFragmentBuffer(m_3dUniforms, 0, 0);
+        encoder->drawPrimitives(MTL::PrimitiveTypeLine, NS::UInteger(0), NS::UInteger(m_gridLineCount));
     }
     
-    // Cubes
-    if (m_gridPipeline) {
-        encoder->setRenderPipelineState(m_gridPipeline);
-        encoder->setDepthStencilState(m_depthStateOn);
-        encoder->setVertexBuffer(m_cubeVertexBuffer, 0, 0);
-        encoder->setVertexBuffer(m_gridUniformBuffer, 0, 1);
+    // ----- Cubes (instances) -----
+    if (m_cubePipeline) {
+        encoder->setRenderPipelineState(m_cubePipeline);
+        encoder->setDepthStencilState(m_depthEnabled);
+        encoder->setVertexBuffer(m_cubeVB, 0, 0);
+        encoder->setVertexBuffer(m_3dUniforms, 0, 1);
         encoder->setVertexBuffer(m_instanceBuffer, 0, 2);
-        encoder->setFragmentBuffer(m_gridUniformBuffer, 0, 0);
-        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_cubeIndexCount,
-                                       MTL::IndexTypeUInt16, m_cubeIndexBuffer, 0, FAB_GRID_TOTAL);
+        encoder->setFragmentBuffer(m_3dUniforms, 0, 0);
+        encoder->drawIndexedPrimitives(
+            MTL::PrimitiveTypeTriangle,
+            m_cubeIndexCount,
+            MTL::IndexTypeUInt16,
+            m_cubeIB,
+            0,
+            FAB_GRID_TOTAL
+        );
     }
     
-    // Axes
+    // ----- Axes XYZ -----
     if (m_axisPipeline && m_axisVertexCount > 0) {
         encoder->setRenderPipelineState(m_axisPipeline);
-        encoder->setDepthStencilState(m_depthStateOn);
-        encoder->setVertexBuffer(m_axisVertexBuffer, 0, 0);
-        encoder->setVertexBuffer(m_axisUniformBuffer, 0, 1);
-        encoder->setFragmentBuffer(m_axisUniformBuffer, 0, 0);
+        encoder->setDepthStencilState(m_depthEnabled);
+        encoder->setVertexBuffer(m_axisVB, 0, 0);
+        encoder->setVertexBuffer(m_3dUniforms, 0, 1);
+        encoder->setFragmentBuffer(m_3dUniforms, 0, 0);
         encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(m_axisVertexCount));
     }
 }
 
 // ============================================================================
-// Input
+// INPUT HANDLING
 // ============================================================================
 
-inline bool FabPanel3D::hitTestPanel(simd::float2 screenPos, simd::float2 screenSize) const {
-    simd::float2 panelPos = getPanelScreenPos(screenSize);
-    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
-    float hw = totalWidth * 0.5f;
-    float hh = panelSize.y * 0.5f;
-    return screenPos.x >= panelPos.x - hw && screenPos.x <= panelPos.x + hw &&
-           screenPos.y >= panelPos.y - hh && screenPos.y <= panelPos.y + hh;
-}
-
-inline bool FabPanel3D::hitTestHeader(simd::float2 screenPos, simd::float2 screenSize) const {
-    simd::float2 panelPos = getPanelScreenPos(screenSize);
-    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
-    float hw = totalWidth * 0.5f;
-    float top = panelPos.y - panelSize.y * 0.5f;
-    return screenPos.x >= panelPos.x - hw && screenPos.x <= panelPos.x + hw &&
-           screenPos.y >= top && screenPos.y <= top + headerHeight;
-}
-
-inline bool FabPanel3D::hitTest3DView(simd::float2 screenPos, simd::float2 screenSize) const {
-    simd::float2 panelPos = getPanelScreenPos(screenSize);
-    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
-    float left = panelPos.x - totalWidth * 0.5f + (isInventoryOpen ? inventoryWidth : 0.f);
-    float top = panelPos.y - panelSize.y * 0.5f + headerHeight;
-    return screenPos.x >= left && screenPos.x <= left + panelSize.x &&
-           screenPos.y >= top && screenPos.y <= top + panelSize.y - headerHeight;
-}
-
-inline bool FabPanel3D::hitTestInventoryToggle(simd::float2 screenPos, simd::float2 screenSize) const {
-    simd::float2 panelPos = getPanelScreenPos(screenSize);
-    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
-    float right = panelPos.x + totalWidth * 0.5f;
-    float top = panelPos.y - panelSize.y * 0.5f;
-    return screenPos.x >= right - 35.f && screenPos.x <= right - 5.f &&
-           screenPos.y >= top + 5.f && screenPos.y <= top + headerHeight - 5.f;
-}
-
-inline void FabPanel3D::onMouseDown(simd::float2 screenPos, simd::float2 screenSize, int button) {
-    if (!hitTestPanel(screenPos, screenSize)) return;
+inline bool FabPanel3D::isInsidePanel(simd::float2 pos, simd::float2 screenSize) const {
+    float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
+    float px = panelCenter.x * screenSize.x;
+    float py = panelCenter.y * screenSize.y;
+    float halfW = totalWidth * 0.5f;
+    float halfH = panelPixelSize.y * 0.5f;
     
-    if (hitTestInventoryToggle(screenPos, screenSize) && button == 0) {
-        toggleInventory();
-        return;
+    return pos.x >= px - halfW && pos.x <= px + halfW &&
+           pos.y >= py - halfH && pos.y <= py + halfH;
+}
+
+inline bool FabPanel3D::isInsideHeader(simd::float2 pos, simd::float2 screenSize) const {
+    float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
+    float px = panelCenter.x * screenSize.x;
+    float py = panelCenter.y * screenSize.y;
+    float left = px - totalWidth * 0.5f;
+    float top = py - panelPixelSize.y * 0.5f;
+    
+    return pos.x >= left && pos.x <= left + totalWidth &&
+           pos.y >= top && pos.y <= top + headerHeight;
+}
+
+inline bool FabPanel3D::isInside3DView(simd::float2 pos, simd::float2 screenSize) const {
+    float vpX, vpY, vpW, vpH;
+    get3DViewportRect(screenSize, vpX, vpY, vpW, vpH);
+    
+    // Convertir vpY de Metal coords (Y up from bottom) à screen coords (Y down from top)
+    float screenTop = screenSize.y - vpY - vpH;
+    
+    return pos.x >= vpX && pos.x <= vpX + vpW &&
+           pos.y >= screenTop && pos.y <= screenTop + vpH;
+}
+
+inline bool FabPanel3D::handleMouseDown(simd::float2 mousePos, simd::float2 screenSize, int button) {
+    if (!visible || !isInsidePanel(mousePos, screenSize)) return false;
+    
+    if (isInsideHeader(mousePos, screenSize) && button == 0) {
+        m_draggingPanel = true;
+        float px = panelCenter.x * screenSize.x;
+        float py = panelCenter.y * screenSize.y;
+        m_panelDragOffset = {mousePos.x - px, mousePos.y - py};
+        return true;
     }
     
-    if (hitTestHeader(screenPos, screenSize) && button == 0) {
-        m_isDraggingPanel = true;
-        simd::float2 panelPos = getPanelScreenPos(screenSize);
-        m_dragOffset = {screenPos.x - panelPos.x, screenPos.y - panelPos.y};
-        return;
+    if (isInside3DView(mousePos, screenSize)) {
+        m_draggingCamera = true;
+        return true;
     }
     
-    if (hitTest3DView(screenPos, screenSize)) {
-        m_isDraggingRotation = true;
-    }
+    return true;
 }
 
-inline void FabPanel3D::onMouseUp(simd::float2 screenPos, simd::float2 screenSize, int button) {
-    m_isDraggingPanel = false;
-    m_isDraggingRotation = false;
+inline bool FabPanel3D::handleMouseUp(simd::float2 mousePos, simd::float2 screenSize, int button) {
+    m_draggingPanel = false;
+    m_draggingCamera = false;
+    return visible && isInsidePanel(mousePos, screenSize);
 }
 
-inline void FabPanel3D::onMouseMoved(simd::float2 screenPos, simd::float2 screenSize) {
-    // Hover
-}
-
-inline void FabPanel3D::onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button) {
-    if (m_isDraggingPanel) {
-        panelPosition = {
-            (screenPos.x - m_dragOffset.x) / screenSize.x,
-            (screenPos.y - m_dragOffset.y) / screenSize.y
-        };
+inline bool FabPanel3D::handleMouseDrag(simd::float2 mousePos, simd::float2 delta, simd::float2 screenSize, int button) {
+    if (!visible) return false;
+    
+    if (m_draggingPanel) {
+        panelCenter.x = (mousePos.x - m_panelDragOffset.x) / screenSize.x;
+        panelCenter.y = (mousePos.y - m_panelDragOffset.y) / screenSize.y;
         
-        float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
-        float marginX = totalWidth * 0.5f / screenSize.x + 0.01f;
-        float marginY = panelSize.y * 0.5f / screenSize.y + 0.01f;
-        panelPosition.x = std::clamp(panelPosition.x, marginX, 1.f - marginX);
-        panelPosition.y = std::clamp(panelPosition.y, marginY, 1.f - marginY);
-        return;
+        // Contraindre aux bords de l'écran
+        float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
+        float marginX = totalWidth * 0.5f / screenSize.x + 0.02f;
+        float marginY = panelPixelSize.y * 0.5f / screenSize.y + 0.02f;
+        panelCenter.x = std::clamp(panelCenter.x, marginX, 1.0f - marginX);
+        panelCenter.y = std::clamp(panelCenter.y, marginY, 1.0f - marginY);
+        return true;
     }
     
-    if (m_isDraggingRotation) {
-        targetRotationY += delta.x * 0.01f;
-        targetRotationX = std::clamp(targetRotationX + delta.y * 0.01f, -1.4f, 1.4f);
+    if (m_draggingCamera) {
+        cameraYaw += delta.x * 0.008f;
+        cameraPitch = std::clamp(cameraPitch + delta.y * 0.008f, -1.5f, 1.5f);
+        return true;
     }
+    
+    return false;
 }
 
-inline void FabPanel3D::onMouseScroll(float delta) {
-    targetZoom = std::clamp(targetZoom + delta * 0.15f, 0.4f, 3.0f);
+inline bool FabPanel3D::handleScroll(simd::float2 mousePos, float scrollDelta, simd::float2 screenSize) {
+    if (!visible || !isInsidePanel(mousePos, screenSize)) return false;
+    
+    cameraZoom = std::clamp(cameraZoom + scrollDelta * 0.1f, 0.3f, 3.0f);
+    return true;
 }
 
-inline void FabPanel3D::onKeyPressed(int keyCode) {
+inline bool FabPanel3D::handleKey(uint16_t keyCode) {
+    if (!visible) return false;
+    
+    // Keycodes macOS
     switch (keyCode) {
-        case 13: moveSelection(0, 1, 0); break;  // W
-        case 1:  moveSelection(0, -1, 0); break; // S
-        case 0:  moveSelection(-1, 0, 0); break; // A
-        case 2:  moveSelection(1, 0, 0); break;  // D
-        case 12: moveSelection(0, 0, -1); break; // Q
-        case 14: moveSelection(0, 0, 1); break;  // E
+        case 13: moveCursor(0, 1, 0); return true;  // W - haut
+        case 1:  moveCursor(0, -1, 0); return true; // S - bas
+        case 0:  moveCursor(-1, 0, 0); return true; // A - gauche
+        case 2:  moveCursor(1, 0, 0); return true;  // D - droite
+        case 12: moveCursor(0, 0, -1); return true; // Q - arrière
+        case 14: moveCursor(0, 0, 1); return true;  // E - avant
+        case 34: toggleInventory(); return true;    // I - toggle inventaire
     }
+    
+    return false;
 }
 
-inline void FabPanel3D::moveSelection(int dx, int dy, int dz) {
-    selectedSlot.x = std::clamp((int)selectedSlot.x + dx, 0, (int)FAB_GRID_SIZE - 1);
-    selectedSlot.y = std::clamp((int)selectedSlot.y + dy, 0, (int)FAB_GRID_SIZE - 1);
-    selectedSlot.z = std::clamp((int)selectedSlot.z + dz, 0, (int)FAB_GRID_SIZE - 1);
+inline void FabPanel3D::moveCursor(int dx, int dy, int dz) {
+    cursor.x = static_cast<uint32_t>(std::clamp(static_cast<int>(cursor.x) + dx, 0, static_cast<int>(FAB_GRID_SIZE) - 1));
+    cursor.y = static_cast<uint32_t>(std::clamp(static_cast<int>(cursor.y) + dy, 0, static_cast<int>(FAB_GRID_SIZE) - 1));
+    cursor.z = static_cast<uint32_t>(std::clamp(static_cast<int>(cursor.z) + dz, 0, static_cast<int>(FAB_GRID_SIZE) - 1));
 }
 
-inline void FabPanel3D::placeItem(FabItemID itemId, uint32_t qty) {
-    grid.placeItem(selectedSlot.x, selectedSlot.y, selectedSlot.z, itemId, qty);
+inline void FabPanel3D::placeAtCursor(FabItemID id, uint32_t qty) {
+    grid.place(cursor.x, cursor.y, cursor.z, id, qty);
 }
 
-inline FabSlot FabPanel3D::removeItem() {
-    return grid.removeItem(selectedSlot.x, selectedSlot.y, selectedSlot.z);
+inline FabSlot FabPanel3D::takeFromCursor() {
+    return grid.take(cursor.x, cursor.y, cursor.z);
 }
 
 } // namespace inventoryWindow
+
+//namespace inventoryWindow {
+//
+//constexpr uint32_t FAB_GRID_SIZE = 5;
+//constexpr uint32_t FAB_GRID_TOTAL = FAB_GRID_SIZE * FAB_GRID_SIZE * FAB_GRID_SIZE;
+//
+//using FabItemID = uint32_t;
+//constexpr FabItemID FAB_ITEM_EMPTY = 0;
+//
+//// ============================================================================
+//// Structures de données
+//// ============================================================================
+//
+//struct FabSlot {
+//    FabItemID itemId = FAB_ITEM_EMPTY;
+//    uint32_t quantity = 0;
+//    
+//    bool isEmpty() const { return itemId == FAB_ITEM_EMPTY || quantity == 0; }
+//    void clear() { itemId = FAB_ITEM_EMPTY; quantity = 0; }
+//};
+//
+//struct FabGrid3D {
+//    std::array<FabSlot, FAB_GRID_TOTAL> slots;
+//    
+//    FabGrid3D() { clear(); }
+//    void clear() { for (auto& s : slots) s.clear(); }
+//    
+//    static size_t index(uint32_t x, uint32_t y, uint32_t z) {
+//        return z * FAB_GRID_SIZE * FAB_GRID_SIZE + y * FAB_GRID_SIZE + x;
+//    }
+//    
+//    FabSlot& at(uint32_t x, uint32_t y, uint32_t z) { return slots[index(x, y, z)]; }
+//    const FabSlot& at(uint32_t x, uint32_t y, uint32_t z) const { return slots[index(x, y, z)]; }
+//    
+//    bool placeItem(uint32_t x, uint32_t y, uint32_t z, FabItemID itemId, uint32_t qty = 1) {
+//        if (x >= FAB_GRID_SIZE || y >= FAB_GRID_SIZE || z >= FAB_GRID_SIZE) return false;
+//        auto& slot = at(x, y, z);
+//        if (slot.isEmpty()) { slot.itemId = itemId; slot.quantity = qty; return true; }
+//        if (slot.itemId == itemId) { slot.quantity += qty; return true; }
+//        return false;
+//    }
+//    
+//    FabSlot removeItem(uint32_t x, uint32_t y, uint32_t z) {
+//        if (x >= FAB_GRID_SIZE || y >= FAB_GRID_SIZE || z >= FAB_GRID_SIZE) return {};
+//        auto& slot = at(x, y, z);
+//        FabSlot removed = slot;
+//        slot.clear();
+//        return removed;
+//    }
+//};
+//
+//// ============================================================================
+//// GPU Structures
+//// ============================================================================
+//
+//struct FabCubeVertex {
+//    simd::float3 position;
+//    simd::float3 normal;
+//    simd::float2 uv;
+//};
+//
+//struct FabSlotInstanceData {
+//    simd::float3 position;
+//    float scale;
+//    simd::float4 color;
+//    uint32_t flags;      // bit0: empty, bit1: selected, bit2: hovered
+//    uint32_t slotX;
+//    uint32_t slotY;
+//    uint32_t slotZ;
+//};
+//
+//struct FabGridUniforms {
+//    simd::float4x4 viewProjection;
+//    simd::float4x4 model;
+//    simd::float3 cameraPos;
+//    float time;
+//    simd::float3 selectedSlot;
+//    float slotSpacing;
+//    simd::float4 emptySlotColor;
+//    simd::float4 selectedColor;
+//    simd::float4 hoveredColor;
+//    float gridSize;
+//    float padding[3];
+//};
+//
+//struct FabAxisVertex {
+//    simd::float3 position;
+//    simd::float4 color;
+//};
+//
+//struct FabAxisUniforms {
+//    simd::float4x4 viewProjection;
+//    float time;
+//    float axisLength;
+//    float axisThickness;
+//    float padding;
+//};
+//
+//struct FabPanelVertex {
+//    simd::float2 position;
+//    simd::float2 uv;
+//};
+//
+//struct FabPanelUniforms {
+//    simd::float2 screenSize;
+//    simd::float2 panelPos;
+//    simd::float2 panelSize;
+//    simd::float4 bgColor;
+//    simd::float4 borderColor;
+//    simd::float4 headerColor;
+//    simd::float4 shadowColor;
+//    float cornerRadius;
+//    float borderWidth;
+//    float headerHeight;
+//    float time;
+//    float shadowBlur;
+//    float shadowOffsetY;
+//    int isInventoryOpen;
+//    float inventoryWidth;
+//};
+//
+//// ============================================================================
+//// FabPanel3D - Classe principale
+//// ============================================================================
+//
+//class FabPanel3D {
+//public:
+//    FabPanel3D(MTL::Device* device, MTL::PixelFormat colorFormat,
+//               MTL::PixelFormat depthFormat, MTL::Library* shaderLibrary);
+//    ~FabPanel3D();
+//    
+//    // ===== État =====
+//    bool isVisible = false;
+//    bool isInventoryOpen = true;
+//    
+//    void show() { isVisible = true; }
+//    void hide() { isVisible = false; }
+//    void toggle() { isVisible = !isVisible; }
+//    void toggleInventory() { isInventoryOpen = !isInventoryOpen; }
+//    
+//    // ===== Grille 3D =====
+//    FabGrid3D grid;
+//    simd::uint3 selectedSlot = {2, 2, 2};
+//    simd::uint3 hoveredSlot = {255, 255, 255};
+//    
+//    // ===== Vue 3D =====
+//    float rotationY = 0.75f;
+//    float rotationX = 0.5f;
+//    float zoom = 1.0f;
+//    float targetRotationY = 0.75f;
+//    float targetRotationX = 0.5f;
+//    float targetZoom = 1.0f;
+//    
+//    // ===== Position du panel =====
+//    simd::float2 panelPosition = {0.5f, 0.5f};
+//    simd::float2 panelSize = {700.f, 500.f};
+//    float inventoryWidth = 220.f;
+//    float headerHeight = 38.f;
+//    
+//    // ===== Couleurs et style =====
+//    struct Style {
+//        simd::float4 panelBg = {0.08f, 0.09f, 0.12f, 0.96f};
+//        simd::float4 panelBorder = {0.25f, 0.32f, 0.48f, 1.0f};
+//        simd::float4 headerBg = {0.12f, 0.14f, 0.20f, 1.0f};
+//        simd::float4 shadow = {0.0f, 0.0f, 0.0f, 0.5f};
+//        simd::float4 inventoryBg = {0.06f, 0.07f, 0.10f, 0.95f};
+//        simd::float4 emptySlot = {0.18f, 0.20f, 0.26f, 0.25f};
+//        simd::float4 selectedSlot = {1.0f, 0.85f, 0.25f, 1.0f};
+//        simd::float4 hoveredSlot = {0.5f, 0.7f, 1.0f, 0.8f};
+//        simd::float4 axisX = {0.95f, 0.25f, 0.25f, 1.0f};
+//        simd::float4 axisY = {0.25f, 0.9f, 0.3f, 1.0f};
+//        simd::float4 axisZ = {0.3f, 0.5f, 0.95f, 1.0f};
+//        float cornerRadius = 12.f;
+//        float borderWidth = 2.f;
+//        float shadowBlur = 25.f;
+//        float shadowOffsetY = 8.f;
+//        float slotScale = 0.42f;
+//        float slotSpacing = 1.0f;
+//        float axisLength = 3.2f;
+//        float axisThickness = 0.08f;
+//    } style;
+//    
+//    // ===== Callback couleur items =====
+//    std::function<simd::float4(FabItemID)> getItemColor = nullptr;
+//    
+//    // ===== Input =====
+//    void onMouseDown(simd::float2 screenPos, simd::float2 screenSize, int button);
+//    void onMouseUp(simd::float2 screenPos, simd::float2 screenSize, int button);
+//    void onMouseMoved(simd::float2 screenPos, simd::float2 screenSize);
+//    void onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button);
+//    void onMouseScroll(float delta);
+//    void onKeyPressed(int keyCode);
+//    
+//    void moveSelection(int dx, int dy, int dz);
+//    void placeItem(FabItemID itemId, uint32_t qty = 1);
+//    FabSlot removeItem();
+//    
+//    // ===== Update & Render =====
+//    void update(float deltaTime);
+//    void render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize);
+//    
+//    // ===== Hit testing =====
+//    bool hitTestPanel(simd::float2 screenPos, simd::float2 screenSize) const;
+//    bool hitTestHeader(simd::float2 screenPos, simd::float2 screenSize) const;
+//    bool hitTest3DView(simd::float2 screenPos, simd::float2 screenSize) const;
+//    bool hitTestInventoryToggle(simd::float2 screenPos, simd::float2 screenSize) const;
+//    
+//private:
+//    MTL::Device* m_device;
+//    
+//    // Pipelines
+//    MTL::RenderPipelineState* m_panelPipeline = nullptr;
+//    MTL::RenderPipelineState* m_gridPipeline = nullptr;
+//    MTL::RenderPipelineState* m_axisPipeline = nullptr;
+//    MTL::RenderPipelineState* m_gridLinesPipeline = nullptr;
+//    MTL::DepthStencilState* m_depthStateOn = nullptr;
+//    MTL::DepthStencilState* m_depthStateOff = nullptr;
+//    
+//    // Buffers
+//    MTL::Buffer* m_panelVertexBuffer = nullptr;
+//    MTL::Buffer* m_panelUniformBuffer = nullptr;
+//    MTL::Buffer* m_cubeVertexBuffer = nullptr;
+//    MTL::Buffer* m_cubeIndexBuffer = nullptr;
+//    MTL::Buffer* m_instanceBuffer = nullptr;
+//    MTL::Buffer* m_gridUniformBuffer = nullptr;
+//    MTL::Buffer* m_axisVertexBuffer = nullptr;
+//    MTL::Buffer* m_axisUniformBuffer = nullptr;
+//    MTL::Buffer* m_gridLinesVertexBuffer = nullptr;
+//    
+//    float m_time = 0.f;
+//    bool m_isDraggingPanel = false;
+//    bool m_isDraggingRotation = false;
+//    simd::float2 m_dragOffset = {0.f, 0.f};
+//    
+//    uint32_t m_cubeIndexCount = 0;
+//    uint32_t m_axisVertexCount = 0;
+//    uint32_t m_gridLinesVertexCount = 0;
+//    
+//    void buildPipelines(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat, MTL::Library* library);
+//    void buildGeometry();
+//    void buildAxisGeometry();
+//    void buildGridLinesGeometry();
+//    void updateInstanceData();
+//    
+//    simd::float4x4 createViewMatrix() const;
+//    simd::float4x4 createProjectionMatrix(float aspect) const;
+//    simd::float4 defaultItemColor(FabItemID id) const;
+//    
+//    simd::float2 getPanelScreenPos(simd::float2 screenSize) const;
+//};
+//
+//// ============================================================================
+//// Implémentation
+//// ============================================================================
+//
+//inline FabPanel3D::FabPanel3D(MTL::Device* device, MTL::PixelFormat colorFormat,
+//                              MTL::PixelFormat depthFormat, MTL::Library* shaderLibrary)
+//    : m_device(device)
+//{
+//    buildGeometry();
+//    buildAxisGeometry();
+//    buildGridLinesGeometry();
+//    buildPipelines(colorFormat, depthFormat, shaderLibrary);
+//}
+//
+//inline FabPanel3D::~FabPanel3D() {
+//    if (m_panelPipeline) m_panelPipeline->release();
+//    if (m_gridPipeline) m_gridPipeline->release();
+//    if (m_axisPipeline) m_axisPipeline->release();
+//    if (m_gridLinesPipeline) m_gridLinesPipeline->release();
+//    if (m_depthStateOn) m_depthStateOn->release();
+//    if (m_depthStateOff) m_depthStateOff->release();
+//    if (m_panelVertexBuffer) m_panelVertexBuffer->release();
+//    if (m_panelUniformBuffer) m_panelUniformBuffer->release();
+//    if (m_cubeVertexBuffer) m_cubeVertexBuffer->release();
+//    if (m_cubeIndexBuffer) m_cubeIndexBuffer->release();
+//    if (m_instanceBuffer) m_instanceBuffer->release();
+//    if (m_gridUniformBuffer) m_gridUniformBuffer->release();
+//    if (m_axisVertexBuffer) m_axisVertexBuffer->release();
+//    if (m_axisUniformBuffer) m_axisUniformBuffer->release();
+//    if (m_gridLinesVertexBuffer) m_gridLinesVertexBuffer->release();
+//}
+//
+//inline void FabPanel3D::buildGeometry() {
+//    // Panel quad
+//    FabPanelVertex panelVerts[] = {
+//        {{-1,-1}, {0,1}}, {{1,-1}, {1,1}}, {{1,1}, {1,0}},
+//        {{-1,-1}, {0,1}}, {{1,1}, {1,0}}, {{-1,1}, {0,0}}
+//    };
+//    m_panelVertexBuffer = m_device->newBuffer(panelVerts, sizeof(panelVerts), MTL::ResourceStorageModeShared);
+//    m_panelUniformBuffer = m_device->newBuffer(sizeof(FabPanelUniforms), MTL::ResourceStorageModeShared);
+//    
+//    // Cube avec normales et UVs
+//    float s = 0.5f;
+//    std::vector<FabCubeVertex> cubeVerts;
+//    std::vector<uint16_t> cubeIndices;
+//    
+//    auto addFace = [&](simd::float3 n, simd::float3 right, simd::float3 up) {
+//        uint16_t base = (uint16_t)cubeVerts.size();
+//        simd::float3 center = n * s;
+//        cubeVerts.push_back({center - right * s - up * s, n, {0, 0}});
+//        cubeVerts.push_back({center + right * s - up * s, n, {1, 0}});
+//        cubeVerts.push_back({center + right * s + up * s, n, {1, 1}});
+//        cubeVerts.push_back({center - right * s + up * s, n, {0, 1}});
+//        cubeIndices.insert(cubeIndices.end(), {base, uint16_t(base+1), uint16_t(base+2),
+//                                               base, uint16_t(base+2), uint16_t(base+3)});
+//    };
+//    
+//    addFace(simd::float3{ 0, 0, 1}, simd::float3{ 1, 0, 0}, simd::float3{0, 1, 0});
+//    addFace(simd::float3{ 0, 0,-1}, simd::float3{-1, 0, 0}, simd::float3{0, 1, 0});
+//    addFace(simd::float3{ 0, 1, 0}, simd::float3{ 1, 0, 0}, simd::float3{0, 0,-1});
+//    addFace(simd::float3{ 0,-1, 0}, simd::float3{ 1, 0, 0}, simd::float3{0, 0, 1});
+//    addFace(simd::float3{ 1, 0, 0}, simd::float3{ 0, 0,-1}, simd::float3{0, 1, 0});
+//    addFace(simd::float3{-1, 0, 0}, simd::float3{ 0, 0, 1}, simd::float3{0, 1, 0});
+//    
+//    m_cubeVertexBuffer = m_device->newBuffer(cubeVerts.data(), cubeVerts.size() * sizeof(FabCubeVertex), MTL::ResourceStorageModeShared);
+//    m_cubeIndexBuffer = m_device->newBuffer(cubeIndices.data(), cubeIndices.size() * sizeof(uint16_t), MTL::ResourceStorageModeShared);
+//    m_cubeIndexCount = (uint32_t)cubeIndices.size();
+//    
+//    m_instanceBuffer = m_device->newBuffer(sizeof(FabSlotInstanceData) * FAB_GRID_TOTAL, MTL::ResourceStorageModeShared);
+//    m_gridUniformBuffer = m_device->newBuffer(sizeof(FabGridUniforms), MTL::ResourceStorageModeShared);
+//}
+//
+//inline void FabPanel3D::buildAxisGeometry() {
+//    std::vector<FabAxisVertex> axisVerts;
+//    
+//    float len = style.axisLength;
+//    float t = style.axisThickness;
+//    
+//    auto addAxisBox = [&](simd::float3 dir, simd::float4 color, float length, float thickness) {
+//        simd::float3 end = dir * length;
+//        simd::float3 perp1, perp2;
+//        
+//        if (fabsf(dir.x) < 0.9f) {
+//            perp1 = simd::normalize(simd::cross(dir, simd::float3{1, 0, 0}));
+//        } else {
+//            perp1 = simd::normalize(simd::cross(dir, simd::float3{0, 1, 0}));
+//        }
+//        perp2 = simd::cross(dir, perp1);
+//        
+//        perp1 = perp1 * thickness;
+//        perp2 = perp2 * thickness;
+//        
+//        simd::float3 v[8] = {
+//            -perp1 - perp2, perp1 - perp2, perp1 + perp2, -perp1 + perp2,
+//            end - perp1 - perp2, end + perp1 - perp2, end + perp1 + perp2, end - perp1 + perp2
+//        };
+//        
+//        int faces[6][4] = {{0,1,2,3}, {4,5,6,7}, {0,1,5,4}, {2,3,7,6}, {1,2,6,5}, {3,0,4,7}};
+//        
+//        for (int f = 0; f < 6; f++) {
+//            axisVerts.push_back({v[faces[f][0]], color});
+//            axisVerts.push_back({v[faces[f][1]], color});
+//            axisVerts.push_back({v[faces[f][2]], color});
+//            axisVerts.push_back({v[faces[f][0]], color});
+//            axisVerts.push_back({v[faces[f][2]], color});
+//            axisVerts.push_back({v[faces[f][3]], color});
+//        }
+//    };
+//    
+//    // Axes positifs
+//    addAxisBox(simd::float3{1, 0, 0}, style.axisX, len, t);
+//    addAxisBox(simd::float3{0, 1, 0}, style.axisY, len, t);
+//    addAxisBox(simd::float3{0, 0, 1}, style.axisZ, len, t);
+//    
+//    // Axes négatifs (plus fins, plus transparents)
+//    simd::float4 xNeg = style.axisX; xNeg.w = 0.35f;
+//    simd::float4 yNeg = style.axisY; yNeg.w = 0.35f;
+//    simd::float4 zNeg = style.axisZ; zNeg.w = 0.35f;
+//    
+//    addAxisBox(simd::float3{-1, 0, 0}, xNeg, len * 0.5f, t * 0.6f);
+//    addAxisBox(simd::float3{0, -1, 0}, yNeg, len * 0.5f, t * 0.6f);
+//    addAxisBox(simd::float3{0, 0, -1}, zNeg, len * 0.5f, t * 0.6f);
+//    
+//    // Sphère centrale
+//    float r = t * 3.0f;
+//    simd::float4 centerColor = {0.92f, 0.93f, 0.97f, 1.0f};
+//    int segments = 16;
+//    
+//    for (int i = 0; i < segments; i++) {
+//        for (int j = 0; j < segments; j++) {
+//            float theta1 = (float)i / segments * M_PI * 2.f;
+//            float theta2 = (float)(i + 1) / segments * M_PI * 2.f;
+//            float phi1 = (float)j / segments * M_PI - M_PI / 2.f;
+//            float phi2 = (float)(j + 1) / segments * M_PI - M_PI / 2.f;
+//            
+//            simd::float3 p1 = {r * cosf(phi1) * cosf(theta1), r * sinf(phi1), r * cosf(phi1) * sinf(theta1)};
+//            simd::float3 p2 = {r * cosf(phi1) * cosf(theta2), r * sinf(phi1), r * cosf(phi1) * sinf(theta2)};
+//            simd::float3 p3 = {r * cosf(phi2) * cosf(theta2), r * sinf(phi2), r * cosf(phi2) * sinf(theta2)};
+//            simd::float3 p4 = {r * cosf(phi2) * cosf(theta1), r * sinf(phi2), r * cosf(phi2) * sinf(theta1)};
+//            
+//            axisVerts.push_back({p1, centerColor});
+//            axisVerts.push_back({p2, centerColor});
+//            axisVerts.push_back({p3, centerColor});
+//            axisVerts.push_back({p1, centerColor});
+//            axisVerts.push_back({p3, centerColor});
+//            axisVerts.push_back({p4, centerColor});
+//        }
+//    }
+//    
+//    // Cônes aux extrémités des axes
+//    auto addCone = [&](simd::float3 pos, simd::float3 dir, simd::float4 color) {
+//        float coneH = 0.25f;
+//        float coneR = 0.12f;
+//        simd::float3 tip = pos + dir * coneH;
+//        
+//        simd::float3 perp1, perp2;
+//        if (fabsf(dir.x) < 0.9f) {
+//            perp1 = simd::normalize(simd::cross(dir, simd::float3{1, 0, 0}));
+//        } else {
+//            perp1 = simd::normalize(simd::cross(dir, simd::float3{0, 1, 0}));
+//        }
+//        perp2 = simd::cross(dir, perp1);
+//        
+//        int segs = 12;
+//        for (int i = 0; i < segs; i++) {
+//            float a1 = (float)i / segs * M_PI * 2.f;
+//            float a2 = (float)(i + 1) / segs * M_PI * 2.f;
+//            
+//            simd::float3 p1 = pos + perp1 * (coneR * cosf(a1)) + perp2 * (coneR * sinf(a1));
+//            simd::float3 p2 = pos + perp1 * (coneR * cosf(a2)) + perp2 * (coneR * sinf(a2));
+//            
+//            axisVerts.push_back({tip, color});
+//            axisVerts.push_back({p1, color});
+//            axisVerts.push_back({p2, color});
+//            
+//            // Base
+//            axisVerts.push_back({pos, color});
+//            axisVerts.push_back({p2, color});
+//            axisVerts.push_back({p1, color});
+//        }
+//    };
+//    
+//    addCone(simd::float3{len, 0, 0}, simd::float3{1, 0, 0}, style.axisX);
+//    addCone(simd::float3{0, len, 0}, simd::float3{0, 1, 0}, style.axisY);
+//    addCone(simd::float3{0, 0, len}, simd::float3{0, 0, 1}, style.axisZ);
+//    
+//    m_axisVertexCount = (uint32_t)axisVerts.size();
+//    m_axisVertexBuffer = m_device->newBuffer(axisVerts.data(), axisVerts.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
+//    m_axisUniformBuffer = m_device->newBuffer(sizeof(FabAxisUniforms), MTL::ResourceStorageModeShared);
+//}
+//
+//inline void FabPanel3D::buildGridLinesGeometry() {
+//    std::vector<FabAxisVertex> lines;
+//    
+//    float halfSize = (FAB_GRID_SIZE - 1) * style.slotSpacing * 0.5f;
+//    float step = style.slotSpacing;
+//    simd::float4 lineColor = {0.35f, 0.4f, 0.5f, 0.2f};
+//    simd::float4 cornerColor = {0.3f, 0.35f, 0.45f, 0.12f};
+//    
+//    // Grille au sol
+//    float y = -halfSize - 0.02f;
+//    for (int i = 0; i <= FAB_GRID_SIZE; i++) {
+//        float t = -halfSize + i * step;
+//        lines.push_back({{-halfSize - 0.3f, y, t}, lineColor});
+//        lines.push_back({{ halfSize + 0.3f, y, t}, lineColor});
+//        lines.push_back({{t, y, -halfSize - 0.3f}, lineColor});
+//        lines.push_back({{t, y,  halfSize + 0.3f}, lineColor});
+//    }
+//    
+//    // Piliers aux coins
+//    float corners[4][2] = {{-halfSize, -halfSize}, {halfSize, -halfSize},
+//                           {halfSize, halfSize}, {-halfSize, halfSize}};
+//    for (int c = 0; c < 4; c++) {
+//        lines.push_back({{corners[c][0], -halfSize - 0.3f, corners[c][1]}, cornerColor});
+//        lines.push_back({{corners[c][0],  halfSize + 0.3f, corners[c][1]}, cornerColor});
+//    }
+//    
+//    // Grille du haut (plus légère)
+//    simd::float4 topLineColor = {0.3f, 0.35f, 0.45f, 0.08f};
+//    y = halfSize + 0.02f;
+//    for (int i = 0; i <= FAB_GRID_SIZE; i++) {
+//        float t = -halfSize + i * step;
+//        lines.push_back({{-halfSize, y, t}, topLineColor});
+//        lines.push_back({{ halfSize, y, t}, topLineColor});
+//        lines.push_back({{t, y, -halfSize}, topLineColor});
+//        lines.push_back({{t, y,  halfSize}, topLineColor});
+//    }
+//    
+//    m_gridLinesVertexCount = (uint32_t)lines.size();
+//    m_gridLinesVertexBuffer = m_device->newBuffer(lines.data(), lines.size() * sizeof(FabAxisVertex), MTL::ResourceStorageModeShared);
+//}
+//
+//inline void FabPanel3D::buildPipelines(MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat,
+//                                        MTL::Library* library) {
+//    NS::Error* error = nullptr;
+//    
+//    // ===== Panel Pipeline =====
+//    {
+//        MTL::Function* vert = library->newFunction(MTLSTR("fabPanelVertexShader"));
+//        MTL::Function* frag = library->newFunction(MTLSTR("fabPanelFragmentShader"));
+//        if (vert && frag) {
+//            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+//            vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat2);
+//            vd->attributes()->object(0)->setOffset(0);
+//            vd->attributes()->object(0)->setBufferIndex(0);
+//            vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
+//            vd->attributes()->object(1)->setOffset(8);
+//            vd->attributes()->object(1)->setBufferIndex(0);
+//            vd->layouts()->object(0)->setStride(sizeof(FabPanelVertex));
+//            
+//            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
+//            pd->setVertexFunction(vert);
+//            pd->setFragmentFunction(frag);
+//            pd->setVertexDescriptor(vd);
+//            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
+//            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
+//            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+//            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+//            pd->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+//            pd->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+//            pd->setDepthAttachmentPixelFormat(depthFormat);
+//            
+//            m_panelPipeline = m_device->newRenderPipelineState(pd, &error);
+//            vd->release(); pd->release();
+//        }
+//        if (vert) vert->release();
+//        if (frag) frag->release();
+//    }
+//    
+//    // ===== Grid Pipeline =====
+//    {
+//        MTL::Function* vert = library->newFunction(MTLSTR("fabGridVertexShader"));
+//        MTL::Function* frag = library->newFunction(MTLSTR("fabGridFragmentShader"));
+//        if (vert && frag) {
+//            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+//            vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+//            vd->attributes()->object(0)->setOffset(0);
+//            vd->attributes()->object(0)->setBufferIndex(0);
+//            vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
+//            vd->attributes()->object(1)->setOffset(12);
+//            vd->attributes()->object(1)->setBufferIndex(0);
+//            vd->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
+//            vd->attributes()->object(2)->setOffset(24);
+//            vd->attributes()->object(2)->setBufferIndex(0);
+//            vd->layouts()->object(0)->setStride(sizeof(FabCubeVertex));
+//            
+//            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
+//            pd->setVertexFunction(vert);
+//            pd->setFragmentFunction(frag);
+//            pd->setVertexDescriptor(vd);
+//            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
+//            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
+//            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+//            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+//            pd->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+//            pd->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+//            pd->setDepthAttachmentPixelFormat(depthFormat);
+//            
+//            m_gridPipeline = m_device->newRenderPipelineState(pd, &error);
+//            vd->release(); pd->release();
+//        }
+//        if (vert) vert->release();
+//        if (frag) frag->release();
+//    }
+//    
+//    // ===== Axis Pipeline =====
+//    {
+//        MTL::Function* vert = library->newFunction(MTLSTR("fabAxisVertexShader"));
+//        MTL::Function* frag = library->newFunction(MTLSTR("fabAxisFragmentShader"));
+//        if (vert && frag) {
+//            MTL::VertexDescriptor* vd = MTL::VertexDescriptor::alloc()->init();
+//            vd->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+//            vd->attributes()->object(0)->setOffset(0);
+//            vd->attributes()->object(0)->setBufferIndex(0);
+//            vd->attributes()->object(1)->setFormat(MTL::VertexFormatFloat4);
+//            vd->attributes()->object(1)->setOffset(12);
+//            vd->attributes()->object(1)->setBufferIndex(0);
+//            vd->layouts()->object(0)->setStride(sizeof(FabAxisVertex));
+//            
+//            MTL::RenderPipelineDescriptor* pd = MTL::RenderPipelineDescriptor::alloc()->init();
+//            pd->setVertexFunction(vert);
+//            pd->setFragmentFunction(frag);
+//            pd->setVertexDescriptor(vd);
+//            pd->colorAttachments()->object(0)->setPixelFormat(colorFormat);
+//            pd->colorAttachments()->object(0)->setBlendingEnabled(true);
+//            pd->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+//            pd->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+//            pd->setDepthAttachmentPixelFormat(depthFormat);
+//            
+//            m_axisPipeline = m_device->newRenderPipelineState(pd, &error);
+//            m_gridLinesPipeline = m_axisPipeline;
+//            if (m_gridLinesPipeline) m_gridLinesPipeline->retain();
+//            vd->release(); pd->release();
+//        }
+//        if (vert) vert->release();
+//        if (frag) frag->release();
+//    }
+//    
+//    // Depth States
+//    MTL::DepthStencilDescriptor* dsd = MTL::DepthStencilDescriptor::alloc()->init();
+//    dsd->setDepthCompareFunction(MTL::CompareFunctionLess);
+//    dsd->setDepthWriteEnabled(true);
+//    m_depthStateOn = m_device->newDepthStencilState(dsd);
+//    
+//    dsd->setDepthCompareFunction(MTL::CompareFunctionAlways);
+//    dsd->setDepthWriteEnabled(false);
+//    m_depthStateOff = m_device->newDepthStencilState(dsd);
+//    dsd->release();
+//}
+//
+//inline simd::float4x4 FabPanel3D::createViewMatrix() const {
+//    float dist = 9.0f / zoom;
+//    float cx = cosf(rotationX), sx = sinf(rotationX);
+//    float cy = cosf(rotationY), sy = sinf(rotationY);
+//    
+//    simd::float3 eye = {dist * sy * cx, dist * sx, dist * cy * cx};
+//    simd::float3 center = {0, 0, 0};
+//    simd::float3 up = {0, 1, 0};
+//    
+//    simd::float3 f = simd::normalize(center - eye);
+//    simd::float3 s = simd::normalize(simd::cross(f, up));
+//    simd::float3 u = simd::cross(s, f);
+//    
+//    return simd::float4x4{
+//        simd::float4{s.x, u.x, -f.x, 0},
+//        simd::float4{s.y, u.y, -f.y, 0},
+//        simd::float4{s.z, u.z, -f.z, 0},
+//        simd::float4{-simd::dot(s, eye), -simd::dot(u, eye), simd::dot(f, eye), 1}
+//    };
+//}
+//
+//inline simd::float4x4 FabPanel3D::createProjectionMatrix(float aspect) const {
+//    float size = 4.0f / zoom;
+//    float l = -size * aspect, r = size * aspect;
+//    float b = -size, t = size;
+//    float n = 0.1f, f = 100.f;
+//    
+//    return simd::float4x4{
+//        simd::float4{2.f/(r-l), 0, 0, 0},
+//        simd::float4{0, 2.f/(t-b), 0, 0},
+//        simd::float4{0, 0, -2.f/(f-n), 0},
+//        simd::float4{-(r+l)/(r-l), -(t+b)/(t-b), -(f+n)/(f-n), 1}
+//    };
+//}
+//
+//inline simd::float4 FabPanel3D::defaultItemColor(FabItemID id) const {
+//    if (id == FAB_ITEM_EMPTY) return style.emptySlot;
+//    float r = fmodf(id * 0.618034f, 1.f) * 0.4f + 0.55f;
+//    float g = fmodf(id * 0.381966f + 0.25f, 1.f) * 0.4f + 0.45f;
+//    float b = fmodf(id * 0.723607f + 0.5f, 1.f) * 0.5f + 0.45f;
+//    return {r, g, b, 1.f};
+//}
+//
+//inline void FabPanel3D::updateInstanceData() {
+//    auto* data = static_cast<FabSlotInstanceData*>(m_instanceBuffer->contents());
+//    float offset = (FAB_GRID_SIZE - 1) * style.slotSpacing * 0.5f;
+//    
+//    for (uint32_t z = 0; z < FAB_GRID_SIZE; ++z) {
+//        for (uint32_t y = 0; y < FAB_GRID_SIZE; ++y) {
+//            for (uint32_t x = 0; x < FAB_GRID_SIZE; ++x) {
+//                size_t idx = FabGrid3D::index(x, y, z);
+//                const FabSlot& slot = grid.slots[idx];
+//                
+//                data[idx].position = {
+//                    x * style.slotSpacing - offset,
+//                    y * style.slotSpacing - offset,
+//                    z * style.slotSpacing - offset
+//                };
+//                
+//                bool isEmpty = slot.isEmpty();
+//                bool isSelected = (x == selectedSlot.x && y == selectedSlot.y && z == selectedSlot.z);
+//                bool isHovered = (x == hoveredSlot.x && y == hoveredSlot.y && z == hoveredSlot.z);
+//                
+//                data[idx].scale = isEmpty ? style.slotScale * 0.45f : style.slotScale;
+//                data[idx].color = getItemColor ? getItemColor(slot.itemId) : defaultItemColor(slot.itemId);
+//                
+//                uint32_t flags = 0;
+//                if (isEmpty) flags |= 1;
+//                if (isSelected) flags |= 2;
+//                if (isHovered) flags |= 4;
+//                data[idx].flags = flags;
+//                data[idx].slotX = x;
+//                data[idx].slotY = y;
+//                data[idx].slotZ = z;
+//            }
+//        }
+//    }
+//}
+//
+//inline simd::float2 FabPanel3D::getPanelScreenPos(simd::float2 screenSize) const {
+//    return {panelPosition.x * screenSize.x, panelPosition.y * screenSize.y};
+//}
+//
+//inline void FabPanel3D::update(float deltaTime) {
+//    m_time += deltaTime;
+//    
+//    float smoothing = 1.f - powf(0.001f, deltaTime);
+//    rotationX += (targetRotationX - rotationX) * smoothing;
+//    rotationY += (targetRotationY - rotationY) * smoothing;
+//    zoom += (targetZoom - zoom) * smoothing;
+//}
+//
+//inline void FabPanel3D::render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize) {
+//    if (!isVisible) return;
+//    
+//    updateInstanceData();
+//    
+//    simd::float2 panelPos = getPanelScreenPos(screenSize);
+//    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//    
+//    // ===== 1. Panel Background =====
+//    if (m_panelPipeline) {
+//        auto* u = static_cast<FabPanelUniforms*>(m_panelUniformBuffer->contents());
+//        u->screenSize = screenSize;
+//        u->panelPos = panelPos;
+//        u->panelSize = {totalWidth, panelSize.y};
+//        u->bgColor = style.panelBg;
+//        u->borderColor = style.panelBorder;
+//        u->headerColor = style.headerBg;
+//        u->shadowColor = style.shadow;
+//        u->cornerRadius = style.cornerRadius;
+//        u->borderWidth = style.borderWidth;
+//        u->headerHeight = headerHeight;
+//        u->time = m_time;
+//        u->shadowBlur = style.shadowBlur;
+//        u->shadowOffsetY = style.shadowOffsetY;
+//        u->isInventoryOpen = isInventoryOpen ? 1 : 0;
+//        u->inventoryWidth = inventoryWidth;
+//        
+//        encoder->setRenderPipelineState(m_panelPipeline);
+//        encoder->setDepthStencilState(m_depthStateOff);
+//        encoder->setVertexBuffer(m_panelVertexBuffer, 0, 0);
+//        encoder->setVertexBuffer(m_panelUniformBuffer, 0, 1);
+//        encoder->setFragmentBuffer(m_panelUniformBuffer, 0, 0);
+//        encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6));
+//    }
+//    
+//    // ===== 2. Grille 3D =====
+//    float viewW = panelSize.x;
+//    float viewH = panelSize.y - headerHeight;
+//    float aspect = viewW / viewH;
+//    
+//    simd::float4x4 view = createViewMatrix();
+//    simd::float4x4 proj = createProjectionMatrix(aspect);
+//    simd::float4x4 vp = simd_mul(proj, view);
+//    
+//    // Grid uniforms
+//    auto* gu = static_cast<FabGridUniforms*>(m_gridUniformBuffer->contents());
+//    gu->viewProjection = vp;
+//    gu->model = simd::float4x4{
+//        simd::float4{1,0,0,0}, simd::float4{0,1,0,0},
+//        simd::float4{0,0,1,0}, simd::float4{0,0,0,1}
+//    };
+//    float dist = 9.0f / zoom;
+//    float cx = cosf(rotationX), sx = sinf(rotationX);
+//    float cy = cosf(rotationY), sy = sinf(rotationY);
+//    gu->cameraPos = {dist * sy * cx, dist * sx, dist * cy * cx};
+//    gu->time = m_time;
+//    gu->selectedSlot = {(float)selectedSlot.x, (float)selectedSlot.y, (float)selectedSlot.z};
+//    gu->slotSpacing = style.slotSpacing;
+//    gu->emptySlotColor = style.emptySlot;
+//    gu->selectedColor = style.selectedSlot;
+//    gu->hoveredColor = style.hoveredSlot;
+//    gu->gridSize = FAB_GRID_SIZE;
+//    
+//    // Axis uniforms
+//    auto* au = static_cast<FabAxisUniforms*>(m_axisUniformBuffer->contents());
+//    au->viewProjection = vp;
+//    au->time = m_time;
+//    au->axisLength = style.axisLength;
+//    au->axisThickness = style.axisThickness;
+//    
+//    // Grid Lines
+//    if (m_gridLinesPipeline && m_gridLinesVertexCount > 0) {
+//        encoder->setRenderPipelineState(m_gridLinesPipeline);
+//        encoder->setDepthStencilState(m_depthStateOn);
+//        encoder->setVertexBuffer(m_gridLinesVertexBuffer, 0, 0);
+//        encoder->setVertexBuffer(m_axisUniformBuffer, 0, 1);
+//        encoder->setFragmentBuffer(m_axisUniformBuffer, 0, 0);
+//        encoder->drawPrimitives(MTL::PrimitiveTypeLine, NS::UInteger(0), NS::UInteger(m_gridLinesVertexCount));
+//    }
+//    
+//    // Cubes
+//    if (m_gridPipeline) {
+//        encoder->setRenderPipelineState(m_gridPipeline);
+//        encoder->setDepthStencilState(m_depthStateOn);
+//        encoder->setVertexBuffer(m_cubeVertexBuffer, 0, 0);
+//        encoder->setVertexBuffer(m_gridUniformBuffer, 0, 1);
+//        encoder->setVertexBuffer(m_instanceBuffer, 0, 2);
+//        encoder->setFragmentBuffer(m_gridUniformBuffer, 0, 0);
+//        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, m_cubeIndexCount,
+//                                       MTL::IndexTypeUInt16, m_cubeIndexBuffer, 0, FAB_GRID_TOTAL);
+//    }
+//    
+//    // Axes
+//    if (m_axisPipeline && m_axisVertexCount > 0) {
+//        encoder->setRenderPipelineState(m_axisPipeline);
+//        encoder->setDepthStencilState(m_depthStateOn);
+//        encoder->setVertexBuffer(m_axisVertexBuffer, 0, 0);
+//        encoder->setVertexBuffer(m_axisUniformBuffer, 0, 1);
+//        encoder->setFragmentBuffer(m_axisUniformBuffer, 0, 0);
+//        encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(m_axisVertexCount));
+//    }
+//}
+//
+//// ============================================================================
+//// Input
+//// ============================================================================
+//
+//inline bool FabPanel3D::hitTestPanel(simd::float2 screenPos, simd::float2 screenSize) const {
+//    simd::float2 panelPos = getPanelScreenPos(screenSize);
+//    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//    float hw = totalWidth * 0.5f;
+//    float hh = panelSize.y * 0.5f;
+//    return screenPos.x >= panelPos.x - hw && screenPos.x <= panelPos.x + hw &&
+//           screenPos.y >= panelPos.y - hh && screenPos.y <= panelPos.y + hh;
+//}
+//
+//inline bool FabPanel3D::hitTestHeader(simd::float2 screenPos, simd::float2 screenSize) const {
+//    simd::float2 panelPos = getPanelScreenPos(screenSize);
+//    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//    float hw = totalWidth * 0.5f;
+//    float top = panelPos.y - panelSize.y * 0.5f;
+//    return screenPos.x >= panelPos.x - hw && screenPos.x <= panelPos.x + hw &&
+//           screenPos.y >= top && screenPos.y <= top + headerHeight;
+//}
+//
+//inline bool FabPanel3D::hitTest3DView(simd::float2 screenPos, simd::float2 screenSize) const {
+//    simd::float2 panelPos = getPanelScreenPos(screenSize);
+//    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//    float left = panelPos.x - totalWidth * 0.5f + (isInventoryOpen ? inventoryWidth : 0.f);
+//    float top = panelPos.y - panelSize.y * 0.5f + headerHeight;
+//    return screenPos.x >= left && screenPos.x <= left + panelSize.x &&
+//           screenPos.y >= top && screenPos.y <= top + panelSize.y - headerHeight;
+//}
+//
+//inline bool FabPanel3D::hitTestInventoryToggle(simd::float2 screenPos, simd::float2 screenSize) const {
+//    simd::float2 panelPos = getPanelScreenPos(screenSize);
+//    float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//    float right = panelPos.x + totalWidth * 0.5f;
+//    float top = panelPos.y - panelSize.y * 0.5f;
+//    return screenPos.x >= right - 35.f && screenPos.x <= right - 5.f &&
+//           screenPos.y >= top + 5.f && screenPos.y <= top + headerHeight - 5.f;
+//}
+//
+//inline void FabPanel3D::onMouseDown(simd::float2 screenPos, simd::float2 screenSize, int button) {
+//    if (!hitTestPanel(screenPos, screenSize)) return;
+//    
+//    if (hitTestInventoryToggle(screenPos, screenSize) && button == 0) {
+//        toggleInventory();
+//        return;
+//    }
+//    
+//    if (hitTestHeader(screenPos, screenSize) && button == 0) {
+//        m_isDraggingPanel = true;
+//        simd::float2 panelPos = getPanelScreenPos(screenSize);
+//        m_dragOffset = {screenPos.x - panelPos.x, screenPos.y - panelPos.y};
+//        return;
+//    }
+//    
+//    if (hitTest3DView(screenPos, screenSize)) {
+//        m_isDraggingRotation = true;
+//    }
+//}
+//
+//inline void FabPanel3D::onMouseUp(simd::float2 screenPos, simd::float2 screenSize, int button) {
+//    m_isDraggingPanel = false;
+//    m_isDraggingRotation = false;
+//}
+//
+//inline void FabPanel3D::onMouseMoved(simd::float2 screenPos, simd::float2 screenSize) {
+//    // Hover
+//}
+//
+//inline void FabPanel3D::onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button) {
+//    if (m_isDraggingPanel) {
+//        panelPosition = {
+//            (screenPos.x - m_dragOffset.x) / screenSize.x,
+//            (screenPos.y - m_dragOffset.y) / screenSize.y
+//        };
+//        
+//        float totalWidth = panelSize.x + (isInventoryOpen ? inventoryWidth : 0.f);
+//        float marginX = totalWidth * 0.5f / screenSize.x + 0.01f;
+//        float marginY = panelSize.y * 0.5f / screenSize.y + 0.01f;
+//        panelPosition.x = std::clamp(panelPosition.x, marginX, 1.f - marginX);
+//        panelPosition.y = std::clamp(panelPosition.y, marginY, 1.f - marginY);
+//        return;
+//    }
+//    
+//    if (m_isDraggingRotation) {
+//        targetRotationY += delta.x * 0.01f;
+//        targetRotationX = std::clamp(targetRotationX + delta.y * 0.01f, -1.4f, 1.4f);
+//    }
+//}
+//
+//inline void FabPanel3D::onMouseScroll(float delta) {
+//    targetZoom = std::clamp(targetZoom + delta * 0.15f, 0.4f, 3.0f);
+//}
+//
+//inline void FabPanel3D::onKeyPressed(int keyCode) {
+//    switch (keyCode) {
+//        case 13: moveSelection(0, 1, 0); break;  // W
+//        case 1:  moveSelection(0, -1, 0); break; // S
+//        case 0:  moveSelection(-1, 0, 0); break; // A
+//        case 2:  moveSelection(1, 0, 0); break;  // D
+//        case 12: moveSelection(0, 0, -1); break; // Q
+//        case 14: moveSelection(0, 0, 1); break;  // E
+//    }
+//}
+//
+//inline void FabPanel3D::moveSelection(int dx, int dy, int dz) {
+//    selectedSlot.x = std::clamp((int)selectedSlot.x + dx, 0, (int)FAB_GRID_SIZE - 1);
+//    selectedSlot.y = std::clamp((int)selectedSlot.y + dy, 0, (int)FAB_GRID_SIZE - 1);
+//    selectedSlot.z = std::clamp((int)selectedSlot.z + dz, 0, (int)FAB_GRID_SIZE - 1);
+//}
+//
+//inline void FabPanel3D::placeItem(FabItemID itemId, uint32_t qty) {
+//    grid.placeItem(selectedSlot.x, selectedSlot.y, selectedSlot.z, itemId, qty);
+//}
+//
+//inline FabSlot FabPanel3D::removeItem() {
+//    return grid.removeItem(selectedSlot.x, selectedSlot.y, selectedSlot.z);
+//}
+//
+//} // namespace inventoryWindow
 
 //namespace inventoryWindow {
 //

@@ -237,11 +237,9 @@ bool bsp(Point const a, Point const b, Point const c, Point const point)
     std::cout << "\033[31mb is 5,05 x 2 = " << b << "\033[0m" << std::endl; // 14 bits 6.10352e-05
     
     if (bsp(Point(-0, -0), Point(-10, -30), Point(-20, -0), Point(-10.66666666, -1.5)) == true )
-    {
         std::cout << "Point3 is in the triangle" << std::endl;
-    } else {
+    else
         std::cout << "Point3 is not in the triangle" << std::endl;
-    }
     Fixed c(Fixed(5.05f) + Fixed(5.1f));
     std::cout << ++c << std::endl;
     std::cout << "\033[31mc préincr' is " << c << "\033[0m" << std::endl;
@@ -259,8 +257,8 @@ bool bsp(Point const a, Point const b, Point const c, Point const point)
     Point aaaa(0, 0);
     Point bbbb(10, 0);
     Point cccc(5, 10);
-    Point p1(5, 5);   // int
-    Point p2(10, 5);  // ext
+    Point p1(5, 5);   // in
+    Point p2(10, 5);  // out
     std::cout << "\033[32mPoint p1 (5, 5) is inside: " << bsp(aaaa, bbbb, cccc, p1) << "\033[0m" << std::endl;
     std::cout << "\033[32mPoint p2 (10, 5) is outside: " << bsp(aaaa, bbbb, cccc, p2) << "\033[0m" << std::endl;
 
@@ -275,8 +273,7 @@ bool bsp(Point const a, Point const b, Point const c, Point const point)
         std::cout << "Point2 is not in the triangle" << std::endl;
  
     return (0);
-}*/
-/*
+}
 Input: A = (0, 0), B = (10, 30), C = (20, 0), P(10, 15)
 Output: Inside
 Explanation:
