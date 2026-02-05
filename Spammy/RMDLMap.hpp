@@ -20,8 +20,8 @@
 struct TerrainConfigLisse
 {
     uint32_t seed;
-    float flatRadius;        // rayon zone plate centrale
-    float maxHeight;         // hauteur max du terrain
+    float flatRadius;
+    float maxHeight;
     float flatness;          // 0.0 = montagneux, 1.0 = très plat
     simd::float2 center;     // point de référence (0,0)
 };
@@ -145,7 +145,7 @@ private:
     MTL::Buffer* m_configBuffer;
     
     uint32_t m_chunkSize = 64;      // vertices par côté
-    uint32_t m_viewDistance = 8;    // chunks autour du joueur
+    uint32_t m_viewDistance = 8;
     float m_chunkWorldSize = 64.0f; // taille monde par chunk
     float totalTime = 0;
     float dayTime = 0;

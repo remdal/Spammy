@@ -117,15 +117,13 @@ gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::FAB),
 m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
-//planet(1e12f, 1000.0f, simd::float3{0, -1000, 0}),
-//moon(1e10f, 100.0f, simd::float3{500, 200, 0}),
-//sea(2000.0f, simd::float3{0, 0, 0}, -5.0f),
 terrainLisse(m_device, 89),
 blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
     _pAudioEngine = std::make_unique<PhaseAudio>(resourcePath);
+    loadPngAndFont(resourcePath);
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
@@ -163,7 +161,7 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     }
     createBuffers();
     
-    
+    inventoryWindow::texture2d texturepng = this->standardPNG();
     grid.setGridSize(16);           // 16x16 cellules
     grid.setCellSize(1.0f);         // 1 unité par cellule
     grid.setEdgeColor({0.3f, 0.8f, 1.0f, 0.8f}); // Bleu cyan
@@ -292,6 +290,19 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     m_fabPanel->grid.place(3, 1, 4, 6);  // Redstone
 }
 
+inventoryWindow::texture2d GameCoordinator::standardPNG()
+{
+    assert(_textureAssets.size() != 0 || !"You need to load the textures before configuring a game");
+
+    return inventoryWindow::texture2d {
+        .one = _textureAssets["RGBA0.png"],
+//        .playerTexture = _textureAssets["player.png"],
+//        .playerBulletTexture = _textureAssets["bullet0.png"],
+//        .backgroundTexture = _textureAssets["background.png"],
+//        .explosionTexture = _textureAssets["explosion0.png"],
+    };
+}
+
 GameCoordinator::~GameCoordinator()
 {
     m_shaderLibrary->release();
@@ -299,6 +310,8 @@ GameCoordinator::~GameCoordinator()
     if (vertexBuffer) vertexBuffer->release();
     if (indexBuffer) indexBuffer->release();
     if (transformBuffer) transformBuffer->release();
+    
+    if (m_fabPanel) delete m_fabPanel;
 
 
     m_terraVehicle.cleanup();
@@ -413,7 +426,39 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
     m_mousePositionComputeKernel = m_device->newComputePipelineState(computeFunction.get(), 0, nullptr, &error);
     
     m_textureBuffer = m_device->newBuffer(sizeof(uint), MTL::ResourceStorageModeManaged);
+}
 
+void GameCoordinator::loadPngAndFont(const std::string& resourcesPath)
+{
+    auto pCommandQueue = NS::TransferPtr(m_device->newCommandQueue());
+    auto pCommandBuffer = pCommandQueue->commandBuffer();
+    
+    std::vector<std::string> alpha {
+        resourcesPath + "/RGBA0.png"
+//        resourcesPath + "/RGBA1.png",
+//        resourcesPath + "/RGBA2.png"
+    };
+    _textureAssets["RGBA0.png"] = NS::TransferPtr(newTextureArrayFromFiles(alpha, m_device, pCommandBuffer));
+    
+//    std::vector<std::string> other {
+//        resourcesPath + "/explosion0.png",
+//        resourcesPath + "/explosion1.png"
+//    };
+//    _textureAssets["explosion0.png"] = NS::TransferPtr(newTextureArrayFromFiles(other, m_device, pCommandBuffer));
+    
+    pCommandBuffer->commit();
+
+//    _textureAssets["player.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/player.png", m_device));
+//    _textureAssets["bullet0.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/bullet0.png", m_device));
+//    _textureAssets["background.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/background.png", m_device));
+    
+    assert(_textureAssets["RGBA0.png"]);
+//    assert(_textureAssets["player.png"]);
+//    assert(_textureAssets["bullet0.png"]);
+//    assert(_textureAssets["background.png"]);
+//    assert(_textureAssets["explosion0.png"]);
+    
+    pCommandBuffer->waitUntilCompleted();
 }
 
 void GameCoordinator::loadGameSounds(const std::string &resourcePath, PhaseAudio *pAudioEngine)
@@ -737,6 +782,7 @@ void GameCoordinator::removeBlockFromVehicle(int blockId)
 
 void GameCoordinator::updateUniforms()
 {
+    m_uniforms.frameTime += 0.16f;
     m_cameraUniforms = m_camera.uniforms();
     
     
@@ -849,7 +895,7 @@ void GameCoordinator::draw(MTK::View* view)
 //    world.updateTime(dt);
 //    world.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 
-    gridCommandant.update(dt);
+    gridCommandant.update(m_uniforms.frameTime);
 //    gridCommandant.setBlockPosition(m_currentVehicleBlockPos);
 //    gridCommandant.setBlockRotation(m_currentVehicleRotation);
     gridCommandant.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position());//simd::float3{0, 50, 0});
@@ -1036,20 +1082,8 @@ RMDLRendererSpammy::~RMDLRendererSpammy()
     _pCommandQueue->release();
 }
 
-void RMDLRendererSpammy::loadPngAndFont( const std::string& resourcesPath )
+void RMDLRendererSpammy::loadPngAndFont(const std::string& resourcesPath)
 {
-//    auto pCommandQueue = NS::TransferPtr(_pDevice->newMTL4CommandQueue());
-//    auto pCommandBuffer = _pDevice->newCommandBuffer();
-
-    std::vector<std::string> sprite2dPng
-    {
-        
-    };
-
-    _textureAssets["jspencore.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/jspencore.png", _pDevice));
-//    _fontAtlas = newFontAtlas(_pDevice);
-//    _textureAssets["fontAtlas"] = _fontAtlas.texture;
-//    assert(_textureAssets["fontAtlas"]);
 }
 
 void RMDLRendererSpammy::makeArgumentTable()

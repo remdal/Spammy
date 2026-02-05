@@ -40,7 +40,17 @@ struct FabSlot
     void clear() { itemId = FAB_EMPTY; quantity = 0; }
 };
 
-class FabGrid3D {
+struct texture2d
+{
+    NS::SharedPtr<MTL::Texture>             one;
+    NS::SharedPtr<MTL::Texture>             two;
+    NS::SharedPtr<MTL::Texture>             three;
+    NS::SharedPtr<MTL::Texture>             four;
+    NS::SharedPtr<MTL::Texture>             five;
+};
+
+class FabGrid3D
+{
 public:
     std::array<FabSlot, FAB_GRID_TOTAL> slots;
     
@@ -244,6 +254,8 @@ private:
     MTL::Viewport m_viewport3D;
     MTL::ScissorRect m_scissor;
     float aspect = 1;
+    
+    texture2d texture2D;
     
     // Counts
     uint32_t m_cubeIndexCount = 0;

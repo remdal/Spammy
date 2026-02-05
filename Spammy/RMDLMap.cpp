@@ -11,15 +11,14 @@ InfiniteTerrainManager::InfiniteTerrainManager(MTL::Device* device, uint32_t see
 : m_device(device)
 {
     m_config.seed = seed;
-    m_config.flatRadius = 50.0f;
-    m_config.maxHeight = 60.0f;
+    m_config.flatRadius = 150.0f;
+    m_config.maxHeight = 160.0f;
     m_config.flatness = 0.7f;
     m_config.center = simd::float2{0, 0};
     
     m_configBuffer = m_device->newBuffer(sizeof(TerrainConfigLisse), MTL::ResourceStorageModeShared);
     memcpy(m_configBuffer->contents(), &m_config, sizeof(TerrainConfigLisse));
     
-    // Build pipelines
     NS::Error* error = nullptr;
     auto library = m_device->newDefaultLibrary();
     
@@ -123,7 +122,8 @@ ChunkCoord InfiniteTerrainManager::worldToChunk(simd::float3 pos) const
     return ChunkCoord{ int32_t(floorf(pos.x / m_chunkWorldSize)), int32_t(floorf(pos.z / m_chunkWorldSize)) };
 }
 
-void InfiniteTerrainManager::update(simd::float3 playerPos, MTL::CommandBuffer* cmd) {
+void InfiniteTerrainManager::update(simd::float3 playerPos, MTL::CommandBuffer* cmd)
+{
     ChunkCoord playerChunk = worldToChunk(playerPos);
     
     // Générer chunks dans le rayon de vue
@@ -334,11 +334,7 @@ void InfiniteTerrainManager::render(MTL::RenderCommandEncoder* encoder, const si
         if (!chunk.ready) continue;
         
         encoder->setVertexBuffer(chunk.vertexBuffer, 0, 0);
-        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-                                       chunk.indexCount,
-                                       MTL::IndexTypeUInt32,
-                                       chunk.indexBuffer,
-                                       0);
+        encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, chunk.indexCount, MTL::IndexTypeUInt32, chunk.indexBuffer, 0);
     }
 }
 

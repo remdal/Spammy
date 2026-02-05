@@ -23,9 +23,8 @@ public:
     
     SpaceshipSynthesizer& synth() { return m_synth; }
     
-    // Contrôle simplifié pour le véhicule
     void setEngineThrottle(float throttle);
-    void addBlockSound(int blockType);  // Ajoute une voix selon le type
+    void addBlockSound(int blockType);
     
 private:
     struct Impl;

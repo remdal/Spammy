@@ -304,9 +304,10 @@ private:
     TerrainConfigLisse  configLisse;
     InfiniteTerrainManager   terrainLisse;
     
-//    Moon    moon;
-//    Sea     sea;
-//    Planet  planet;
+    
+    inventoryWindow::texture2d standardPNG();
+    std::unordered_map<std::string, NS::SharedPtr<MTL::Texture>> _textureAssets;
+
     
     cube::BlockSystem   blocs;
     
@@ -365,7 +366,6 @@ private:
     MTL4::RenderPassDescriptor*         _gBufferRenderPassDesc;
     MTL4::RenderPassDescriptor*         _zBufferRenderPassDesc;
     NS::SharedPtr<MTL::SharedEvent>     _pPacingEvent;
-    std::unordered_map<std::string, NS::SharedPtr<MTL::Texture>> _textureAssets;
     std::unique_ptr<PhaseAudio>         _pAudioEngine;
     NS::SharedPtr<MTL::DepthStencilDescriptor> pDsDesc;
     NS::SharedPtr<MTL::TextureDescriptor> depthDesc;

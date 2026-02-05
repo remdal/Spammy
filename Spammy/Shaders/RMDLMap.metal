@@ -217,10 +217,8 @@ uint classifyBiome(float2 worldPos, float2 center, float flatRadius, uint seed)
         }
     }
     
-    // Près du spawn, forcer Plains au lieu de biomes extrêmes
-    if (spawnBlend < 0.5 && (biome == 5 || biome == 6 || biome == 7)) {
-        biome = 1; // Plains
-    }
+    if (spawnBlend < 0.5)// && (biome == 5 || biome == 6 || biome == 7))
+        biome = 1;
     
     return biome;
 }
@@ -267,7 +265,6 @@ kernel void terrainGenerateKernel(device TerrainVertexLisse* vertices [[buffer(0
     float flatBlend = 1.0 - smoothstep(config.flatRadius * 0.7, config.flatRadius * 1.2, dist);
     height = mix(height, 0.0, flatBlend);
     
-    // Écriture vertex
     vertices[idx].position = float3(worldPos.x, height, worldPos.y);
     vertices[idx].uv = localPos / float(chunk.size);
     vertices[idx].biomeID = biome;
