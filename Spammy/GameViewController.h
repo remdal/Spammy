@@ -28,6 +28,7 @@
 - (void)jump;
 - (void)inventory:(BOOL)visible;
 - (void)setInventory;
+- (void)setInventoryBest;
 - (void)boh;
 
 - (void)toggleVehicleMode;

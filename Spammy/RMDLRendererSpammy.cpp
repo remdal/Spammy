@@ -129,8 +129,8 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f);
-    m_cameraPNJ.initPerspectiveWithPosition({0.0f, 89.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f);
+    m_cameraPNJ.initPerspectiveWithPosition({100.0f, 89.0f, 220.0f}, {22.0f, 180.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f);
     m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -477,31 +477,41 @@ void GameCoordinator::rotateCamera(float deltaYaw, float deltaPitch)
     }
 }
 
+void GameCoordinator::setInventoryBest()
+{
+    if (m_gamePlayMode != GamePlayMode::FAB)
+        m_inventoryPanel.setVisible(!m_inventoryPanel.isVisible());
+//    if (!m_camera.isTransitioning())
+//        m_camera.applyShake(9.0f, 13.f);
+//        m_camera.applyShake(5.f, 8.f, 250.f);
+}
+
 void GameCoordinator::setInventory()
 {
-    m_inventoryPanel.setVisible(!m_inventoryPanel.isVisible());
     if (testTransitionCamera == 0)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseInOutCubic);
+        m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::EaseInOutCubic);
     if (testTransitionCamera == 1)
-        m_camera.transitionTo(m_cameraOrtho, 1.5f, RMDLCameraEase::Linear);
+        m_camera.transitionTo(m_cameraOrtho, 15.f, RMDLCameraEase::Linear);
     if (testTransitionCamera == 2)
-        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 60000.0f), 150.0f, RMDLCameraEase::SmoothStep);
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f), 15.0f, RMDLCameraEase::SmoothStep);
     if (testTransitionCamera == 3)
         m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::SmootherStep);
     if (testTransitionCamera == 4)
         m_camera.transitionTo(m_cameraOrtho, 15.f, RMDLCameraEase::EaseInQuad);
     if (testTransitionCamera == 5)
-        m_camera.transitionTo(m_cameraPNJ, 1.5f, RMDLCameraEase::EaseOutQuad);
+        m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::EaseOutQuad);
     if (testTransitionCamera == 6)
         m_camera.transitionTo(m_cameraPNJ, 5.f, RMDLCameraEase::EaseInOutQuad);
     if (testTransitionCamera == 7)
-        m_camera.transitionTo(m_cameraPNJ, 120.f, RMDLCameraEase::EaseInCubic);
+        m_camera.transitionTo(m_cameraPNJ, 6.f, RMDLCameraEase::EaseInCubic);
     if (testTransitionCamera == 8)
         m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::EaseOutCubic);
     if (testTransitionCamera == 9)
-        m_camera.transitionTo(m_cameraPNJ, 5.5f, RMDLCameraEase::EaseInOutBack);
-    testTransitionCamera++;
+        m_camera.transitionTo(m_cameraPNJ, 6.f, RMDLCameraEase::EaseInOutBack);
     if (testTransitionCamera == 10)
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f), 6.f, RMDLCameraEase::EaseInOutBack);
+    testTransitionCamera++;
+    if (testTransitionCamera == 11)
     {
         m_camera.transitionTo(cinematicView, 15.0f, RMDLCameraEase::SmootherStep);
         testTransitionCamera = 0;
@@ -686,12 +696,8 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
     float throttle = simd::length(input.moveDirection);
     m_spaceAudio->setEngineThrottle(throttle);
     
-//    moon.updateOrbit(dt);
-    
     m_camera.updateTransition(dt);
-//    if (!m_camera.isTransitioning())
-//        m_camera.applyShake(9.0f, 13.f);
-//        m_camera.applyShake(5.f, 8.f, 250.f);
+
 
     
     

@@ -162,10 +162,12 @@ public:
     void vehicleMouseUp();
     
     void setInventory();
+    void setInventoryBest();
     
     void onMouseDragged(simd::float2 screenPos, simd::float2 screenSize, simd::float2 delta, int button);
     
     void playCinematic();
+    
     
     void fabPanelKey(uint16_t keyCode) {
         if (m_fabPanel && m_fabPanel->visible) {

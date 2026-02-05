@@ -85,6 +85,7 @@ enum : Controls
         {
             case 0x31: [self.gameCoordinator jump]; break; // Espace
             case inventory: [self.gameCoordinator inventory : true]; break; // R
+            case 0x03: [self.gameCoordinator setInventoryBest]; break; // F
             case 0x0B: // B
                 [self.gameCoordinator toggleVehicleBuildMode];
                 break;
@@ -401,6 +402,11 @@ enum : Controls
 - (void)setInventory
 {
     _pGameCoordinator->setInventory();
+}
+
+- (void)setInventoryBest
+{
+    _pGameCoordinator->setInventoryBest();
 }
 
 - (void)jump
