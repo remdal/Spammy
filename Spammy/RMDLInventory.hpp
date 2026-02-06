@@ -14,6 +14,8 @@
 #include <vector>
 #include <string>
 
+#include "RMDLPNGLoader.h"
+
 namespace inventoryWindow {
 
 struct InventoryPanelVertex
@@ -77,7 +79,7 @@ public:
     void onMouseScroll(float deltaY);
     
     void setSlotItem(uint32_t slotIndex, uint32_t typeID, uint32_t count, simd::float4 color);
-    void setSlotTexture(uint32_t slotIndex, MTL::Texture* texture);
+    void setSlotTexture(uint32_t slotIndex, MTL::Texture* texture, const std::string& resourcesPath);
     void clearSlot(uint32_t slotIndex);
     
     MTL::Texture* loadIconTexture(const std::string& filePath);

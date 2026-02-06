@@ -238,7 +238,7 @@ private:
     MTL::ComputePipelineState*          _pipelineStateDescriptor;
     
 
-    simd::float3        m_lastValidGridCenter;
+//    simd::float3        m_lastValidGridCenter;
     
     std::unique_ptr<SpaceshipAudioEngine> m_spaceAudio;
     std::unordered_map<int, int> m_blockVoices;  // blockId -> voiceId

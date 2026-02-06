@@ -438,10 +438,36 @@ void InventoryPanel::onMouseScroll(float deltaY)
     m_scrollOffset = fmaxf(0.f, fminf(m_maxScrollOffset, m_scrollOffset));
 }
 
-MTL::Texture* InventoryPanel::loadIconTexture(const std::string& filePath)
+MTL::Texture* InventoryPanel::loadIconTexture(const std::string& resourcesPath)
 {
-    // Tu as déjà ta fonction de chargement PNG
-    // Retourne la texture créée pour l'assigner aux slots
+    
+//    auto pCommandQueue = NS::TransferPtr(m_device->newCommandQueue());
+//    auto pCommandBuffer = pCommandQueue->commandBuffer();
+//    
+//    std::vector<std::string> alpha {
+//        resourcesPath + "/RGBA0.png"
+////        resourcesPath + "/RGBA1.png",
+////        resourcesPath + "/RGBA2.png"
+//    };
+//    _textureAssets["RGBA0.png"] = NS::TransferPtr(newTextureArrayFromFiles(alpha, m_device, pCommandBuffer));
+//    
+////    std::vector<std::string> other {
+////        resourcesPath + "/explosion0.png",
+////        resourcesPath + "/explosion1.png"
+////    };
+////    _textureAssets["explosion0.png"] = NS::TransferPtr(newTextureArrayFromFiles(other, m_device, pCommandBuffer));
+//    
+//    pCommandBuffer->commit();
+//
+////    _textureAssets["player.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/player.png", m_device));
+////    _textureAssets["bullet0.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/bullet0.png", m_device));
+////    _textureAssets["background.png"] = NS::TransferPtr(newTextureFromFile(resourcesPath + "/background.png", m_device));
+//    
+//    assert(_textureAssets["RGBA0.png"]);
+//
+//    
+//    pCommandBuffer->waitUntilCompleted();
+
     return nullptr;
 }
 
@@ -454,10 +480,10 @@ void InventoryPanel::setSlotItem(uint32_t slotIndex, uint32_t typeID, uint32_t c
     m_items[slotIndex].hasItem = (count > 0);
 }
 
-void InventoryPanel::setSlotTexture(uint32_t slotIndex, MTL::Texture* texture)
+void InventoryPanel::setSlotTexture(uint32_t slotIndex, MTL::Texture* texture, const std::string& resourcesPath)
 {
     if (slotIndex >= TOTAL_SLOTS) return;
-    m_items[slotIndex].iconTexture = texture;
+    m_items[slotIndex].iconTexture = loadSingleTexture(resourcesPath + "/RGBA0.png", m_device); // texture;
 }
 
 void InventoryPanel::clearSlot(uint32_t slotIndex)

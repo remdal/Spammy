@@ -74,9 +74,8 @@ vertex InventoryVertexOut inventoryPanelVertexShader(
     return out;
 }
 
-fragment float4 inventorySlotFragmentShader(
-    InventoryVertexOut in [[stage_in]],
-    constant InventoryUniformsGPU& uniforms [[buffer(0)]])
+fragment float4 inventorySlotFragmentShader(InventoryVertexOut in [[stage_in]],
+                                            constant InventoryUniformsGPU& uniforms [[buffer(0)]])
 {
     float2 uv = in.texCoord;
     float2 center = uv - 0.5;
@@ -89,7 +88,6 @@ fragment float4 inventorySlotFragmentShader(
     
     float4 col = in.color;
     
-    // Slot
     if (in.elementType == 0) {
         // Inner shadow/depth
         float innerShadow = smoothstep(0.0, 0.12, -d);
@@ -140,11 +138,10 @@ fragment float4 inventorySlotFragmentShader(
     return col;
 }
 
-fragment float4 inventoryIconFragmentShader(
-    InventoryVertexOut in [[stage_in]],
-    constant InventoryUniformsGPU& uniforms [[buffer(0)]],
-    texture2d<float> iconTexture [[texture(0)]],
-    sampler iconSampler [[sampler(0)]])
+fragment float4 inventoryIconFragmentShader(InventoryVertexOut in [[stage_in]],
+                                            constant InventoryUniformsGPU& uniforms [[buffer(0)]],
+                                            texture2d<float> iconTexture [[texture(0)]],
+                                            sampler iconSampler [[sampler(0)]])
 {
     float2 uv = in.texCoord;
     float4 texColor = iconTexture.sample(iconSampler, uv);

@@ -52,7 +52,7 @@ bool RMDLBlender::doTheImportThing(const std::string& resourcesPath)
 {
     Assimp::Importer importer;
 
-    const aiScene* scene = importer.ReadFile(resourcesPath + "/rosée.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+    const aiScene* scene = importer.ReadFile(resourcesPath + "/auto.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 
     if (scene == nullptr)
     {

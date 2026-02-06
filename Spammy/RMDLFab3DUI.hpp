@@ -1086,10 +1086,10 @@ inline bool FabPanel3D::handleScroll(simd::float2 mousePos, float scrollDelta, s
     return true;
 }
 
-inline bool FabPanel3D::handleKey(uint16_t keyCode) {
+inline bool FabPanel3D::handleKey(uint16_t keyCode)
+{
     if (!visible) return false;
     
-    // Keycodes macOS
     switch (keyCode) {
         case 13: moveCursor(0, 1, 0); return true;  // W - haut
         case 1:  moveCursor(0, -1, 0); return true; // S - bas
@@ -1117,28 +1117,9 @@ inline FabSlot FabPanel3D::takeFromCursor() {
     return grid.take(cursor.x, cursor.y, cursor.z);
 }
 
-} // namespace inventoryWindow
+}
 
-//namespace inventoryWindow {
-//
-//constexpr uint32_t FAB_GRID_SIZE = 5;
-//constexpr uint32_t FAB_GRID_TOTAL = FAB_GRID_SIZE * FAB_GRID_SIZE * FAB_GRID_SIZE;
-//
-//using FabItemID = uint32_t;
-//constexpr FabItemID FAB_ITEM_EMPTY = 0;
-//
-//// ============================================================================
-//// Structures de données
-//// ============================================================================
-//
-//struct FabSlot {
-//    FabItemID itemId = FAB_ITEM_EMPTY;
-//    uint32_t quantity = 0;
-//    
-//    bool isEmpty() const { return itemId == FAB_ITEM_EMPTY || quantity == 0; }
-//    void clear() { itemId = FAB_ITEM_EMPTY; quantity = 0; }
-//};
-//
+
 //struct FabGrid3D {
 //    std::array<FabSlot, FAB_GRID_TOTAL> slots;
 //    

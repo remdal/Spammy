@@ -127,8 +127,8 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f);
-    m_cameraPNJ.initPerspectiveWithPosition({100.0f, 89.0f, 220.0f}, {22.0f, 180.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f);
+    m_cameraPNJ.initPerspectiveWithPosition({100.0f, 89.0f, 220.0f}, {22.0f, 180.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f);
     m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
     MTL::TextureDescriptor* texDesc = MTL::TextureDescriptor::texture2DDescriptor(layerPixelFormat, height, width, false);
@@ -141,6 +141,8 @@ blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePat
     blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
     size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
     blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20}) + math::makeScale({10, 10, 10});
+    size_t carauto = blender.loadModel(resourcePath + "/auto.glb", "caruto");
+    blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
     
     
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
@@ -538,7 +540,7 @@ void GameCoordinator::setInventory()
     if (testTransitionCamera == 1)
         m_camera.transitionTo(m_cameraOrtho, 15.f, RMDLCameraEase::Linear);
     if (testTransitionCamera == 2)
-        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f), 15.0f, RMDLCameraEase::SmoothStep);
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f), 15.0f, RMDLCameraEase::SmoothStep);
     if (testTransitionCamera == 3)
         m_camera.transitionTo(m_cameraPNJ, 15.f, RMDLCameraEase::SmootherStep);
     if (testTransitionCamera == 4)
@@ -554,7 +556,7 @@ void GameCoordinator::setInventory()
     if (testTransitionCamera == 9)
         m_camera.transitionTo(m_cameraPNJ, 6.f, RMDLCameraEase::EaseInOutBack);
     if (testTransitionCamera == 10)
-        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 30000.0f), 6.f, RMDLCameraEase::EaseInOutBack);
+        m_camera.transitionTo(m_camera.initPerspectiveWithPosition({100.0f, 100.0f, 100.0f}, {270.0f, -90.0f, 90.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f), 6.f, RMDLCameraEase::EaseInOutBack);
     testTransitionCamera++;
     if (testTransitionCamera == 11)
     {
@@ -636,6 +638,8 @@ void GameCoordinator::handleScroll(float deltaY)
         m_terraVehicle.zoomCamera(deltaY * 0.5f);
 //    if (deltaY != 0.f)
     m_inventoryPanel.onMouseScroll(deltaY);
+    if (m_camera.isOrbitMode())
+        m_camera.zoom(deltaY * 2.0f);
 }
 
 void GameCoordinator::setMousePosition(float x, float y)
@@ -742,6 +746,13 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
     m_spaceAudio->setEngineThrottle(throttle);
     
     m_camera.updateTransition(dt);
+    if (m_gamePlayMode != GamePlayMode::DEV)
+    {
+        m_camera.followTarget(m_currentVehicleBlockPos, 100.0f, 5.0f, 0.15f, dt);
+//        m_camera.setOrbitTarget(m_currentVehicleBlockPos);
+//        m_camera.setOrbitMode(true);
+    }
+    m_currentVehicleBlockPos += simd::float3{0, 0, dt};
 
 
     
@@ -969,7 +980,7 @@ void GameCoordinator::draw(MTK::View* view)
     
     terrainLisse.requestHeightAt(m_camera.position().x, m_camera.position().z, commandBuffer);
     float terrainHeight = terrainLisse.getLastHeight();
-    float minHeight = terrainHeight + 2.0f;
+    float minHeight = terrainHeight + 4.0f;
     if (m_camera.position().y < minHeight)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
 //    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);
