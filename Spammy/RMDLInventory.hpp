@@ -67,7 +67,7 @@ public:
     static constexpr uint32_t TOTAL_ROWS = 8;
     static constexpr uint32_t TOTAL_SLOTS = VISIBLE_COLUMNS * TOTAL_ROWS;
     
-    InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary);
+    InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat, MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary, const std::string& resourcesPath);
     ~InventoryPanel();
     
     void render(MTL::RenderCommandEncoder* renderCommandEncoder, simd::float2 screenSize);
@@ -135,6 +135,11 @@ private:
     int32_t hitTestHandle(simd::float2 normPos, simd::float2 screenSize) const;
     simd::float2 getSlotScreenPosition(uint32_t slotIndex, simd::float2 screenSize) const;
     simd::float2 getPanelDimensions(simd::float2 screenSize) const;
+    
+    MTL::Texture* test;
+//    std::string testStr = "test";
+
+
 };
 
 }

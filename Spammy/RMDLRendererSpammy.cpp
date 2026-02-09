@@ -116,9 +116,10 @@ blackHole(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 gridCommandant(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 m_terraVehicle(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
 vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePlayMode(GamePlayMode::FAB),
-m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary),
+m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath),
 terrainLisse(m_device, 89),
-blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue)
+blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue),
+m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
@@ -324,6 +325,115 @@ GameCoordinator::~GameCoordinator()
     m_depthStencilState->release();
     m_commandQueue->release();
     m_device->release();
+}
+
+void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
+{
+    m_text.clearBatch();
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {0.0f, 1.0f, 0.0f, 1.0f};  // Vert
+        opts.scale = 0.5f;
+        
+        char fpsText[32];
+        snprintf(fpsText, sizeof(fpsText), "FPS: %.1llu", m_frame);
+        
+        m_text.generateTextMesh(fpsText, 10, m_viewport.width - 30, opts);
+    }
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {1.0f, 1.0f, 1.0f, 1.0f};  // Blanc
+        opts.scale = 2.0f;
+        opts.thickness = 0.5f;
+        opts.outlineWidth = 0.15f;
+        opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};  // Contour noir
+        opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+        
+        m_text.generateTextMesh("METAL 4 ENGINE", m_viewport.width / 2, m_viewport.height - 100, opts);
+    }
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {0.8f, 0.8f, 0.8f, 1.0f};
+        opts.scale = 0.4f;
+        
+        std::string info = "Position: " + formatVector(m_camera.position()) + "\n"
+            "Frame: " + std::to_string(m_frame);
+        
+        TextRendering::TextRenderOptions shadowOpts;
+        shadowOpts.color = {0, 0, 0, 0.5f};
+        m_text.generateTextMesh(info, 10 + 2, 100 - 2, shadowOpts);
+        
+        m_text.generateTextMesh(info, 10, 100, opts);
+    }
+    
+
+    TextRendering::TextRenderOptions opts;
+    opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
+    opts.scale = 1.2f;
+    opts.thickness = 0.6f;  // Plus épais = gras
+    opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+    
+    m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2, m_viewport.height / 2, opts);
+    
+    renderMenu(20, 400);
+    
+    m_text.render(encoder, m_viewport.width, m_viewport.height);
+}
+
+void GameCoordinator::renderMenu(float x, float y)
+{
+    const char* menuItems[] = {
+        "Nouvelle Partie",
+        "Charger",
+        "Options",
+        "Quitter"
+    };
+    
+    for (int i = 0; i < 4; i++)
+    {
+        TextRendering::TextRenderOptions opts;
+        
+        if (i == 4)
+        {
+            // Item sélectionné
+            opts.color = {1.0f, 0.8f, 0.0f, 1.0f};  // Jaune
+            opts.scale = 0.7f;
+            opts.thickness = 0.55f;
+        } else {
+            // Item normal
+            opts.color = {0.6f, 0.6f, 0.6f, 1.0f};  // Gris
+            opts.scale = 0.6f;
+        }
+        
+        m_text.generateTextMesh(menuItems[i], x, y - i * 50, opts);
+    }
+}
+
+void GameCoordinator::layoutCenteredBox(const std::string& text, float scale)
+{
+    simd::float2 size = m_text.measureText(text, scale);
+    
+    // Calculer la position centrée
+    float boxX = (m_viewport.width - size.x) / 2 - 20;  // 20px padding
+    float boxY = (m_viewport.height - size.y) / 2 - 20;
+    float boxW = size.x + 40;
+    float boxH = size.y + 40;
+    
+    // Dessiner le fond (avec ton système de rendu 2D)
+    // drawRect(boxX, boxY, boxW, boxH, {0, 0, 0, 0.8f});
+    
+    // Puis le texte
+    TextRendering::TextRenderOptions opts;
+    opts.scale = scale;
+    opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+    m_text.generateTextMesh(text, m_viewport.width / 2, boxY + size.y + 10, opts);
+}
+
+std::string GameCoordinator::formatVector(simd::float3 v)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.1f, %.1f, %.1f", v.x, v.y, v.z);
+    return buf;
 }
 
 void GameCoordinator::createBuffers()
@@ -753,8 +863,6 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
 //        m_camera.setOrbitMode(true);
     }
     m_currentVehicleBlockPos += simd::float3{0, 0, dt};
-
-
     
     
 //    planet->applyGravityTo(m_vehicleRigidBody);
@@ -764,6 +872,7 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
     blocs.update(dt);
     
     m_fabPanel->update(dt);
+    
 }
 
 void GameCoordinator::addBlockToVehicle(int blockId, BlockType type)
@@ -961,6 +1070,8 @@ void GameCoordinator::draw(MTK::View* view)
 
     }
     
+    renderUI(renderCommandEncoder);
+    
     renderCommandEncoder->endEncoding();
 
     
@@ -984,7 +1095,8 @@ void GameCoordinator::draw(MTK::View* view)
     if (m_camera.position().y < minHeight)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
 //    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);
-    
+
+
     
     commandBuffer->presentDrawable(view->currentDrawable());
     commandBuffer->commit();
@@ -994,6 +1106,7 @@ void GameCoordinator::draw(MTK::View* view)
     snappedPos.y = roundf(result.worldPosition.y);//0.0f;
     snappedPos.z = roundf(result.worldPosition.z);
     grid.setGridCenter(snappedPos);
+//    blender.getModel("caruto")->transform = math::makeTranslate({snappedPos});
     
     if (result.depth > 0.9)
     {

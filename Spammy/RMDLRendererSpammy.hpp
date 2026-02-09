@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <simd/simd.h>
 #include <vector>
+#include <chrono>
 #include <stdio.h>
 
 #include "RMDLSkybox.hpp"
@@ -48,6 +49,8 @@
 #include "RMDLMotherCube.hpp"
 
 #include "RMDLFab3DUI.hpp"
+
+#include "RMDLSDF.hpp"
 
 #define kMaxBuffersInFlight 3
 
@@ -187,6 +190,11 @@ public:
             m_fabPanel->cameraZoom = std::clamp(m_fabPanel->cameraZoom + delta * 0.1f, 0.3f, 3.0f);
         }
     }
+    
+    void layoutCenteredBox(const std::string& text, float scale);
+    void renderMenu(float x, float y);
+    std::string formatVector(simd::float3 v);
+    void renderUI(MTL::RenderCommandEncoder* encoder);
 
     void playSoundTestY();
     void loadGameSounds(const std::string& resourcePath, PhaseAudio* audioEngine);
@@ -213,6 +221,7 @@ private:
     simd::float2                        cursorPosition;
     
     simd_uint2                          m_viewportSize;
+    simd_uint2                          m_viewportSizePanel;
     float                       _rotationAngle;
 
     
@@ -321,6 +330,7 @@ private:
 //    GameMode m_gameMode = GameMode::FreeCam;
 //    // Position du bloc en cours de placement
 //    simd_float3 m_buildPreviewPos = {0, 0, 0};
+    TextRendering::SDFTextSystem m_text;
 };
 
 class RMDLRendererSpammy : NonCopyable

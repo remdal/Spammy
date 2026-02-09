@@ -54,9 +54,8 @@ float roundedRectSDF(float2 p, float2 halfSize, float r) {
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - r;
 }
 
-vertex InventoryVertexOut inventoryPanelVertexShader(
-    InventoryVertexIn in [[stage_in]],
-    constant InventoryUniformsGPU& uniforms [[buffer(1)]])
+vertex InventoryVertexOut inventoryPanelVertexShader(InventoryVertexIn in [[stage_in]],
+                                                     constant InventoryUniformsGPU& uniforms [[buffer(1)]])
 {
     InventoryVertexOut out;
     

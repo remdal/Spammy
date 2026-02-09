@@ -17,7 +17,8 @@ InventoryItemData::InventoryItemData()
 {}
 
 InventoryPanel::InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelFormat,
-                               MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary)
+                               MTL::PixelFormat depthPixelFormat, MTL::Library* shaderLibrary,
+                               const std::string& resourcesPath)
     : m_device(device)
     , m_slotPipeline(nullptr)
     , m_iconPipeline(nullptr)
@@ -59,6 +60,8 @@ InventoryPanel::InventoryPanel(MTL::Device* device, MTL::PixelFormat colorPixelF
     
     buildPipelines(colorPixelFormat, depthPixelFormat, shaderLibrary);
     buildBuffers();
+        
+    setSlotTexture(3, test, resourcesPath);
     
     // Sampler for icons
     MTL::SamplerDescriptor* samplerDesc = MTL::SamplerDescriptor::alloc()->init();
@@ -200,14 +203,15 @@ void InventoryPanel::rebuildGeometry(simd::float2 screenSize)
     float top = m_panelPosition.y - panelDim.y * 0.5f;
     float right = m_panelPosition.x + panelDim.x * 0.5f;
     float bottom = m_panelPosition.y + panelDim.y * 0.5f;
-    
-    auto addQuad = [&](simd::float2 pos, simd::float2 size, simd::float4 color,
-                       float radius, float border, uint32_t type, uint32_t slot) {
+
+    auto addQuad = [&](simd::float2 pos, simd::float2 size, simd::float4 color, float radius, float border, uint32_t type, uint32_t slot)
+    {
         uint32_t base = (uint32_t)vertices.size();
         vertices.push_back({{pos.x, pos.y}, {0,0}, color, radius, border, type, slot});
         vertices.push_back({{pos.x + size.x, pos.y}, {1,0}, color, radius, border, type, slot});
         vertices.push_back({{pos.x + size.x, pos.y + size.y}, {1,1}, color, radius, border, type, slot});
         vertices.push_back({{pos.x, pos.y + size.y}, {0,1}, color, radius, border, type, slot});
+    
         indices.insert(indices.end(), {base, base+1, base+2, base, base+2, base+3});
     };
     
@@ -483,7 +487,7 @@ void InventoryPanel::setSlotItem(uint32_t slotIndex, uint32_t typeID, uint32_t c
 void InventoryPanel::setSlotTexture(uint32_t slotIndex, MTL::Texture* texture, const std::string& resourcesPath)
 {
     if (slotIndex >= TOTAL_SLOTS) return;
-    m_items[slotIndex].iconTexture = loadSingleTexture(resourcesPath + "/RGBA0.png", m_device); // texture;
+    m_items[slotIndex].iconTexture = newTextureFromFile(resourcesPath + "/RGBA0.png", m_device); // texture;
 }
 
 void InventoryPanel::clearSlot(uint32_t slotIndex)

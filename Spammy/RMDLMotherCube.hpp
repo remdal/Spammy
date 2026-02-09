@@ -218,7 +218,7 @@ inline uint32_t BlockTextureManager::loadTexture(const std::string& path)
         return m_textureIndices[name];
     }
     
-    MTL::Texture* tex = loadSingleTexture(path, m_device);
+    MTL::Texture* tex = newTextureFromFile(path, m_device);
     if (!tex) return 0;
     
     uint32_t index = (uint32_t)m_stagingTextures.size();
