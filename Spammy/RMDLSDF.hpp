@@ -34,7 +34,8 @@ struct GlyphInfo
 struct TextVertex
 {
     simd::float2 position;
-    simd::float2 texCoord; // UV dans l'atlas
+    simd::float2 texCoord;
+    simd::float4 color;
 };
 
 
@@ -51,11 +52,11 @@ struct TextUniforms
 
 struct TextRenderOptions
 {
-    simd::float4 color = {1.0f, 1.0f, 0.0f, 1.0f};
+    simd::float4 color = {1.0f, 1.0f, 1.0f, 1.0f};
     float scale = 1.0f;
     float thickness = 0.5f;           // 0.3 = fin, 0.5 = normal, 0.7 = gras
     float outlineWidth = 0.0f;        // 0 = pas de contour
-    simd::float4 outlineColor = {0.6f, 0.0f, 0.0f, 1.0f};
+    simd::float4 outlineColor = {0.6f, 0.6f, 0.0f, 1.0f};
     
     enum class Alignment { Left, Center, Right };
     Alignment alignment = Alignment::Left;

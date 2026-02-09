@@ -333,23 +333,23 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
     {
         TextRendering::TextRenderOptions opts;
         opts.color = {0.0f, 1.0f, 0.0f, 1.0f};  // Vert
-        opts.scale = 0.5f;
+        opts.scale = 0.25f;
         
         char fpsText[32];
         snprintf(fpsText, sizeof(fpsText), "FPS: %.1llu", m_frame);
         
-        m_text.generateTextMesh(fpsText, 10, m_viewport.width - 30, opts);
+        m_text.generateTextMesh(fpsText, m_viewport.width - 300, m_viewport.height - 300, opts);
     }
     {
         TextRendering::TextRenderOptions opts;
         opts.color = {1.0f, 1.0f, 1.0f, 1.0f};  // Blanc
-        opts.scale = 2.0f;
+        opts.scale = 1.5f;
         opts.thickness = 0.5f;
         opts.outlineWidth = 0.15f;
         opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};  // Contour noir
         opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
         
-        m_text.generateTextMesh("METAL 4 ENGINE", m_viewport.width / 2, m_viewport.height - 100, opts);
+        m_text.generateTextMesh("MSL4xCPP", m_viewport.width / 2, m_viewport.height - 160, opts);
     }
     {
         TextRendering::TextRenderOptions opts;
@@ -359,23 +359,27 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
         std::string info = "Position: " + formatVector(m_camera.position()) + "\n"
             "Frame: " + std::to_string(m_frame);
         
-        TextRendering::TextRenderOptions shadowOpts;
-        shadowOpts.color = {0, 0, 0, 0.5f};
-        m_text.generateTextMesh(info, 10 + 2, 100 - 2, shadowOpts);
-        
         m_text.generateTextMesh(info, 10, 100, opts);
     }
     
-
-    TextRendering::TextRenderOptions opts;
-    opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
-    opts.scale = 1.2f;
-    opts.thickness = 0.6f;  // Plus épais = gras
-    opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+    if (m_gamePlayMode == GamePlayMode::DEV)
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
+        opts.scale = 1.2f;
+        opts.thickness = 0.6f;
+        opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+        
+        m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2, m_viewport.height / 2, opts);
+        
+        TextRendering::TextRenderOptions shadowOpts;
+        shadowOpts.color = {0, 0, 0, 0.5f};
+        shadowOpts.scale = 1.2f;
+        shadowOpts.thickness = 0.6f;
+        m_text.generateTextMesh("ATTENTION!", m_viewport.width / 4, m_viewport.height / 2 - 20.0, shadowOpts);
+    }
     
-    m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2, m_viewport.height / 2, opts);
-    
-    renderMenu(20, 400);
+    renderMenu(m_viewport.width - 750, m_viewport.height / 2);
     
     m_text.render(encoder, m_viewport.width, m_viewport.height);
 }
@@ -393,19 +397,19 @@ void GameCoordinator::renderMenu(float x, float y)
     {
         TextRendering::TextRenderOptions opts;
         
-        if (i == 4)
+        if (i == 0)
         {
             // Item sélectionné
             opts.color = {1.0f, 0.8f, 0.0f, 1.0f};  // Jaune
-            opts.scale = 0.7f;
-            opts.thickness = 0.55f;
+            opts.scale = 0.5f;
+            opts.thickness = 0.85f;
         } else {
             // Item normal
             opts.color = {0.6f, 0.6f, 0.6f, 1.0f};  // Gris
-            opts.scale = 0.6f;
+            opts.scale = 0.45f;
         }
         
-        m_text.generateTextMesh(menuItems[i], x, y - i * 50, opts);
+        m_text.generateTextMesh(menuItems[i], x, y - i * 60, opts);
     }
 }
 
@@ -972,6 +976,8 @@ void GameCoordinator::draw(MTK::View* view)
     
     MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(passDesc);
     renderCommandEncoder->setViewport(m_viewport);
+    MTL::ScissorRect sc = {0, 0, m_viewportSize.x, static_cast<NS::UInteger>(m_viewport.height)};
+    renderCommandEncoder->setScissorRect(sc);
     
     simd::float3 vehicleCamPos = m_terraVehicle.getCameraPosition();
     simd::float3 vehicleCamTarget = m_terraVehicle.getCameraTarget();
@@ -1069,7 +1075,8 @@ void GameCoordinator::draw(MTK::View* view)
         m_fabPanel->render(renderCommandEncoder, screenSz);
 
     }
-    
+    renderCommandEncoder->setViewport(m_viewport);
+    renderCommandEncoder->setScissorRect(sc);
     renderUI(renderCommandEncoder);
     
     renderCommandEncoder->endEncoding();

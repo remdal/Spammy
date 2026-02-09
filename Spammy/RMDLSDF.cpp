@@ -20,17 +20,22 @@ static const char* shaderSource = R"(
 #include <metal_stdlib>
 using namespace metal;
 
-struct TextVertex {
+struct TextVertex 
+{
     float2 position [[attribute(0)]];
     float2 texCoord [[attribute(1)]];
+    float4 color [[attribute(2)]];
 };
 
-struct VertexOut {
+struct VertexOut 
+{
     float4 position [[position]];
     float2 texCoord;
+    float4 color;
 };
 
-struct TextUniforms {
+struct TextUniforms 
+{
     float4x4 projectionMatrix;
     float4 textColor;
     float smoothing;
@@ -41,17 +46,20 @@ struct TextUniforms {
 };
 
 vertex VertexOut textVertexShader(TextVertex in [[stage_in]],
-                                   constant TextUniforms& uniforms [[buffer(1)]]) {
+                                   constant TextUniforms& uniforms [[buffer(1)]])
+{
     VertexOut out;
     out.position = uniforms.projectionMatrix * float4(in.position, 0.0, 1.0);
     out.texCoord = in.texCoord;
+    out.color = in.color;
     return out;
 }
 
 fragment float4 textFragmentShader(VertexOut in [[stage_in]],
                                     constant TextUniforms& uniforms [[buffer(0)]],
                                     texture2d<float> atlas [[texture(0)]],
-                                    sampler samp [[sampler(0)]]) {
+                                    sampler samp [[sampler(0)]])
+{
     // Échantillonnage de la distance signée
     float distance = atlas.sample(samp, in.texCoord).r;
     
@@ -67,14 +75,14 @@ fragment float4 textFragmentShader(VertexOut in [[stage_in]],
     float alpha = smoothstep(threshold - smoothing, threshold + smoothing, distance);
     
     // Couleur finale du texte
-    float4 color = uniforms.textColor;
+    float4 color = in.color; // uniforms.textColor;
     color.a *= alpha;
     
     // Contour optionnel
-    if (uniforms.outlineWidth > 0.0) {
+    if (uniforms.outlineWidth > 0.0)
+    {
         float outlineThreshold = threshold - uniforms.outlineWidth;
-        float outlineAlpha = smoothstep(outlineThreshold - smoothing, 
-                                         outlineThreshold + smoothing, distance);
+        float outlineAlpha = smoothstep(outlineThreshold - smoothing, outlineThreshold + smoothing, distance);
         
         // Blend entre contour et texte
         float4 outlineColor = uniforms.outlineColor;
@@ -91,6 +99,20 @@ fragment float4 textFragmentShader(VertexOut in [[stage_in]],
     }
     
     return color;
+
+//        if (alpha > 0.01)
+//            // Texte opaque avec alpha du texte
+//            return float4(uniforms.textColor.rgb, uniforms.textColor.a * alpha);
+//        else if (outlineAlpha > 0.01)
+//            // Seulement le contour
+//            return float4(uniforms.outlineColor.rgb, uniforms.outlineColor.a * outlineAlpha);
+//        discard_fragment();
+//    }
+//    // Sans contour
+//    if (alpha < 0.01)
+//        discard_fragment();
+//            
+//    return float4(uniforms.textColor.rgb, uniforms.textColor.a * alpha);
 }
 )";
 
@@ -137,6 +159,11 @@ void SDFTextSystem::createPipelineState(MTL::PixelFormat pixelFormat, MTL::Pixel
     vertexDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
     vertexDesc->attributes()->object(1)->setOffset(sizeof(simd::float2));
     vertexDesc->attributes()->object(1)->setBufferIndex(0);
+    
+    // color
+    vertexDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat4);
+    vertexDesc->attributes()->object(2)->setOffset(sizeof(simd::float4));
+    vertexDesc->attributes()->object(2)->setBufferIndex(0);
     
     vertexDesc->layouts()->object(0)->setStride(sizeof(TextVertex));
     vertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
@@ -302,20 +329,17 @@ std::vector<uint32_t> SDFTextSystem::utf8ToCodepoints(const std::string& text) c
     return codepoints;
 }
 
-// ============================================================================
-// Génération du mesh pour une chaîne de texte
-// ============================================================================
-void SDFTextSystem::generateTextMesh(const std::string& text,
-                                      float x, float y,
-                                      const TextRenderOptions& options) {
-    m_currentOptions = options;
+void SDFTextSystem::generateTextMesh(const std::string& text, float x, float y, const TextRenderOptions& options)
+{
+//    m_currentOptions = options;
     
     std::vector<uint32_t> codepoints = utf8ToCodepoints(text);
     float scale = options.scale * (m_baseSize / 64.0f);  // Normalisation
     
     // Calcul de l'offset pour l'alignement
     float totalWidth = 0;
-    if (options.alignment != TextRenderOptions::Alignment::Left) {
+    if (options.alignment != TextRenderOptions::Alignment::Left)
+    {
         simd::float2 size = measureText(text, options.scale);
         totalWidth = size.x;
     }
@@ -330,16 +354,19 @@ void SDFTextSystem::generateTextMesh(const std::string& text,
     float cursorX = x + offsetX;
     float cursorY = y;
     
-    for (uint32_t cp : codepoints) {
+    for (uint32_t cp : codepoints)
+    {
         // Gestion des retours à la ligne
-        if (cp == '\n') {
+        if (cp == '\n')
+        {
             cursorX = x + offsetX;
             cursorY -= m_baseSize * scale;  // Descendre d'une ligne
             continue;
         }
         
         auto it = m_glyphs.find(cp);
-        if (it == m_glyphs.end()) {
+        if (it == m_glyphs.end())
+        {
             // Caractère inconnu - utiliser espace ou placeholder
             it = m_glyphs.find(' ');
             if (it == m_glyphs.end()) continue;
@@ -347,22 +374,18 @@ void SDFTextSystem::generateTextMesh(const std::string& text,
         
         const GlyphInfo& g = it->second;
         
-        // Position du quad
         float px = cursorX + g.bearingX * scale;
         float py = cursorY - (g.height - g.bearingY) * scale;
         float pw = g.width * scale;
         float ph = g.height * scale;
         
-        // Index de base pour ce quad
         uint16_t baseIndex = static_cast<uint16_t>(m_vertices.size());
         
-        // 4 vertices par caractère
-        m_vertices.push_back({{px,      py},      {g.atlasX,                  g.atlasY + g.atlasHeight}});
-        m_vertices.push_back({{px + pw, py},      {g.atlasX + g.atlasWidth,   g.atlasY + g.atlasHeight}});
-        m_vertices.push_back({{px + pw, py + ph}, {g.atlasX + g.atlasWidth,   g.atlasY}});
-        m_vertices.push_back({{px,      py + ph}, {g.atlasX,                  g.atlasY}});
+        m_vertices.push_back({{px,      py},      {g.atlasX,                  g.atlasY + g.atlasHeight}, options.color});
+        m_vertices.push_back({{px + pw, py},      {g.atlasX + g.atlasWidth,   g.atlasY + g.atlasHeight}, options.color});
+        m_vertices.push_back({{px + pw, py + ph}, {g.atlasX + g.atlasWidth,   g.atlasY}, options.color});
+        m_vertices.push_back({{px,      py + ph}, {g.atlasX,                  g.atlasY}, options.color});
         
-        // 6 indices (2 triangles)
         m_indices.push_back(baseIndex + 0);
         m_indices.push_back(baseIndex + 1);
         m_indices.push_back(baseIndex + 2);
@@ -374,10 +397,8 @@ void SDFTextSystem::generateTextMesh(const std::string& text,
     }
 }
 
-// ============================================================================
-// Mesure des dimensions d'un texte
-// ============================================================================
-simd::float2 SDFTextSystem::measureText(const std::string& text, float scale) const {
+simd::float2 SDFTextSystem::measureText(const std::string& text, float scale) const
+{
     std::vector<uint32_t> codepoints = utf8ToCodepoints(text);
     float adjustedScale = scale * (m_baseSize / 64.0f);
     
@@ -386,8 +407,10 @@ simd::float2 SDFTextSystem::measureText(const std::string& text, float scale) co
     float lineWidth = 0;
     int lineCount = 1;
     
-    for (uint32_t cp : codepoints) {
-        if (cp == '\n') {
+    for (uint32_t cp : codepoints)
+    {
+        if (cp == '\n')
+        {
             width = std::max(width, lineWidth);
             lineWidth = 0;
             lineCount++;
@@ -395,7 +418,8 @@ simd::float2 SDFTextSystem::measureText(const std::string& text, float scale) co
         }
         
         auto it = m_glyphs.find(cp);
-        if (it == m_glyphs.end()) {
+        if (it == m_glyphs.end())
+        {
             it = m_glyphs.find(' ');
             if (it == m_glyphs.end()) continue;
         }

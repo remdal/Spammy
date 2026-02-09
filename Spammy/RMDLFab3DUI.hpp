@@ -95,12 +95,8 @@ public:
     }
 };
 
-// ============================================================================
-// STRUCTURES GPU (doivent matcher les shaders Metal)
-// ============================================================================
-
-// Vertex pour les quads 2D (panel background)
-struct FabPanelVertex {
+struct FabPanelVertex
+{
     simd::float2 position;
     simd::float2 uv;
 };

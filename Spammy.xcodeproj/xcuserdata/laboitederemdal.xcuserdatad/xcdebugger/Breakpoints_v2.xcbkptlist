@@ -62,8 +62,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "453"
-            endingLineNumber = "453"
+            startingLineNumber = "457"
+            endingLineNumber = "457"
             landmarkName = "GameCoordinator::makeTexture(layerPixelFormat, depthPixelFormat)"
             landmarkType = "7">
          </BreakpointContent>
@@ -78,8 +78,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1152"
-            endingLineNumber = "1152"
+            startingLineNumber = "1159"
+            endingLineNumber = "1159"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -94,8 +94,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1150"
-            endingLineNumber = "1150"
+            startingLineNumber = "1157"
+            endingLineNumber = "1157"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -110,8 +110,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1139"
-            endingLineNumber = "1139"
+            startingLineNumber = "1146"
+            endingLineNumber = "1146"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -126,8 +126,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1140"
-            endingLineNumber = "1140"
+            startingLineNumber = "1147"
+            endingLineNumber = "1147"
             landmarkName = "GameCoordinator::resizeMtkViewAndUpdateViewportWindow(width, height)"
             landmarkType = "7">
          </BreakpointContent>
@@ -142,8 +142,8 @@
             filePath = "Spammy/RMDLRendererSpammy.cpp"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1125"
-            endingLineNumber = "1125"
+            startingLineNumber = "1132"
+            endingLineNumber = "1132"
             landmarkName = "GameCoordinator::draw(view)"
             landmarkType = "7">
          </BreakpointContent>
@@ -274,6 +274,38 @@
             endingLineNumber = "68"
             landmarkName = "m_indexCount()"
             landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "57710BA7-2EDA-45EA-95E4-5A2FFBA2502B"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "Spammy/RMDLRendererSpammy.cpp"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1135"
+            endingLineNumber = "1135"
+            landmarkName = "GameCoordinator::draw(view)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "E4278649-2F11-47A5-9D62-CF648AFC1E75"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "Spammy/RMDLRendererSpammy.cpp"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "412"
+            endingLineNumber = "412"
+            landmarkName = "GameCoordinator::renderMenu(x, y)"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>
