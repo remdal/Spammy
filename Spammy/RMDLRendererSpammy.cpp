@@ -332,8 +332,11 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
     m_text.clearBatch();
     {
         TextRendering::TextRenderOptions opts;
-        opts.color = {0.0f, 1.0f, 0.0f, 1.0f};  // Vert
+        opts.color = {0.0f, 1.0f, 0.0f, 1.0f};
         opts.scale = 0.25f;
+        opts.thickness = 0.15f;
+        opts.outlineWidth = 0.f;
+        opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
         
         char fpsText[32];
         snprintf(fpsText, sizeof(fpsText), "FPS: %.1llu", m_frame);
@@ -342,19 +345,25 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
     }
     {
         TextRendering::TextRenderOptions opts;
-        opts.color = {1.0f, 1.0f, 1.0f, 1.0f};  // Blanc
-        opts.scale = 1.5f;
+        opts.color = {1.0f, 1.0f, 0.6f, 1.0f};
+        opts.scale = 1.2f;
         opts.thickness = 0.5f;
-        opts.outlineWidth = 0.15f;
+        opts.outlineWidth = 0.2f;
         opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};  // Contour noir
         opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
         
+        m_text.generateTextMesh("MSL4xCPP", m_viewport.width / 2, m_viewport.height - 160, opts);
+        opts.color = {1.0f, 1.0f, 0.7f, 0.27f};
+        opts.scale = 1.25f;
         m_text.generateTextMesh("MSL4xCPP", m_viewport.width / 2, m_viewport.height - 160, opts);
     }
     {
         TextRendering::TextRenderOptions opts;
         opts.color = {0.8f, 0.8f, 0.8f, 1.0f};
         opts.scale = 0.4f;
+        opts.thickness = 0.5f;
+        opts.outlineWidth = 0.f;
+        opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
         
         std::string info = "Position: " + formatVector(m_camera.position()) + "\n"
             "Frame: " + std::to_string(m_frame);
@@ -364,19 +373,25 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
     
     if (m_gamePlayMode == GamePlayMode::DEV)
     {
-        TextRendering::TextRenderOptions opts;
-        opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
-        opts.scale = 1.2f;
-        opts.thickness = 0.6f;
-        opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
-        
-        m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2, m_viewport.height / 2, opts);
-        
-        TextRendering::TextRenderOptions shadowOpts;
-        shadowOpts.color = {0, 0, 0, 0.5f};
-        shadowOpts.scale = 1.2f;
-        shadowOpts.thickness = 0.6f;
-        m_text.generateTextMesh("ATTENTION!", m_viewport.width / 4, m_viewport.height / 2 - 20.0, shadowOpts);
+        {
+            TextRendering::TextRenderOptions shadowOpts;
+            shadowOpts.color = {0, 0, 0, 0.3f};
+            shadowOpts.scale = 1.2f;
+            shadowOpts.thickness = 0.7f;
+            shadowOpts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+            m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2 + 5.0, m_viewport.height / 2 - 5.0, shadowOpts);
+        }
+        {
+            TextRendering::TextRenderOptions opts;
+            opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
+            opts.scale = 1.2f;
+            opts.thickness = 0.7f;
+            opts.outlineWidth = 0.f;
+            opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
+            opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
+            
+            m_text.generateTextMesh("ATTENTION!", m_viewport.width / 2, m_viewport.height / 2, opts);
+        }
     }
     
     renderMenu(m_viewport.width - 750, m_viewport.height / 2);
@@ -402,7 +417,7 @@ void GameCoordinator::renderMenu(float x, float y)
             // Item sélectionné
             opts.color = {1.0f, 0.8f, 0.0f, 1.0f};  // Jaune
             opts.scale = 0.5f;
-            opts.thickness = 0.85f;
+            opts.thickness = 0.5f;
         } else {
             // Item normal
             opts.color = {0.6f, 0.6f, 0.6f, 1.0f};  // Gris

@@ -25,6 +25,9 @@ struct TextVertex
     float2 position [[attribute(0)]];
     float2 texCoord [[attribute(1)]];
     float4 color [[attribute(2)]];
+    float thickness [[attribute(3)]];
+    float outlineWidth [[attribute(4)]];
+    float4 outlineColor [[attribute(5)]];
 };
 
 struct VertexOut 
@@ -32,17 +35,16 @@ struct VertexOut
     float4 position [[position]];
     float2 texCoord;
     float4 color;
+    float thickness;
+    float outlineWidth;
+    float4 outlineColor;
 };
 
 struct TextUniforms 
 {
     float4x4 projectionMatrix;
-    float4 textColor;
-    float smoothing;
-    float thickness;
-    float outlineWidth;
     float padding;
-    float4 outlineColor;
+    float smoothing;
 };
 
 vertex VertexOut textVertexShader(TextVertex in [[stage_in]],
@@ -52,6 +54,9 @@ vertex VertexOut textVertexShader(TextVertex in [[stage_in]],
     out.position = uniforms.projectionMatrix * float4(in.position, 0.0, 1.0);
     out.texCoord = in.texCoord;
     out.color = in.color;
+    out.thickness = in.thickness;
+    out.outlineWidth = in.outlineWidth;
+    out.outlineColor = in.outlineColor;
     return out;
 }
 
@@ -69,23 +74,23 @@ fragment float4 textFragmentShader(VertexOut in [[stage_in]],
     float smoothing = max(uniforms.smoothing, smoothingBase);
     
     // Seuil pour le texte principal
-    float threshold = uniforms.thickness;
+    float threshold = in.thickness;
     
     // Anti-aliasing avec smoothstep
     float alpha = smoothstep(threshold - smoothing, threshold + smoothing, distance);
     
     // Couleur finale du texte
-    float4 color = in.color; // uniforms.textColor;
+    float4 color = in.color;
     color.a *= alpha;
     
     // Contour optionnel
-    if (uniforms.outlineWidth > 0.0)
+    if (in.outlineWidth > 0.0)
     {
-        float outlineThreshold = threshold - uniforms.outlineWidth;
+        float outlineThreshold = threshold - in.outlineWidth;
         float outlineAlpha = smoothstep(outlineThreshold - smoothing, outlineThreshold + smoothing, distance);
         
         // Blend entre contour et texte
-        float4 outlineColor = uniforms.outlineColor;
+        float4 outlineColor = in.outlineColor;
         outlineColor.a *= outlineAlpha;
         
         // Le texte est au-dessus du contour
@@ -99,20 +104,6 @@ fragment float4 textFragmentShader(VertexOut in [[stage_in]],
     }
     
     return color;
-
-//        if (alpha > 0.01)
-//            // Texte opaque avec alpha du texte
-//            return float4(uniforms.textColor.rgb, uniforms.textColor.a * alpha);
-//        else if (outlineAlpha > 0.01)
-//            // Seulement le contour
-//            return float4(uniforms.outlineColor.rgb, uniforms.outlineColor.a * outlineAlpha);
-//        discard_fragment();
-//    }
-//    // Sans contour
-//    if (alpha < 0.01)
-//        discard_fragment();
-//            
-//    return float4(uniforms.textColor.rgb, uniforms.textColor.a * alpha);
 }
 )";
 
@@ -152,18 +143,28 @@ void SDFTextSystem::createPipelineState(MTL::PixelFormat pixelFormat, MTL::Pixel
     MTL::VertexDescriptor* vertexDesc = MTL::VertexDescriptor::alloc()->init();
     
     vertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat2);
-    vertexDesc->attributes()->object(0)->setOffset(0);
+    vertexDesc->attributes()->object(0)->setOffset(offsetof(TextVertex, position));
     vertexDesc->attributes()->object(0)->setBufferIndex(0);
     
-    // TexCoord
     vertexDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat2);
-    vertexDesc->attributes()->object(1)->setOffset(sizeof(simd::float2));
+    vertexDesc->attributes()->object(1)->setOffset(offsetof(TextVertex, texCoord));
     vertexDesc->attributes()->object(1)->setBufferIndex(0);
     
-    // color
     vertexDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat4);
-    vertexDesc->attributes()->object(2)->setOffset(sizeof(simd::float4));
+    vertexDesc->attributes()->object(2)->setOffset(offsetof(TextVertex, color));
     vertexDesc->attributes()->object(2)->setBufferIndex(0);
+    
+    vertexDesc->attributes()->object(3)->setFormat(MTL::VertexFormatFloat);
+    vertexDesc->attributes()->object(3)->setOffset(offsetof(TextVertex, thickness));
+    vertexDesc->attributes()->object(3)->setBufferIndex(0);
+    
+    vertexDesc->attributes()->object(4)->setFormat(MTL::VertexFormatFloat);
+    vertexDesc->attributes()->object(4)->setOffset(offsetof(TextVertex, outlineWidth));
+    vertexDesc->attributes()->object(4)->setBufferIndex(0);
+    
+    vertexDesc->attributes()->object(5)->setFormat(MTL::VertexFormatFloat4);
+    vertexDesc->attributes()->object(5)->setOffset(offsetof(TextVertex, outlineColor));
+    vertexDesc->attributes()->object(5)->setBufferIndex(0);
     
     vertexDesc->layouts()->object(0)->setStride(sizeof(TextVertex));
     vertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
@@ -207,9 +208,7 @@ void SDFTextSystem::createPipelineState(MTL::PixelFormat pixelFormat, MTL::Pixel
 void SDFTextSystem::createBuffers()
 {
     m_vertexBuffer = m_device->newBuffer(MAX_VERTICES * sizeof(TextVertex), MTL::ResourceStorageModeShared);
-    
     m_indexBuffer = m_device->newBuffer(MAX_INDICES * sizeof(uint16_t), MTL::ResourceStorageModeShared);
-    
     m_uniformBuffer = m_device->newBuffer(sizeof(TextUniforms), MTL::ResourceStorageModeShared);
 }
 
@@ -381,10 +380,10 @@ void SDFTextSystem::generateTextMesh(const std::string& text, float x, float y, 
         
         uint16_t baseIndex = static_cast<uint16_t>(m_vertices.size());
         
-        m_vertices.push_back({{px,      py},      {g.atlasX,                  g.atlasY + g.atlasHeight}, options.color});
-        m_vertices.push_back({{px + pw, py},      {g.atlasX + g.atlasWidth,   g.atlasY + g.atlasHeight}, options.color});
-        m_vertices.push_back({{px + pw, py + ph}, {g.atlasX + g.atlasWidth,   g.atlasY}, options.color});
-        m_vertices.push_back({{px,      py + ph}, {g.atlasX,                  g.atlasY}, options.color});
+        m_vertices.push_back({{px,      py},      {g.atlasX,                  g.atlasY + g.atlasHeight},    options.color, options.thickness, options.outlineWidth, options.outlineColor});
+        m_vertices.push_back({{px + pw, py},      {g.atlasX + g.atlasWidth,   g.atlasY + g.atlasHeight},    options.color, options.thickness, options.outlineWidth, options.outlineColor});
+        m_vertices.push_back({{px + pw, py + ph}, {g.atlasX + g.atlasWidth,   g.atlasY},                    options.color, options.thickness, options.outlineWidth, options.outlineColor});
+        m_vertices.push_back({{px,      py + ph}, {g.atlasX,                  g.atlasY},                    options.color, options.thickness, options.outlineWidth, options.outlineColor});
         
         m_indices.push_back(baseIndex + 0);
         m_indices.push_back(baseIndex + 1);
@@ -448,11 +447,7 @@ void SDFTextSystem::render(MTL::RenderCommandEncoder* encoder, float screenWidth
         simd::float4{0, 2.0f / screenHeight, 0, 0},
         simd::float4{0, 0, 1, 0},
         simd::float4{-1, -1, 0, 1} };
-    uniforms.textColor = m_currentOptions.color;
     uniforms.smoothing = 0.15f;
-    uniforms.thickness = m_currentOptions.thickness;
-    uniforms.outlineWidth = m_currentOptions.outlineWidth;
-    uniforms.outlineColor = m_currentOptions.outlineColor;
     
     memcpy(m_uniformBuffer->contents(), &uniforms, sizeof(TextUniforms));
     

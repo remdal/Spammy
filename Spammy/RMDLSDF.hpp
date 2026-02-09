@@ -36,18 +36,17 @@ struct TextVertex
     simd::float2 position;
     simd::float2 texCoord;
     simd::float4 color;
+    float thickness; // Épaisseur (0.5 = normal)
+    float outlineWidth; // 0 = pas de contour
+    simd::float4 outlineColor;
 };
 
 
 struct TextUniforms
 {
     simd::float4x4 projectionMatrix;
-    simd::float4 textColor;
     float smoothing; // anti-aliasing (typiquement 0.1-0.25)
-    float thickness; // Épaisseur (0.5 = normal)
-    float outlineWidth; // 0 = pas de contour
     float padding;
-    simd::float4 outlineColor;
 };
 
 struct TextRenderOptions
