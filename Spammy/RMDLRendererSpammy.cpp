@@ -401,12 +401,7 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
 
 void GameCoordinator::renderMenu(float x, float y)
 {
-    const char* menuItems[] = {
-        "Nouvelle Partie",
-        "Charger",
-        "Options",
-        "Quitter"
-    };
+    const char* menuItems[] = { "Nouvelle Partie", "Charger", "Options", "Quitter" };
     
     for (int i = 0; i < 4; i++)
     {
@@ -415,12 +410,13 @@ void GameCoordinator::renderMenu(float x, float y)
         if (i == 0)
         {
             // Item sélectionné
-            opts.color = {1.0f, 0.8f, 0.0f, 1.0f};  // Jaune
+            opts.color = {1.0f, 0.8f, 0.0f, 1.0f};
             opts.scale = 0.5f;
             opts.thickness = 0.5f;
-        } else {
-            // Item normal
-            opts.color = {0.6f, 0.6f, 0.6f, 1.0f};  // Gris
+        }
+        else
+        {
+            opts.color = {0.6f, 0.6f, 0.6f, 1.0f};
             opts.scale = 0.45f;
         }
         
