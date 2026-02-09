@@ -291,6 +291,8 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     m_fabPanel->grid.place(2, 2, 2, 3);  // Diamant au centre
     m_fabPanel->grid.place(1, 3, 2, 4);  // Bois
     m_fabPanel->grid.place(3, 1, 4, 6);  // Redstone
+    
+    m_fabPanel->setViewportWindow(width, height);
 }
 
 inventoryWindow::texture2d GameCoordinator::standardPNG()
@@ -348,7 +350,7 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
         opts.color = {1.0f, 1.0f, 0.6f, 1.0f};
         opts.scale = 1.2f;
         opts.thickness = 0.5f;
-        opts.outlineWidth = 0.2f;
+        opts.outlineWidth = 0.15f;
         opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};  // Contour noir
         opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
         
@@ -383,7 +385,7 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
         }
         {
             TextRendering::TextRenderOptions opts;
-            opts.color = {1.0f, 0.2f, 0.2f, 1.0f};  // Rouge
+            opts.color = {1.0f, 0.2f, 0.2f, 1.0f};
             opts.scale = 1.2f;
             opts.thickness = 0.7f;
             opts.outlineWidth = 0.f;
@@ -1153,7 +1155,7 @@ void GameCoordinator::resizeMtkViewAndUpdateViewportWindow(NS::UInteger width, N
     if (m_fabPanel)
         m_fabPanel->setViewportWindow(width, height);
     
-    screenSz = {(float)m_viewport.width, (float)m_viewport.height};
+    screenSz = {(float)width, (float)height};
 
     m_depthTextureDescriptor = MTL::TextureDescriptor::texture2DDescriptor(m_depthPixelFormat, width, height, false);
 //    m_depthTextureDescriptor->setUsage(MTL::TextureUsageRenderTarget);

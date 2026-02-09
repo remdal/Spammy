@@ -90,7 +90,7 @@ enum : Controls
                 [self.gameCoordinator toggleVehicleBuildMode];
                 break;
             case 0x22: [self.gameCoordinator setInventory]; break; // i
-            case 0x30: [self.gameCoordinator toggleVehicleMode]; break; // tab?? 0x75 nok
+            case 0x30: [self.gameCoordinator toggleVehicleMode]; break; // tab
             
             case 0x12: [self.gameCoordinator selectVehicleSlot:0]; break;
             case 0x13: [self.gameCoordinator selectVehicleSlot:1]; break;
@@ -109,7 +109,8 @@ enum : Controls
             case 0x01: [self.gameCoordinator fabPanelKey:0x01]; break; // S
             case 0x02: [self.gameCoordinator fabPanelKey:0x02]; break; // D
             case 0x0C: [self.gameCoordinator fabPanelKey:0x0C]; break; // Q
-            case 0x0E: [self.gameCoordinator fabPanelKey:0x06]; break; // Z
+            case 0x06: [self.gameCoordinator fabPanelKey:0x06]; break; // Z
+            case 0x0E: [self.gameCoordinator fabPanelKey:0x0E]; break; // E
         }
     }
     NSString* chars = [event charactersIgnoringModifiers];

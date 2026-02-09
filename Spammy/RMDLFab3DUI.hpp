@@ -219,7 +219,6 @@ public:
     void placeAtCursor(FabItemID id, uint32_t qty = 1);
     FabSlot takeFromCursor();
     
-    // ===== Update & Render =====
     void update(float deltaTime);
     void render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize);
     void setViewportWindow(NS::UInteger width, NS::UInteger height);
@@ -290,17 +289,11 @@ private:
     void get3DViewportRect(simd::float2 screenSize, float& outX, float& outY, float& outW, float& outH) const;
 };
 
-// ============================================================================
-// IMPLEMENTATION
-// ============================================================================
-
 inline FabPanel3D::FabPanel3D(MTL::Device* device,
-                              MTL::PixelFormat colorFormat,
-                              MTL::PixelFormat depthFormat,
+                              MTL::PixelFormat colorFormat, MTL::PixelFormat depthFormat,
                               MTL::Library* shaderLibrary, NS::UInteger width, NS::UInteger height)
-    : m_device(device)
+: m_device(device)
 {
-//    setViewportWindow(width, height);
     createBuffers();
     buildCubeGeometry();
     buildAxisGeometry();
@@ -313,8 +306,6 @@ inline FabPanel3D::FabPanel3D(MTL::Device* device,
     grid.place(2, 2, 2, 3);
     grid.place(1, 3, 2, 4);
     grid.place(3, 1, 4, 5);
-    
-    setViewportWindow(width, height);
 }
 
 inline FabPanel3D::~FabPanel3D()
@@ -853,7 +844,8 @@ inline void FabPanel3D::get3DViewportRect(simd::float2 screenSize, float& outX, 
     
     // La zone 3D est à droite de l'inventaire (si ouvert)
     float viewLeft = panelX - totalWidth * 0.5f + (inventoryOpen ? sidebarWidth : 0.0f) + 10.0f;
-    float viewTop = panelY - panelPixelSize.y * 0.5f + headerHeight + 10.0f;
+    float viewTop = panelY - panelPixelSize.y * 0.5f + headerHeight + 10.0f + 10.f - 50.f; // pile
+//    float viewTop = panelY - panelPixelSize.y * 0.5f + headerHeight + 10.0f + 10.f; // pile
     float viewWidth = panelPixelSize.x - 20.0f;
     float viewHeight = panelPixelSize.y - headerHeight - 20.0f;
     
@@ -1086,7 +1078,8 @@ inline bool FabPanel3D::handleKey(uint16_t keyCode)
 {
     if (!visible) return false;
     
-    switch (keyCode) {
+    switch (keyCode)
+    {
         case 13: moveCursor(0, 1, 0); return true;  // W - haut
         case 1:  moveCursor(0, -1, 0); return true; // S - bas
         case 0:  moveCursor(-1, 0, 0); return true; // A - gauche
