@@ -921,6 +921,10 @@ void GameCoordinator::updateUniforms()
 {
     m_uniforms.frameTime += 0.16f;
     m_cameraUniforms = m_camera.uniforms();
+    float timeOfDay = fmod(m_uniforms.frameTime, 120.f) / 120.f;
+    float sunAngle = timeOfDay * 2.0f * M_PI;
+    m_uniforms.sunDirection = simd_make_float3(0.0f, sin(sunAngle), cos(sunAngle));
+    m_uniforms.sunDirection = simd_normalize(m_uniforms.sunDirection);
     
     
     m_uniforms.cameraUniforms = m_camera.uniforms();
@@ -1014,7 +1018,7 @@ void GameCoordinator::draw(MTK::View* view)
     renderCommandEncoder->setFragmentBytes(&m_cameraUniforms, sizeof(RMDLCameraUniforms), 1);
     
 //    blender.drawBlender(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix * modelMatrixRot, modelMatrixRot); // matrix_identity_float4x4
-    blender.draw(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
+    blender.draw(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_uniforms);
     blender.updateBlender(dt);
 
     skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});

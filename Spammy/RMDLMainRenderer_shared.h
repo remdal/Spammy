@@ -45,6 +45,8 @@ struct RMDLUniforms
     float               ambientOcclusionScale;
     float               ambientLightScale;
     float               frameTime;
+    
+    simd::float3        sunDirection;
 };
 
 struct Plane
@@ -108,17 +110,11 @@ typedef enum RenderTargetIndex
     RenderTargetDepth     = 3
 }   RenderTargetIndex;
 
-struct RMDLSun
-{
-    simd::float3 sunDirection;
-};
-
 struct RMDLSkyboxUniforms
 {
     simd::float4x4 invViewProjection;
     simd::float3 cameraPos;
     float _pad0;
-    RMDLSun rmdlSun;
     float sunIntensity;
     simd::float3 rayleighCoeff;
     float rayleighHeight;

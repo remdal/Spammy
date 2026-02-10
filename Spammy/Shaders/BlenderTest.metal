@@ -8,6 +8,8 @@
 #include <metal_stdlib>
 using namespace metal;
 
+#include "../RMDLMainRenderer_shared.h"
+
 struct VertexBlender
 {
     float3 position [[attribute(0)]];
@@ -79,7 +81,8 @@ fragment float4 fragmentmain(VertexOut in [[stage_in]],
                              texture2d<float> normalTexture [[texture(1)]],
                              texture2d<float> roughnessTexture [[texture(2)]],
                              texture2d<float> metallicTexture [[texture(3)]],
-                             sampler textureSampler [[sampler(0)]])
+                             sampler textureSampler [[sampler(0)]],
+                             constant RMDLUniforms& uniforms [[buffer(1)]])
 {
     float4 albedo = diffuseTexture.sample(textureSampler, in.texCoord);
     float3 normal = normalTexture.sample(textureSampler, in.texCoord).rgb;
@@ -99,15 +102,15 @@ fragment float4 fragmentmain(VertexOut in [[stage_in]],
     
     float3 normalIze = normalize(TBN * normal);
     
-    // Lighting avec la normale perturbée
-    float3 lightDir = normalize(float3(1.0, 1.0, 0.5));
+                                                        // Lighting avec la normale perturbée
+    float3 lightDir = normalize(uniforms.sunDirection); // float3(1.0, 1.0, 0.5));
     float NdotL = max(dot(normalIze, lightDir), 0.0);
     
-    float3 diffuse = albedo.rgb * NdotL;
+    float3 diffuse = albedo.rgb * NdotL; // to test : * scene.sunColor; // pour moduler la lumière
     float3 ambient = albedo.rgb * 0.3;
     
     // Specular
-    float3 viewDir = normalize(-in.worldPos);
+    float3 viewDir = normalize(-in.worldPos); // and : scene.cameraPosition - in.worldPos);  // ← Meilleur calcul
     float3 halfDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(normalIze, halfDir), 0.0), 32.0 * (1.0 - roughness));
     float3 specular = float3(1.0) * spec * (1.0 - roughness);

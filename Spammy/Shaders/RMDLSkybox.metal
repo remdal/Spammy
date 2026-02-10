@@ -324,7 +324,7 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
                                 constant RMDLSkyboxUniforms& uniforms [[buffer(1)]])
 {
     float3 rd = normalize(in.viewRay);
-    float3 sunDir = normalize(uniforms.rmdlSun.sunDirection);
+//    float3 sunDir = normalize(uniforms.rmdlSun.sunDirection);
     float3 color = perlinFBMColor3D(rd);
     // effet pastel
     color = color * 0.5 + 0.7;
@@ -334,13 +334,13 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
     color = saturate(color);
     // Gamma
     color = pow(color, float3(1.0 / 2.5));
-    float sunDot = dot(rd, uniforms.rmdlSun.sunDirection);
-    if (sunDot > 0.9995)
-        color += float3(1.0) * uniforms.sunIntensity * 0.1;
-    float sunHalo = pow(max(0.0, sunDot), 32.0);
-    color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
-    float3 sun = renderSun(rd, sunDir, uniforms.sunIntensity);
-    color += sun;
+//    float sunDot = dot(rd, uniforms.rmdlSun.sunDirection);
+//    if (sunDot > 0.9995)
+//        color += float3(1.0) * uniforms.sunIntensity * 0.1;
+//    float sunHalo = pow(max(0.0, sunDot), 32.0);
+//    color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
+//    float3 sun = renderSun(rd, sunDir, uniforms.sunIntensity);
+//    color += sun;
     
     return float4(color, 1.0);
 }

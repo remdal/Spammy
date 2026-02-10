@@ -63,7 +63,7 @@ void RMDLSkybox::updateUniforms(const simd::float4x4& view, const simd::float4x4
     pUniforms->invViewProjection = simd_inverse(viewProj);
     pUniforms->cameraPos = camPos;
 
-    pUniforms->rmdlSun.sunDirection = simd_normalize(_pAtmosphereParams.sunDirection);
+//    pUniforms->rmdlSun.sunDirection = simd_normalize(_pAtmosphereParams.sunDirection);
     pUniforms->sunIntensity = _pAtmosphereParams.sunIntensity;
     pUniforms->rayleighCoeff = _pAtmosphereParams.rayleighScattering;
     pUniforms->rayleighHeight = _pAtmosphereParams.rayleighScaleHeight;

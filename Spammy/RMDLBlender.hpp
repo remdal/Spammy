@@ -26,6 +26,8 @@
 #include "RMDLUtils.hpp"
 #include "RMDLMathUtils.hpp"
 
+#include "RMDLMainRenderer_shared.h"
+
 struct VertexBlender
 {
     simd::float3 position;
@@ -151,8 +153,8 @@ public:
         
     void createPipelineBlender(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat);
     void updateBlender(float deltaTime);
-    void draw(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProj);
-    void drawBlender(MTL::RenderCommandEncoder* pEncoder, size_t index, const simd::float4x4& viewProjectionMatrix, const simd::float4x4& model);
+    void draw(MTL::RenderCommandEncoder* encoder, const simd::float4x4& viewProj, const RMDLUniforms &uniforms);
+    void drawBlender(MTL::RenderCommandEncoder* pEncoder, size_t index, const simd::float4x4& viewProjectionMatrix, const simd::float4x4& model, const RMDLUniforms &uniforms);
     
 private:
     MTL::Device*                m_device;

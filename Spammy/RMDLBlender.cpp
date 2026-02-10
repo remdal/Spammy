@@ -665,13 +665,13 @@ void RMDLBlender::printMemoryStats() const
 //        boneMatrices[i] = bones[i].globalTransform * bones[i].offsetMatrix;
 //}
 
-void RMDLBlender::draw(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewProj)
+void RMDLBlender::draw(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewProj, const RMDLUniforms &uniforms)
 {
     for (size_t i = 0; i < m_models.size(); i++)
-        drawBlender(pEncoder, i, viewProj, m_models[i].transform);
+        drawBlender(pEncoder, i, viewProj, m_models[i].transform, uniforms);
 }
 
-void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, size_t index, const simd::float4x4 &viewProjectionMatrix, const simd::float4x4 &modelMatrix)
+void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, size_t index, const simd::float4x4 &viewProjectionMatrix, const simd::float4x4 &modelMatrix, const RMDLUniforms &uniforms)
 {
     if (index >= m_models.size()) return;
     Blender& model = m_models[index];
@@ -697,6 +697,7 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, size_t index,
     pEncoder->setVertexBuffer(model.vertexBuffer, 0, 0);
     pEncoder->setVertexBuffer(model.uniformBuffer, 0, 1);
     pEncoder->setFragmentBuffer(model.uniformBuffer, 0, 0);
+    pEncoder->setFragmentBytes(&uniforms, sizeof(RMDLUniforms), 1);
     pEncoder->setFragmentTexture(model.diffuseTexture, 0);
     pEncoder->setFragmentTexture(model.normalTexture, 1);
     pEncoder->setFragmentTexture(model.roughnessTexture, 2);
