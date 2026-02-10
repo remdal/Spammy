@@ -923,15 +923,50 @@ void GameCoordinator::updateUniforms()
     m_cameraUniforms = m_camera.uniforms();
     float timeOfDay = fmod(m_uniforms.frameTime, 120.f) / 120.f;
     float sunAngle = timeOfDay * 2.0f * M_PI;
-    m_uniforms.sunDirection = simd_make_float3(0.0f, sin(sunAngle), cos(sunAngle));
+    float tilt = M_PI * 0.1f; // 18° d'inclinaison
+    m_uniforms.sunDirection = simd_make_float3(cos(sunAngle) * sin(tilt), sin(sunAngle), cos(sunAngle) * cos(tilt));
+//    m_uniforms.sunDirection = simd_make_float3(0.0f, sin(sunAngle), cos(sunAngle)); // Z au lieu de X cos(sunAngle), sin(sunAngle), 0.0f
     m_uniforms.sunDirection = simd_normalize(m_uniforms.sunDirection);
-    
+    if (sunAngle > M_PI)
+    {
+        float nightProgress = (sunAngle - M_PI) / M_PI;
+        
+        if (nightProgress < 0.3f)
+        {
+            float t = nightProgress / 0.3f;
+            m_uniforms.sunColor = simd_mix(simd_make_float3(1.0f, 0.4f, 0.2f), simd_make_float3(0.1f, 0.1f, 0.2f), simd::smoothstep(0.0f, 1.0f, t));
+        }
+        else if (nightProgress < 0.7f)
+            m_uniforms.sunColor = simd_make_float3(0.1f, 0.1f, 0.2f);
+        else
+        {
+            float t = (nightProgress - 0.7f) / 0.3f;
+            m_uniforms.sunColor = simd_mix(simd_make_float3(0.1f, 0.1f, 0.2f), simd_make_float3(1.0f, 0.4f, 0.2f), simd::smoothstep(0.0f, 1.0f, t));
+        }
+    }
+    else
+    {
+        float dayProgress = sunAngle / M_PI;
+        
+        if (dayProgress < 0.2f)
+        {
+            float t = dayProgress / 0.2f;
+            m_uniforms.sunColor = simd_mix(simd_make_float3(1.0f, 0.4f, 0.2f), simd_make_float3(1.0f, 0.95f, 0.9f), simd::smoothstep(0.0f, 1.0f, t));
+        }
+        else if (dayProgress < 0.8f)
+            m_uniforms.sunColor = simd_make_float3(1.0f, 0.95f, 0.9f);
+        else
+        {
+            float t = (dayProgress - 0.8f) / 0.2f;
+            m_uniforms.sunColor = simd_mix(simd_make_float3(1.0f, 0.95f, 0.9f), simd_make_float3(1.0f, 0.4f, 0.2f), simd::smoothstep(0.0f, 1.0f, t));
+        }
+    }
     
     m_uniforms.cameraUniforms = m_camera.uniforms();
     m_uniforms.mouseState = simd::float3{ cursorPosition.x, cursorPosition.y, float(1.0f) };
     m_uniforms.invScreenSize = simd::float2{ 1.0f / m_depth->width(), 1.0f / m_depth->width() };
     m_uniforms.projectionYScale = 1.73205066;
-    m_uniforms.brushSize = 10.0f;
+    m_uniforms.crossSize = 10.0f;
 
     // Set up shadows
     //  - to cover as much of our frustum with shadow volumes, we create a simplified 1D model along the frustum center axis.
@@ -1021,7 +1056,7 @@ void GameCoordinator::draw(MTK::View* view)
     blender.draw(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_uniforms);
     blender.updateBlender(dt);
 
-    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position()); //{0,0,0});
+    skybox.render(renderCommandEncoder, math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_camera.position(), m_uniforms);
 //    snow.render(enc, modelMatrix2, {0,0,0});
     skybox.updateUniforms(math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), {0,0,0});
     float time = dt * 0.5f;
@@ -1118,6 +1153,7 @@ void GameCoordinator::draw(MTK::View* view)
     float minHeight = terrainHeight + 4.0f;
     if (m_camera.position().y < minHeight)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
+    
 //    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);
 
 

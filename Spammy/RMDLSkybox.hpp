@@ -9,11 +9,14 @@
 #define RMDLSkybox_hpp
 
 #include <stdio.h>
+
 #import <Metal/Metal.hpp>
+
 #import <simd/simd.h>
 #include <memory>
 #include <string>
 #include <cmath>
+
 #include "RMDLMainRenderer_shared.h"
 
 namespace sky {
@@ -44,13 +47,11 @@ public:
     RMDLSkybox(MTL::Device* pDevice, MTL::PixelFormat pPixelFormat, MTL::PixelFormat pDepthPixelFormat, MTL::Library* pShaderLibrary);
     ~RMDLSkybox();
     
-    void render(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewMatrix, const simd::float4x4& projMatrix, const simd::float3& cameraPos);
+    void render(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewMatrix, const simd::float4x4& projMatrix, const simd::float3& cameraPos, const RMDLUniforms &uniforms);
     void setAtmosphereParams(const AtmosphereParams& params);
     void setTimeOfDay(float time);
     void setSunDirection(const simd::float3& dir);
-    void updateUniforms(const simd::float4x4& view,
-                       const simd::float4x4& proj,
-                       const simd::float3& camPos);
+    void updateUniforms(const simd::float4x4& view, const simd::float4x4& proj, const simd::float3& camPos);
 
     AtmosphereParams& getParams() { return _pAtmosphereParams; }
     

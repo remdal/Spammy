@@ -65,7 +65,7 @@ float evaluateModificationCross(simd::float2 worldPosition, simd::float4 mousePo
 
 float4 visualizeModificationCross(constant RMDLUniforms& globalUniforms, float3 worldPosition, float4 mousePosition)
 {
-    float cross = evaluateModificationCross(worldPosition.xz, mousePosition, globalUniforms.brushSize);
+    float cross = evaluateModificationCross(worldPosition.xz, mousePosition, globalUniforms.crossSize);
     float3 color = globalUniforms.mouseState.z == 2 ? float3(0.9, 0.5, 0.5) :
     globalUniforms.mouseState.z == 1 ? float3(0.5, 0.9, 0.5) : float3(0.5, 0.5, 0.7);
 

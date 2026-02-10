@@ -39,7 +39,7 @@ struct RMDLUniforms
     simd::float3        mouseState;
     simd::float2        invScreenSize;
     float               projectionYScale;
-    float               brushSize;
+    float               crossSize;
 
     float               ambientOcclusionContrast;
     float               ambientOcclusionScale;
@@ -47,6 +47,7 @@ struct RMDLUniforms
     float               frameTime;
     
     simd::float3        sunDirection;
+    simd::float3        sunColor;
 };
 
 struct Plane

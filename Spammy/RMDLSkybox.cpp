@@ -76,22 +76,20 @@ void RMDLSkybox::updateUniforms(const simd::float4x4& view, const simd::float4x4
     pUniforms->timeOfDay = _pAtmosphereParams.timeOfDay;
 }
 
-void RMDLSkybox::render(MTL::RenderCommandEncoder* pEncoder,
-                       const simd::float4x4& viewMatrix,
-                       const simd::float4x4& projMatrix,
-                       const simd::float3& cameraPos)
+void RMDLSkybox::render(MTL::RenderCommandEncoder* renderCommandEncoder, const simd::float4x4& viewMatrix, const simd::float4x4& projMatrix, const simd::float3& cameraPos, const RMDLUniforms &uniforms)
 {
     updateUniforms(viewMatrix, projMatrix, cameraPos);
     
-    pEncoder->setRenderPipelineState(_pPipelineStateBlender);
-    pEncoder->setDepthStencilState(_pDepthState);
-    pEncoder->setCullMode(MTL::CullModeNone);
+    renderCommandEncoder->setRenderPipelineState(_pPipelineStateBlender);
+    renderCommandEncoder->setDepthStencilState(_pDepthState);
+    renderCommandEncoder->setCullMode(MTL::CullModeNone);
     
-    pEncoder->setVertexBuffer(_pVertexBuffer, 0, 0);
-    pEncoder->setVertexBuffer(_pUniformBuffer, 0, 1);
-    pEncoder->setFragmentBuffer(_pUniformBuffer, 0, 1);
+    renderCommandEncoder->setVertexBuffer(_pVertexBuffer, 0, 0);
+    renderCommandEncoder->setVertexBuffer(_pUniformBuffer, 0, 1);
+    renderCommandEncoder->setFragmentBuffer(_pUniformBuffer, 0, 1);
+    renderCommandEncoder->setFragmentBytes(&uniforms, sizeof(uniforms), 2);
     
-    pEncoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(_pVertexCount));
+    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(_pVertexCount));
 }
 
 void RMDLSkybox::setAtmosphereParams(const AtmosphereParams& params)
