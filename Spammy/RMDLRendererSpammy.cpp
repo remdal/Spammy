@@ -331,6 +331,20 @@ GameCoordinator::~GameCoordinator()
     m_device->release();
 }
 
+std::string toString(GamePlayMode mode)
+{
+    switch (mode)
+    {
+        case GamePlayMode::FreeCam:  return "FreeCam";
+        case GamePlayMode::Driving:  return "Driving";
+        case GamePlayMode::Building: return "Building";
+        case GamePlayMode::DEV:      return "DEV";
+        case GamePlayMode::Flight:   return "Flight";
+        case GamePlayMode::FAB:      return "FAB";
+        default:                     return "Unknown";
+    }
+}
+
 void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
 {
     m_text.clearBatch();
@@ -400,6 +414,18 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
     
     renderMenu(m_viewport.width - 750, m_viewport.height / 2);
     
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {0.6f, 0.6f, 0.6f, 1.0f};
+        opts.scale = 0.3f;
+        opts.thickness = 0.55f;
+        opts.outlineWidth = 0.25f;
+        opts.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
+        opts.alignment = TextRendering::TextRenderOptions::Alignment::Left;
+        std::string info = "Switch to Mode -> " + toString(m_gamePlayMode);
+        
+        m_text.generateTextMesh(info, m_viewport.width / 2, m_viewport.height - 260, opts);
+    }
     m_text.render(encoder, m_viewport.width, m_viewport.height);
 }
 
@@ -614,6 +640,8 @@ void GameCoordinator::handleKeyPress(int key)
 void GameCoordinator::inventory(bool visible)
 {
     grid.setVisible(visible);
+    cinematicView.position = snappedPos;
+    m_camera.transitionTo(cinematicView, 3.f, RMDLCameraEase::EaseInOutCubic);
 }
 
 void GameCoordinator::jump()
@@ -636,6 +664,28 @@ void GameCoordinator::jump()
     m_camera.setPosition(jump);
 //    m_camera.setPosition(jumpback);
 //    setPosition(math::makeTranslate(jump));
+}
+
+void GameCoordinator::moveTowardsCursor(float distance)
+{
+    simd::float2 normPos = { cursorPosition.x / (float)m_viewport.width, cursorPosition.y / (float)m_viewport.height };
+
+    simd::float2 ndc = { normPos.x * 2.0f - 1.0f, 1.0f - (normPos.y * 2.0f) };
+
+    simd::float4x4 viewMatrix = m_camera.ViewMatrix();
+    simd::float4x4 projMatrix = m_camera.getProjectionMatrix();
+    simd::float4x4 invViewProj = simd::inverse(projMatrix * viewMatrix);
+    simd::float4 nearPoint = {ndc.x, ndc.y, -1.0f, 1.0f};
+    simd::float4 farPoint = {ndc.x, ndc.y, 1.0f, 1.0f};
+    simd::float4 nearWorld = invViewProj * nearPoint;
+    simd::float4 farWorld = invViewProj * farPoint;
+    nearWorld /= nearWorld.w;
+    farWorld /= farWorld.w;
+    
+    simd::float3 rayDir = simd::normalize(simd::make_float3(farWorld.x - nearWorld.x, farWorld.y - nearWorld.y, farWorld.z - nearWorld.z));
+    
+    simd::float3 movement = rayDir * distance;
+    moveCamera(movement);
 }
 
 void GameCoordinator::moveCamera(simd::float3 translation)
@@ -874,7 +924,7 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
     m_spaceAudio->setEngineThrottle(throttle);
     
     m_camera.updateTransition(dt);
-    if (m_gamePlayMode != GamePlayMode::DEV)
+    if (m_gamePlayMode == GamePlayMode::Flight)
     {
         m_camera.followTarget(m_currentVehicleBlockPos, 100.0f, 5.0f, 0.15f, dt);
 //        m_camera.setOrbitTarget(m_currentVehicleBlockPos);
@@ -889,7 +939,11 @@ void GameCoordinator::update(float dt, const InputState& input, MTL::CommandBuff
 //    }
     blocs.update(dt);
     
-    m_fabPanel->update(dt);
+    if (m_gamePlayMode == GamePlayMode::FAB)
+        m_fabPanel->update(dt);
+
+    if (m_gamePlayMode == GamePlayMode::FreeCam)
+        moveTowardsCursor(0.55f * dt);
     
 }
 
@@ -1152,7 +1206,7 @@ void GameCoordinator::draw(MTK::View* view)
     terrainLisse.requestHeightAt(m_camera.position().x, m_camera.position().z, commandBuffer);
     float terrainHeight = terrainLisse.getLastHeight();
     float minHeight = terrainHeight + 4.0f;
-    if (m_camera.position().y < minHeight)
+    if (m_camera.position().y < minHeight && m_gamePlayMode == GamePlayMode::Driving)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
     
 //    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);

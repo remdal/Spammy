@@ -148,6 +148,8 @@ public:
     void inventory(bool visible);
     void jump();
     
+    void moveTowardsCursor(float distance);
+    
     void addBlockToVehicle(int blockId, BlockType type);
     void removeBlockFromVehicle(int blockId);
 
