@@ -53,10 +53,6 @@ fragment float4 gridFragmentShader(GridVertexOut in [[stage_in]],
     return color;
 }
 
-
-
-
-
 struct VertexIn
 {
     float3 position [[attribute(0)]];

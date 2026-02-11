@@ -57,7 +57,7 @@
 static const uint32_t NumLights = 256;
 
 enum class GamePlayMode {
-    FreeCam, Driving, Building, DEV, Flight, FAB
+    FreeCam, Driving, Building, DEV, Flight, FAB, Count
 };
 
 struct VertexCursor

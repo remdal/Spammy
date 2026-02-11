@@ -290,14 +290,47 @@ float3 atmosphericScattering(float3 ro, float3 rd, float3 sunDir, constant RMDLS
     return scatter;
 }
 
-float3 renderSun(float3 rd, float3 sunDir, float intensity)
+float3 renderSun(float3 rd, float3 sunDir, float intensity, float3 sunColor)
 {
+//    float sunDot = max(0.0, dot(rd, sunDir));
+//    
+//    // Disque solaire principal avec bord doux
+//    float sunSharpness = 1.0 - smoothstep(0.0, 1.0, intensity * 0.1);
+//    float sunDisk = smoothstep(0.9995 - sunSharpness * 0.0004,
+//                               0.9999 + sunSharpness * 0.0002,
+//                               sunDot);
+//    
+//    // Couleur du disque solaire qui évolue avec l'intensité/position
+//    float3 diskColor = mix(float3(1.0, 0.95, 0.9),
+//                          float3(1.0, 0.7, 0.4),
+//                          1.0 - intensity);
+//    sunColor += diskColor * sunDisk * (30.0 + intensity * 20.0);
+//    
+//    // Corona interne - proche du soleil
+//    float coronaInner = pow(sunDot, 128.0);
+//    float3 coronaColor = mix(float3(1.0, 0.9, 0.7),
+//                            float3(1.0, 0.6, 0.3),
+//                            sqrt(1.0 - intensity));
+//    sunColor += coronaColor * coronaInner * (1.5 + intensity);
+//    
+//    // Corona externe - halo large
+//    float coronaOuter = pow(sunDot, 16.0);
+//    float3 outerColor = mix(float3(1.0, 0.8, 0.6),
+//                           float3(0.8, 0.5, 0.3),
+//                           1.0 - intensity);
+//    sunColor += outerColor * coronaOuter * (0.1 + intensity * 0.05);
+//    
+//    // Effet de bloom léger très éloigné
+//    float distantGlow = pow(sunDot, 4.0);
+//    sunColor += float3(1.0, 0.95, 0.85) * distantGlow * 0.02;
+//    
+//    return sunColor;
+    
     float sunDot = dot(rd, sunDir);
-    float3 sunColor = float3(0.0);
     
     // Hard sun disk
     float sunDisk = smoothstep(0.9997, 0.9999, sunDot);
-    sunColor += float3(1.0, 0.95, 0.9) * sunDisk * 50.0;
+    sunColor = sunColor * sunDisk * 50.0;// float3(1.0, 0.95, 0.9) * sunDisk * 50.0;
     
     // Sun glow / corona
     float glow = pow(max(sunDot, 0.0), 256.0);
@@ -340,7 +373,7 @@ fragment float4 skybox_fragment(VertexOut in [[stage_in]],
         color += float3(1.0) * uniforms.sunIntensity * 0.1;
     float sunHalo = pow(max(0.0, sunDot), 32.0);
     color += float3(1.0, 0.9, 0.7) * sunHalo * 0.3;
-    float3 sun = renderSun(rd, sunDir, uniforms.sunIntensity);
+    float3 sun = renderSun(rd, sunDir, uniforms.sunIntensity, globalUniforms.sunColor);
     color += sun;
     
     return float4(color, 1.0);

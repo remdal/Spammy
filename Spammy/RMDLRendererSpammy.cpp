@@ -144,6 +144,8 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20}) + math::makeScale({10, 10, 10});
     size_t carauto = blender.loadModel(resourcePath + "/auto.glb", "caruto");
     blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
+    size_t ter = blender.loadModel(resourcePath + "/simpleSphere.glb", "ter");
+    blender.getModel("ter")->transform = math::makeTranslate({20, 60, 100});
     
     
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
@@ -697,11 +699,10 @@ void GameCoordinator::setInventory()
 void GameCoordinator::setGamePlayMode(GamePlayMode mode)
 {
     m_gamePlayMode = mode;
-    
-    if (mode == GamePlayMode::Building)
-        m_terraVehicle.toggleBuildMode();
-    else if (m_terraVehicle.isBuildMode())
-        m_terraVehicle.toggleBuildMode();
+//    if (mode == GamePlayMode::Building)
+//        m_terraVehicle.toggleBuildMode();
+//    else if (m_terraVehicle.isBuildMode())
+//        m_terraVehicle.toggleBuildMode();
 }
 
 void GameCoordinator::toggleVehicleBuildMode()
@@ -1094,7 +1095,7 @@ void GameCoordinator::draw(MTK::View* view)
     ui.drawText("Hello 89 ! Make sense", 550, 50, 0.5);
 //    colorsFlash.renderPostProcess(renderCommandEncoder);
     
-//    m_terrainSystem->update(dt, m_camera.position());
+//    terrainSystem->update(dt, m_camera.position());
 
 //    m_terrainSystem->render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix);
 

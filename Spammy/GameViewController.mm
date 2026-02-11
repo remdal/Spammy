@@ -417,10 +417,15 @@ enum : Controls
 
 - (void)toggleVehicleMode
 {
-    if (_pGameCoordinator->m_gamePlayMode == GamePlayMode::FAB || _pGameCoordinator->m_gamePlayMode == GamePlayMode::Building)
-        _pGameCoordinator->setGamePlayMode(GamePlayMode::DEV);
-    else
-        _pGameCoordinator->setGamePlayMode(GamePlayMode::FAB);
+//    if (_pGameCoordinator->m_gamePlayMode == GamePlayMode::FAB || _pGameCoordinator->m_gamePlayMode == GamePlayMode::Building)
+//        _pGameCoordinator->setGamePlayMode(GamePlayMode::DEV);
+//    else
+//        _pGameCoordinator->setGamePlayMode(GamePlayMode::FAB);
+    GamePlayMode current = _pGameCoordinator->m_gamePlayMode;
+
+    int next = (static_cast<int>(current) + 1) % static_cast<int>(GamePlayMode::Count);
+
+    _pGameCoordinator->setGamePlayMode(static_cast<GamePlayMode>(next));
 }
 
 - (void)toggleVehicleBuildMode

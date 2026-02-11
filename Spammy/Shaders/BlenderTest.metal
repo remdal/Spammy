@@ -106,7 +106,7 @@ fragment float4 fragmentmain(VertexOut in [[stage_in]],
     float3 lightDir = normalize(uniforms.sunDirection); // float3(1.0, 1.0, 0.5));
     float NdotL = max(dot(normalIze, lightDir), 0.0);
     
-    float3 diffuse = albedo.rgb * NdotL * uniforms.sunColor; // to test : * scene.sunColor; // pour moduler la lumière
+    float3 diffuse = albedo.rgb * NdotL * uniforms.sunColor;
     float3 ambient = albedo.rgb * 0.3;
     
     // Specular
