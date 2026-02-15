@@ -52,7 +52,7 @@ bool RMDLBlender::doTheImportThing(const std::string& resourcesPath)
 {
     Assimp::Importer importer;
 
-    const aiScene* scene = importer.ReadFile(resourcesPath + "/auto.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+    const aiScene* scene = importer.ReadFile(resourcesPath + "/uneNouvelleChance.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 
     if (scene == nullptr)
     {
@@ -348,12 +348,7 @@ void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::Pixel
 void RMDLBlender::updateBlender(float deltaTime)
 {
 //    float bounce = sin(t * M_PI * 2.0f) * 0.5f;
-//    boneMatrix = simd::float4x4{
-//        simd::make_float4(1, 0, 0, 0),
-//        simd::make_float4(0, 1, 0, 0),
-//        simd::make_float4(0, 0, 1, 0),
-//        simd::make_float4(0, bounce, 0, 1)
-//    };
+//    boneMatrix = simd::float4x4{ simd::make_float4(1, 0, 0, 0), simd::make_float4(0, 1, 0, 0), simd::make_float4(0, 0, 1, 0), simd::make_float4(0, bounce, 0, 1) };
     m_frame++;
     const uint32_t frameIndex = m_frame % 3;
 
@@ -361,14 +356,113 @@ void RMDLBlender::updateBlender(float deltaTime)
     {
         if (!model.hasAnimation || model.animations.empty())
             continue;
-        
-        Animation& anim = model.animations[model.currentAnimation];
-        model.currentTime += deltaTime * anim.ticksPerSec;
-        if (model.currentTime > anim.duration)
-            model.currentTime = fmod(model.currentTime, anim.duration);
-        
-        for (auto& m : m_boneMatrices) m = math::makeIdentity();
-        computeBoneTransforms(model.currentTime, model.rootNode, math::makeIdentity(), model);
+        if (model.useLayeredAnimation && !model.animationLayers.empty())
+        {
+            for (auto& m : model.boneMatrices)
+                m = matrix_identity_float4x4;
+            
+            for (auto& layer : model.animationLayers)
+            {
+                if (!layer.isPlaying)
+                    continue;
+                
+                Animation& anim = model.animations[layer.animationIndex];
+                layer.currentTime += deltaTime * anim.ticksPerSec * layer.speedMultiplier;
+                
+                if (layer.currentTime > anim.duration)
+                {
+                    if (layer.loop)
+                        layer.currentTime = fmod(layer.currentTime, anim.duration);
+                    else
+                    {
+                        layer.currentTime = anim.duration;
+                        layer.isPlaying = false;
+                    }
+                }
+
+                std::vector<simd::float4x4> layerBones(model.boneCount, matrix_identity_float4x4);
+                computeBoneTransforms(layer.currentTime, model.rootNode, math::makeIdentity(), model);
+                
+                // Blender avec le poids
+                if (layer.weight > 0.0f)
+                {
+                    for (size_t i = 0; i < model.boneCount; i++)
+                    {
+                        // Interpolation linéaire entre identity et la pose du layer
+                        // C'est simplifié, pour un vrai blend il faudrait décomposer en TRS
+                        model.boneMatrices[i] = model.boneMatrices[i] * (1.0f - layer.weight) +
+                                                 model.boneMatrices[i] * layer.weight;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (!model.animController.isPlaying)
+                continue;
+            
+            if (model.name == "player")
+            {
+                model.shouldAnimate = false;
+            }
+            
+            if (model.animController.isTransitioning)
+            {
+                model.animController.transitionTime += deltaTime;
+                float t = model.animController.transitionTime / model.animController.transitionDuration;
+                
+                if (t >= 1.0f)
+                {
+                    model.currentAnimation = model.animController.targetAnimation;
+                    model.currentTime = 0.0f;
+                    model.animController.isTransitioning = false;
+                }
+                else
+                {
+                    if (t > 0.5f)
+                    {
+                        model.currentAnimation = model.animController.targetAnimation;
+                        model.currentTime = 0.0f;
+                    }
+                }
+            }
+            
+            Animation& anim = model.animations[model.currentAnimation];
+            model.currentTime += deltaTime * anim.ticksPerSec * model.animController.speedMultiplier;
+            
+            if (model.currentTime > anim.duration)
+            {
+                if (model.animController.loop)
+                    model.currentTime = fmod(model.currentTime, anim.duration);
+                else
+                {
+                    model.currentTime = anim.duration;
+                    model.animController.isPlaying = false;
+                }
+            }
+            
+            for (size_t i = 0; i < model.boneMatrices.size(); i++)
+            {
+                // Trouver la bind pose pour ce bone
+                bool foundBone = false;
+                for (const auto& bonePair : model.boneMap)
+                {
+                    if (bonePair.second.id == i)
+                    {
+                        // La bind pose est l'inverse de l'offset
+                        model.boneMatrices[i] = bonePair.second.offset;
+                        foundBone = true;
+                        break;
+                    }
+                }
+                if (!foundBone)
+                    model.boneMatrices[i] = matrix_identity_float4x4;
+            }
+//            for (auto& m : model.boneMatrices)
+//                m = math::makeIdentity();
+            
+            computeBoneTransforms(model.currentTime, model.rootNode, math::makeIdentity(), model);
+        }
     }
 }
 
@@ -468,6 +562,41 @@ MTL::Texture* RMDLBlender::loadTexture(const std::string& resourcesPath, const c
 //    material->GetTexture(aiTextureType_METALNESS, 0, &texPath);
 //}
 
+void RMDLBlender::addAnimationLayer(size_t modelIndex, const std::string& animName, float weight)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    Blender& model = m_models[modelIndex];
+    
+    if (!model.hasAnimations(animName))
+    {
+        printf("Warning: Animation '%s' not found\n", animName.c_str());
+        return;
+    }
+    
+    AnimationLayer layer;
+    layer.animationIndex = model.getAnimationIndex(animName);
+    layer.weight = weight;
+    layer.currentTime = 0.0f;
+    layer.isPlaying = true;
+    layer.loop = true;
+    
+    model.animationLayers.push_back(layer);
+    model.useLayeredAnimation = true;
+    
+    printf("Added layer: '%s' (weight: %.2f)\n", animName.c_str(), weight);
+}
+
+void RMDLBlender::clearAnimationLayers(size_t modelIndex)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    m_models[modelIndex].animationLayers.clear();
+    m_models[modelIndex].useLayeredAnimation = false;
+}
+
 void RMDLBlender::loadAnimations(const aiScene *scene, Blender& model)
 {
     for (unsigned i = 0; i < scene->mNumAnimations; i++)
@@ -476,7 +605,7 @@ void RMDLBlender::loadAnimations(const aiScene *scene, Blender& model)
         Animation a;
         a.name = anim->mName.C_Str();
         a.duration = (float)anim->mDuration;
-        a.ticksPerSec = anim->mTicksPerSecond > 0 ? (float)anim->mTicksPerSecond : 25.0f;
+        a.ticksPerSec = 120.f;//anim->mTicksPerSecond > 0 ? (float)anim->mTicksPerSecond : 120.0f;
         
         for (unsigned c = 0; c < anim->mNumChannels; c++)
         {
@@ -504,6 +633,7 @@ void RMDLBlender::loadAnimations(const aiScene *scene, Blender& model)
             
             a.channels.push_back(ba);
         }
+        model.animationMap[a.name] = i;
         model.animations.push_back(a);
     }
 }
@@ -524,15 +654,18 @@ void RMDLBlender::createSampler()
 void RMDLBlender::computeBoneTransforms(float time, const NodeData& node, const simd::float4x4& parentTf, Blender& model)
 {
     simd::float4x4 localTf = node.transform;
+    bool wasAnimated = false;
 
     if (!model.animations.empty())
     {
         Animation& anim = model.animations[model.currentAnimation];
+        
         for (auto& ch : anim.channels)
         {
             if (ch.boneName == node.name)
             {
                 localTf = makeTRS(interpolatePosition(time, ch), interpolateRotation(time, ch), interpolateScale(time, ch));
+                wasAnimated = true;
                 break;
             }
         }
@@ -623,6 +756,128 @@ void RMDLBlender::printMemoryStats() const
     printf("================================\n\n");
 }
 
+void RMDLBlender::printAnimations(size_t modelIndex) const
+{
+    if (modelIndex >= m_models.size()) return;
+    
+    const Blender& model = m_models[modelIndex];
+    printf("\n=== Animations for '%s' ===\n", model.name.c_str());
+    
+    for (size_t i = 0; i < model.animations.size(); i++)
+    {
+        const Animation& anim = model.animations[i];
+        printf("  [%zu] '%s' - %.2fs @ %.1f tps\n",
+               i, anim.name.c_str(),
+               anim.duration / anim.ticksPerSec,
+               anim.ticksPerSec);
+    }
+    printf("========================\n\n");
+}
+
+void RMDLBlender::debugBones(size_t modelIndex) const
+{
+    if (modelIndex >= m_models.size()) return;
+    
+    const Blender& model = m_models[modelIndex];
+    
+    printf("\n=== BONES DEBUG ===\n");
+    printf("Model: %s\n", model.name.c_str());
+    printf("Bone count: %d\n\n", model.boneCount);
+    
+    for (const auto& bonePair : model.boneMap)
+    {
+        const std::string& boneName = bonePair.first;
+        const BoneInfo& boneInfo = bonePair.second;
+        
+        printf("Bone [%d]: %s\n", boneInfo.id, boneName.c_str());
+        printf("  Offset matrix:\n");
+        for (int row = 0; row < 4; row++)
+        {
+            printf("    [%.3f, %.3f, %.3f, %.3f]\n",
+                   boneInfo.offset.columns[row].x,
+                   boneInfo.offset.columns[row].y,
+                   boneInfo.offset.columns[row].z,
+                   boneInfo.offset.columns[row].w);
+        }
+        printf("\n");
+    }
+    printf("==================\n\n");
+}
+
+void RMDLBlender::playAnimation(size_t modelIndex, const std::string& animName, bool loop)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    Blender& model = m_models[modelIndex];
+    
+    if (!model.hasAnimations(animName))
+    {
+        printf("Warning: Animation '%s' not found in model '%s'\n",
+               animName.c_str(), model.name.c_str());
+        return;
+    }
+    
+    size_t animIndex = model.getAnimationIndex(animName);
+    model.currentAnimation = animIndex;
+    model.currentTime = 0.0f;
+    model.animController.isPlaying = true;
+    model.animController.loop = loop;
+    model.animController.isTransitioning = false;
+    
+    printf("Playing animation '%s' on model '%s'\n", animName.c_str(), model.name.c_str());
+}
+
+void RMDLBlender::playAnimation(const std::string& modelName, const std::string& animName, bool loop)
+{
+    for (size_t i = 0; i < m_models.size(); i++)
+    {
+        if (m_models[i].name == modelName)
+        {
+            playAnimation(i, animName, loop);
+            return;
+        }
+    }
+    printf("Warning: Model '%s' not found\n", modelName.c_str());
+}
+
+void RMDLBlender::transitionToAnimation(size_t modelIndex, const std::string& animName, float duration)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    Blender& model = m_models[modelIndex];
+    
+    if (!model.hasAnimations(animName))
+        return;
+    
+    size_t targetIndex = model.getAnimationIndex(animName);
+    
+    if (targetIndex == model.currentAnimation && !model.animController.isTransitioning)
+        return;
+    
+    model.animController.isTransitioning = true;
+    model.animController.targetAnimation = targetIndex;
+    model.animController.transitionDuration = duration;
+    model.animController.transitionTime = 0.0f;
+}
+
+void RMDLBlender::stopAnimation(size_t modelIndex)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    m_models[modelIndex].animController.isPlaying = false;
+}
+
+void RMDLBlender::setAnimationSpeed(size_t modelIndex, float speed)
+{
+    if (modelIndex >= m_models.size())
+        return;
+    
+    m_models[modelIndex].animController.speedMultiplier = speed;
+}
+
 //// Interpoler entre keyframes
 //simd::float4x4 RMDLBlender::sampleChannel(const AnimationChannel& channel, float time)
 //{
@@ -692,7 +947,7 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, size_t index,
         pEncoder->setRenderPipelineState(_pPipelineStateBlender);
     }
     pEncoder->setDepthStencilState(_pDepthState);
-    pEncoder->setCullMode(MTL::CullModeFront);
+    pEncoder->setCullMode(MTL::CullModeNone);
     pEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
     pEncoder->setVertexBuffer(model.vertexBuffer, 0, 0);
     pEncoder->setVertexBuffer(model.uniformBuffer, 0, 1);

@@ -38,6 +38,8 @@
 #include "RMDLRendererSpammy.hpp"
 #include "RMDLUtilities.h"
 
+#define BUG true
+
 #define kMaxFramesInFlight 3
 
 #define NUM_ELEMS(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -123,12 +125,17 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
     AAPL_PRINT("NS::UIntegerMax = " + std::to_string(NS::UIntegerMax));
+    unsigned int numThreads = std::thread::hardware_concurrency();
+    std::cout << "number of Threads = std::thread::hardware_concurrency : " << numThreads << std::endl;
     _pAudioEngine = std::make_unique<PhaseAudio>(resourcePath);
+    if (m_device->supportsFamily(MTL::GPUFamily::GPUFamilyMetal4))
+        std::cerr << "Metal features required by this app are supported on this device (GPUFamily::GPUFamilyMetal4 check success)." << std::endl;
+//    auto start = std::chrono::system_clock::now();
     loadPngAndFont(resourcePath);
     loadGameSounds(resourcePath, _pAudioEngine.get());
     cursorPosition = simd::make_float2(0, 0);
     resizeMtkViewAndUpdateViewportWindow(width, height);
-    m_camera.initPerspectiveWithPosition({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f);
+    m_camera.initPerspectiveWithPosition({0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f);
     m_cameraPNJ.initPerspectiveWithPosition({100.0f, 89.0f, 220.0f}, {22.0f, 180.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 0.6f, 20000.0f);
     m_cameraOrtho.initParallelWithPosition({20000.0f, 8900.0f, 0.f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, M_PI / 1.8f, 1.0f, 1.0f, 250.0f);
     printf("%lu\n%lu\n%lu\n", sizeof(simd_float2), sizeof(simd_uint2), sizeof(simd::float4x4));
@@ -136,9 +143,9 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
     
-    size_t character = blender.loadModel(resourcePath + "/rosée.glb", "player");
+    size_t character = blender.loadModel(resourcePath + "/tes.glb", "player");
     size_t tree = blender.loadModel(resourcePath + "/all.glb", "plane");
-    blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
+//    blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
     blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
     size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
     blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20}) + math::makeScale({10, 10, 10});
@@ -146,6 +153,32 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
     size_t ter = blender.loadModel(resourcePath + "/simpleSphere.glb", "ter");
     blender.getModel("ter")->transform = math::makeTranslate({20, 60, 100});
+    
+    blender.playAnimation("player", "ArmatureAction", true);
+//    blender.playAnimation("player", "Armature.001", true);
+//    blender.playAnimation("player", "Armature.002", true);
+//    blender.playAnimation("player", "Armature.003", true);
+//    blender.playAnimation("player", "Armature.004", true);
+//    blender.addAnimationLayer(0, "Armature", 0.2f);
+//    blender.addAnimationLayer(0, "Armature.001", 0.2f);
+//    blender.addAnimationLayer(0, "Armature.002", 0.2f);
+//    blender.addAnimationLayer(0, "Armature.003", 0.2f);
+//    blender.addAnimationLayer(0, "Armature.004", 0.2f);
+    
+    if (BUG)
+    {
+        blender.printAnimations(0);
+        blender.printAnimations(1);
+        blender.printAnimations(2);
+        blender.printAnimations(3);
+        blender.printAnimations(4);
+        blender.debugBones(0);
+        blender.debugBones(1);
+        blender.debugBones(2);
+        blender.debugBones(3);
+        blender.debugBones(4);
+    }
+    
     
     
     world.setBiomeGenerator(std::make_unique<BiomeGenerator>(89));
@@ -425,6 +458,18 @@ void GameCoordinator::renderUI(MTL::RenderCommandEncoder* encoder)
         std::string info = "Switch to Mode -> " + toString(m_gamePlayMode);
         
         m_text.generateTextMesh(info, m_viewport.width / 2, m_viewport.height - 260, opts);
+    }
+    {
+        TextRendering::TextRenderOptions opts;
+        opts.color = {0.3f, 0.6f, 0.3f, 1.0f};
+        opts.scale = 0.22f;
+        opts.thickness = 0.05f;
+        opts.outlineWidth = 0.05f;
+        opts.outlineColor = {1.0f, 0.0f, 0.0f, 1.0f};
+        opts.alignment = TextRendering::TextRenderOptions::Alignment::Right;
+        std::string pre = "Horloge (0) ";
+        
+        m_text.generateTextMesh(pre, m_viewport.width / 2, m_viewport.height - 260, opts);
     }
     m_text.render(encoder, m_viewport.width, m_viewport.height);
 }
@@ -1206,7 +1251,7 @@ void GameCoordinator::draw(MTK::View* view)
     terrainLisse.requestHeightAt(m_camera.position().x, m_camera.position().z, commandBuffer);
     float terrainHeight = terrainLisse.getLastHeight();
     float minHeight = terrainHeight + 4.0f;
-    if (m_camera.position().y < minHeight && m_gamePlayMode == GamePlayMode::Driving)
+    if (m_camera.position().y < minHeight && m_gamePlayMode != GamePlayMode::Driving && m_gamePlayMode != GamePlayMode::FreeCam && m_gamePlayMode != GamePlayMode::FAB)
         m_camera.setPosition({m_camera.position().x, minHeight, m_camera.position().z});
     
 //    m_camera.rotateYawPitch(blackHole.position().x, blackHole.position().y);

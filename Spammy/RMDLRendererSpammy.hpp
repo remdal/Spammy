@@ -19,6 +19,8 @@
 #include <simd/simd.h>
 #include <vector>
 #include <chrono>
+#include <time.h>
+
 #include <stdio.h>
 
 #include "RMDLSkybox.hpp"
