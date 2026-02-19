@@ -143,18 +143,19 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     texDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     m_terrainTexture = m_device->newTexture(texDesc);
     
-    size_t character = blender.loadModel(resourcePath + "/tes.glb", "player");
+    size_t character = blender.loadModel(resourcePath + "/vitesse.glb", "player");
     size_t tree = blender.loadModel(resourcePath + "/all.glb", "plane");
-//    blender.getModel("player")->transform = math::makeTranslate({-100, 60, 20});
-    blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});
+    blender.getModel("player")->transform = math::makeTranslate({0, 5, 0});
+    blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});//+ math::makeScale({10, 10, 10});
     size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
-    blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20}) + math::makeScale({10, 10, 10});
+    blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20});
     size_t carauto = blender.loadModel(resourcePath + "/auto.glb", "caruto");
     blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
     size_t ter = blender.loadModel(resourcePath + "/simpleSphere.glb", "ter");
     blender.getModel("ter")->transform = math::makeTranslate({20, 60, 100});
     
-    blender.playAnimation("player", "ArmatureAction", true);
+    
+    blender.playAnimation("player", "petite_chenille_deviendra_grandeAction.002", true);
 //    blender.playAnimation("player", "Armature.001", true);
 //    blender.playAnimation("player", "Armature.002", true);
 //    blender.playAnimation("player", "Armature.003", true);

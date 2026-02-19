@@ -882,21 +882,40 @@ inline void FabPanel3D::setViewportWindow(NS::UInteger width, NS::UInteger heigh
     aspect = vpW / vpH;
 }
 
+inline simd::float4x4 offAxisProjection(float eyeX, float eyeY, float eyeZ, float screenWidth, float screenHeight, float near, float far)
+{
+    float left   = near * (-screenWidth/2 - eyeX) / eyeZ;
+    float right  = near * ( screenWidth/2 - eyeX) / eyeZ;
+    float bottom = near * (-screenHeight/2 - eyeY) / eyeZ;
+    float top    = near * ( screenHeight/2 - eyeY) / eyeZ;
+
+    float x = 2 * near / (right - left);
+    float y = 2 * near / (top - bottom);
+    float a = (right + left) / (right - left);
+    float b = (top + bottom) / (top - bottom);
+    float c = far / (near - far);
+    float d = (far * near) / (near - far);
+
+    return simd::float4x4{
+        simd::float4{ x, 0, 0, 0 },
+        simd::float4{ 0, y, 0, 0 },
+        simd::float4{ a, b, c, -1 },
+        simd::float4{ 0, 0, d, 0 }
+    };
+}
+
 inline void FabPanel3D::render(MTL::RenderCommandEncoder* encoder, simd::float2 screenSize)
 {
     if (!visible) return;
     
-    // Calculer les dimensions
     float totalWidth = panelPixelSize.x + (inventoryOpen ? sidebarWidth : 0.0f);
     float panelX = panelCenter.x * screenSize.x;
     float panelY = panelCenter.y * screenSize.y;
     
     updateInstanceBuffer();
     
-    // ========================================
-    // PASS 1: Panel 2D (fond)
-    // ========================================
-    if (m_panelPipeline) {
+    if (m_panelPipeline)
+    {
         auto* uniforms = static_cast<FabPanelUniforms*>(m_panelUniforms->contents());
         uniforms->screenSize = screenSize;
         uniforms->panelPosition = {panelX, panelY};
@@ -923,6 +942,7 @@ inline void FabPanel3D::render(MTL::RenderCommandEncoder* encoder, simd::float2 
 
     simd::float4x4 viewMat = computeViewMatrix();
     simd::float4x4 projMat = computeProjectionMatrix(aspect);
+//    simd::float4x4 viewProjMat = offAxisProjection(20.f, 20.f, 15.f, 1000.0f, 1000.f, 0.1f, 100.0f);
     simd::float4x4 viewProjMat = simd_mul(projMat, viewMat);
     
     float dist = 12.0f / cameraZoom;

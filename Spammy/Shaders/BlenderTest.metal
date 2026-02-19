@@ -59,15 +59,16 @@ vertex VertexOut vertexmain(VertexBlender in [[stage_in]],
     return out;
 }
 
-vertex VertexOut vertex_full(VertexBlenderFull in [[stage_in]],
+vertex VertexOut vertex_full(VertexBlenderFull in [[stage_in]], uint vertexID [[vertex_id]],
                             constant BlenderUniformsFull& uniforms [[buffer(1)]])
 {
+    VertexOut out;
+    
     float4x4 skin = uniforms.boneMatrices[in.joints.x] * in.weights.x + uniforms.boneMatrices[in.joints.y] * in.weights.y + uniforms.boneMatrices[in.joints.z] * in.weights.z + uniforms.boneMatrices[in.joints.w] * in.weights.w;
     
     float4 skinnedPos = skin * float4(in.position, 1.0);
     float3 skinnedNormal = normalize((skin * float4(in.normal, 0.0)).xyz);
-    
-    VertexOut out;
+
     float4 worldPos = uniforms.modelMatrix * skinnedPos;
     out.position = uniforms.viewProjectionMatrix * worldPos;
     out.worldPos = worldPos.xyz;

@@ -52,7 +52,7 @@ bool RMDLBlender::doTheImportThing(const std::string& resourcesPath)
 {
     Assimp::Importer importer;
 
-    const aiScene* scene = importer.ReadFile(resourcesPath + "/uneNouvelleChance.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+    const aiScene* scene = importer.ReadFile(resourcesPath + "/tes.glb", aiProcess_CalcTangentSpace | aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 
     if (scene == nullptr)
     {
@@ -77,9 +77,7 @@ bool RMDLBlender::doTheImportThing(const std::string& resourcesPath)
 size_t RMDLBlender::loadModel(const std::string& resourcesPath, const std::string& name)
 {
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(resourcesPath,
-        aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace |
-        aiProcess_GenNormals | aiProcess_JoinIdenticalVertices | aiProcess_LimitBoneWeights);
+    const aiScene* scene = importer.ReadFile(resourcesPath, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_GenNormals | aiProcess_JoinIdenticalVertices | aiProcess_LimitBoneWeights | aiProcess_SortByPType | aiProcess_GenSmoothNormals);
 
     Blender model;
     model.name = name.empty() ? resourcesPath : name;
@@ -219,7 +217,10 @@ void RMDLBlender::processMeshSkinned(aiMesh* pMesh, Blender& model)
             if (sum > 0.0f)
                 v.weights /= sum;
             else
-                v.joints.x = 0; v.weights.x = 1.0f;
+            {
+                v.joints.x = 0;
+                v.weights.x = 1.0f;
+            }
         }
     }
     else
@@ -345,8 +346,9 @@ void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::Pixel
     printf("✓ Pipeline created\n");
 }
 
-void RMDLBlender::updateBlender(float deltaTime)
+void RMDLBlender::updateBlender(float deltaTim)
 {
+    deltaTime = 0.008f;
 //    float bounce = sin(t * M_PI * 2.0f) * 0.5f;
 //    boneMatrix = simd::float4x4{ simd::make_float4(1, 0, 0, 0), simd::make_float4(0, 1, 0, 0), simd::make_float4(0, 0, 1, 0), simd::make_float4(0, bounce, 0, 1) };
     m_frame++;
@@ -605,7 +607,7 @@ void RMDLBlender::loadAnimations(const aiScene *scene, Blender& model)
         Animation a;
         a.name = anim->mName.C_Str();
         a.duration = (float)anim->mDuration;
-        a.ticksPerSec = 120.f;//anim->mTicksPerSecond > 0 ? (float)anim->mTicksPerSecond : 120.0f;
+        a.ticksPerSec = 500.f;//anim->mTicksPerSecond > 0 ? (float)anim->mTicksPerSecond : 120.0f;
         
         for (unsigned c = 0; c < anim->mNumChannels; c++)
         {
@@ -801,7 +803,6 @@ void RMDLBlender::debugBones(size_t modelIndex) const
         }
         printf("\n");
     }
-    printf("==================\n\n");
 }
 
 void RMDLBlender::playAnimation(size_t modelIndex, const std::string& animName, bool loop)

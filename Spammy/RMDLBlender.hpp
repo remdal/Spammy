@@ -67,7 +67,7 @@ struct BlenderUniformsFull
 {
     simd::float4x4 modelMatrix;
     simd::float4x4 viewProjectionMatrix;
-    simd::float4x4 boneMatrices[28];
+    simd::float4x4 boneMatrices[94];
 };
 
 struct BoneInfo
@@ -241,7 +241,7 @@ private:
     std::vector<simd::float4x4>     m_boneMatrices;
     std::vector<VertexBlender>    m_vertices;
     
-
+    float deltaTime = 0.f;
     
     std::vector<Blender> m_models;
     
