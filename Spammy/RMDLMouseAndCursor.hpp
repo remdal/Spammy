@@ -12,8 +12,6 @@
 
 #include <simd/simd.h>
 
-#include "RMDLMainRenderer_shared.h"
-
 struct MousePickResult
 {
     simd::float3 worldPosition;

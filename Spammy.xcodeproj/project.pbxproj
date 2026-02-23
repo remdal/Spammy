@@ -10,7 +10,6 @@
 		751560012EEC91C7005998C4 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 751560002EEC91C7005998C4 /* QuartzCore.framework */; };
 		751560032EEC91CB005998C4 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 751560022EEC91CB005998C4 /* Metal.framework */; };
 		751560052EEC91D1005998C4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 751560042EEC91D1005998C4 /* Foundation.framework */; };
-		756538252F3A471A00521101 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 756538242F3A471A00521101 /* README.md */; };
 		7570A8A42EED18AA00B0A7F3 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7570A8A32EED18AA00B0A7F3 /* MetalKit.framework */; };
 		7570A8A62EED18AE00B0A7F3 /* MetalFX.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7570A8A52EED18AE00B0A7F3 /* MetalFX.framework */; };
 		7570A8A82EED18B700B0A7F3 /* AVFAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7570A8A72EED18B700B0A7F3 /* AVFAudio.framework */; };
@@ -30,14 +29,61 @@
 		7570A8A92EED1DBA00B0A7F3 /* PHASE.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PHASE.framework; path = System/Library/Frameworks/PHASE.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		75F6B4E22F4CC45A006922D0 /* Exceptions for "include" folder in "Spammy" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				assimp/.editorconfig,
+				assimp/color4.inl,
+				assimp/config.h.in,
+				assimp/material.inl,
+				assimp/matrix3x3.inl,
+				assimp/matrix4x4.inl,
+				assimp/quaternion.inl,
+				assimp/revision.h.in,
+				assimp/SmoothingGroups.inl,
+				assimp/vector2.inl,
+				assimp/vector3.inl,
+				imgGui/docs/BACKENDS.md,
+				imgGui/docs/CHANGELOG.txt,
+				imgGui/docs/CONTRIBUTING.md,
+				imgGui/docs/EXAMPLES.md,
+				imgGui/docs/FAQ.md,
+				imgGui/docs/FONTS.md,
+				imgGui/docs/READ.md,
+				imgGui/docs/TODO.txt,
+				imgGui/LICENSE.txt,
+				"metal-cpp/LICENSE.txt",
+				"metal-cpp/SingleHeader/MakeSingleHeader.py",
+			);
+			target = 75155FE32EEC919C005998C4 /* Spammy */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		75F6B4EF2F4CC612006922D0 /* Exceptions for "Spammy" folder in "Copy Bundle Resources" phase from "Spammy" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 75F6B4E12F4CC45A006922D0 /* Resources */;
+			membershipExceptions = (
+				"engine_metal-cpp.entitlements",
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		75155FE62EEC919C005998C4 /* Spammy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				75F6B4EF2F4CC612006922D0 /* Exceptions for "Spammy" folder in "Copy Bundle Resources" phase from "Spammy" target */,
+			);
 			path = Spammy;
 			sourceTree = "<group>";
 		};
 		7570A8782EECD68500B0A7F3 /* include */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				75F6B4E22F4CC45A006922D0 /* Exceptions for "include" folder in "Spammy" target */,
+			);
 			path = include;
 			sourceTree = "<group>";
 		};
@@ -104,7 +150,7 @@
 			buildPhases = (
 				75155FE02EEC919C005998C4 /* Sources */,
 				75155FE12EEC919C005998C4 /* Frameworks */,
-				75155FE22EEC919C005998C4 /* Resources */,
+				75F6B4E12F4CC45A006922D0 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -155,11 +201,10 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		75155FE22EEC919C005998C4 /* Resources */ = {
+		75F6B4E12F4CC45A006922D0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				756538252F3A471A00521101 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

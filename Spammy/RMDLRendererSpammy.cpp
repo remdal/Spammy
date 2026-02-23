@@ -22,6 +22,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 
+#include "imgui.h"
+#include "imgui_impl_metal.h"
+
 #include <simd/simd.h>
 #include <utility>
 #include <variant>
@@ -149,13 +152,13 @@ m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePa
     blender.getModel("plane")->transform = math::makeTranslate({5, 20, 0});//+ math::makeScale({10, 10, 10});
     size_t wheel = blender.loadModel(resourcePath + "/wheel.glb", "vehicule");
     blender.getModel("vehicule")->transform = math::makeTranslate({100, 60, 20});
-    size_t carauto = blender.loadModel(resourcePath + "/auto.glb", "caruto");
-    blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
+//    size_t carauto = blender.loadModel(resourcePath + "/auto.glb", "caruto");
+//    blender.getModel("caruto")->transform = math::makeTranslate({15, 120, 110});
     size_t ter = blender.loadModel(resourcePath + "/simpleSphere.glb", "ter");
     blender.getModel("ter")->transform = math::makeTranslate({20, 60, 100});
     
     
-    blender.playAnimation("player", "petite_chenille_deviendra_grandeAction.002", true);
+    
 //    blender.playAnimation("player", "Armature.001", true);
 //    blender.playAnimation("player", "Armature.002", true);
 //    blender.playAnimation("player", "Armature.003", true);
@@ -504,16 +507,11 @@ void GameCoordinator::layoutCenteredBox(const std::string& text, float scale)
 {
     simd::float2 size = m_text.measureText(text, scale);
     
-    // Calculer la position centrée
-    float boxX = (m_viewport.width - size.x) / 2 - 20;  // 20px padding
+    float boxX = (m_viewport.width - size.x) / 2 - 20;
     float boxY = (m_viewport.height - size.y) / 2 - 20;
     float boxW = size.x + 40;
     float boxH = size.y + 40;
     
-    // Dessiner le fond (avec ton système de rendu 2D)
-    // drawRect(boxX, boxY, boxW, boxH, {0, 0, 0, 0.8f});
-    
-    // Puis le texte
     TextRendering::TextRenderOptions opts;
     opts.scale = scale;
     opts.alignment = TextRendering::TextRenderOptions::Alignment::Center;
@@ -601,15 +599,6 @@ void GameCoordinator::makeTexture(MTL::PixelFormat layerPixelFormat, MTL::PixelF
 //    pRenderPipDesc->setSampleCount(1);
 
     NS::Error* error = nullptr;
-//    NS::SharedPtr<MTL::VertexDescriptor> pVertexDesc = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-//    pVertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat4);
-//    pVertexDesc->attributes()->object(0)->setOffset(0);
-//    pVertexDesc->attributes()->object(0)->setBufferIndex(0);
-//    
-//    pVertexDesc->layouts()->object(0)->setStride(sizeof(16));
-//    pVertexDesc->layouts()->object(0)->setStepRate(1);
-//    pVertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
-
     NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDescriptor = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
     depthStencilDescriptor->setDepthCompareFunction(MTL::CompareFunction::CompareFunctionLess);
     depthStencilDescriptor->setDepthWriteEnabled(true);
@@ -686,8 +675,13 @@ void GameCoordinator::handleKeyPress(int key)
 void GameCoordinator::inventory(bool visible)
 {
     grid.setVisible(visible);
-    cinematicView.position = snappedPos;
-    m_camera.transitionTo(cinematicView, 3.f, RMDLCameraEase::EaseInOutCubic);
+    blender.playAnimation("player", "V.003Action", visible);
+    blender.getModel("player")->transform += math::makeTranslate({m_uniforms.frameTime / 80 , 0, 0});
+    if (m_gamePlayMode == GamePlayMode::DEV)
+    {
+        cinematicView.position = snappedPos;
+        m_camera.transitionTo(cinematicView, 3.f, RMDLCameraEase::EaseInOutCubic);
+    }
 }
 
 void GameCoordinator::jump()
@@ -1020,14 +1014,14 @@ void GameCoordinator::removeBlockFromVehicle(int blockId)
 
 void GameCoordinator::updateUniforms()
 {
-    m_uniforms.frameTime += 0.16f;
+    m_uniforms.frameTime += 0.08f;
     m_cameraUniforms = m_camera.uniforms();
     float timeOfDay = fmod(m_uniforms.frameTime, 120.f) / 120.f;
     float sunAngle = timeOfDay * 2.0f * M_PI;
     float tilt = M_PI * 0.1f; // 18° d'inclinaison
     m_uniforms.sunDirection = simd_make_float3(cos(sunAngle) * sin(tilt), sin(sunAngle), cos(sunAngle) * cos(tilt));
-//    m_uniforms.sunDirection = simd_make_float3(0.0f, sin(sunAngle), cos(sunAngle)); // Z au lieu de X cos(sunAngle), sin(sunAngle), 0.0f
     m_uniforms.sunDirection = simd_normalize(m_uniforms.sunDirection);
+    //    m_uniforms.sunDirection = simd_make_float3(0.0f, sin(sunAngle), cos(sunAngle)); // Z au lieu de X cos(sunAngle), sin(sunAngle), 0.0f
     if (sunAngle > M_PI)
     {
         float nightProgress = (sunAngle - M_PI) / M_PI;

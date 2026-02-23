@@ -5,7 +5,7 @@
 //  Created by Rémy on 12/12/2025.
 //
 
-#include "RMDLRendererSpammy.hpp"
+#import "RMDLRendererSpammy.hpp"
 
 #import "GameViewController.h"
 
