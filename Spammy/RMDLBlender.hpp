@@ -67,7 +67,7 @@ struct BlenderUniformsFull
 {
     simd::float4x4 modelMatrix;
     simd::float4x4 viewProjectionMatrix;
-    simd::float4x4 boneMatrices[94];
+    simd::float4x4 boneMatrices[21];
 };
 
 struct BoneInfo
@@ -157,6 +157,7 @@ struct Blender
     MTL::Texture* normalTexture = nullptr;
     MTL::Texture* roughnessTexture = nullptr;
     MTL::Texture* metallicTexture = nullptr;
+    MTL::Texture* ambientOcclusion = nullptr;
     
     simd::float4x4 transform = matrix_identity_float4x4;
     simd::float3 position = {};
@@ -278,8 +279,7 @@ public:
         states[name] = animName;
     }
     
-    void addTransition(const std::string& from, const std::string& to,
-                      std::function<bool()> condition)
+    void addTransition(const std::string& from, const std::string& to, std::function<bool()> condition)
     {
         transitions[from].push_back({to, condition});
     }

@@ -36,7 +36,7 @@ struct BlenderUniformsFull
 {
     simd::float4x4 modelMatrix;
     simd::float4x4 viewProjectionMatrix;
-    simd::float4x4 boneMatrices[28];
+    simd::float4x4 boneMatrices[21];
 };
 
 struct VertexOut
@@ -47,8 +47,8 @@ struct VertexOut
     float3 worldPos;
 };
 
-vertex VertexOut vertexmain(VertexBlender in [[stage_in]],
-                            constant BlenderUniforms& uniforms [[buffer(1)]])
+vertex VertexOut vertexmain_Blender(VertexBlender in [[stage_in]],
+                                    constant BlenderUniforms& uniforms [[buffer(1)]])
 {
     VertexOut out;
     float4 worldPos = uniforms.modelMatrix * float4(in.position, 1.0);
@@ -59,8 +59,8 @@ vertex VertexOut vertexmain(VertexBlender in [[stage_in]],
     return out;
 }
 
-vertex VertexOut vertex_full(VertexBlenderFull in [[stage_in]], uint vertexID [[vertex_id]],
-                            constant BlenderUniformsFull& uniforms [[buffer(1)]])
+vertex VertexOut vertexmain_BlenderAnyme(VertexBlenderFull in [[stage_in]], uint vertexID [[vertex_id]],
+                                         constant BlenderUniformsFull& uniforms [[buffer(1)]])
 {
     VertexOut out;
     
@@ -77,13 +77,13 @@ vertex VertexOut vertex_full(VertexBlenderFull in [[stage_in]], uint vertexID [[
     return out;
 }
 
-fragment float4 fragmentmain(VertexOut in [[stage_in]],
-                             texture2d<float> diffuseTexture [[texture(0)]],
-                             texture2d<float> normalTexture [[texture(1)]],
-                             texture2d<float> roughnessTexture [[texture(2)]],
-                             texture2d<float> metallicTexture [[texture(3)]],
-                             sampler textureSampler [[sampler(0)]],
-                             constant RMDLUniforms& uniforms [[buffer(1)]])
+fragment float4 fragmentmain_Blender(VertexOut in [[stage_in]],
+                                     texture2d<float> diffuseTexture [[texture(0)]],
+                                     texture2d<float> normalTexture [[texture(1)]],
+                                     texture2d<float> roughnessTexture [[texture(2)]],
+                                     texture2d<float> metallicTexture [[texture(3)]],
+                                     sampler textureSampler [[sampler(0)]],
+                                     constant RMDLUniforms& uniforms [[buffer(1)]])
 {
     float4 albedo = diffuseTexture.sample(textureSampler, in.texCoord);
     float3 normal = normalTexture.sample(textureSampler, in.texCoord).rgb;

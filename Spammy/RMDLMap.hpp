@@ -110,7 +110,8 @@ struct PhysicsSample
     float friction;
 };
 
-class InfiniteTerrainManager {
+class InfiniteTerrainManager
+{
 public:
     InfiniteTerrainManager(MTL::Device* device, uint32_t seed);
     ~InfiniteTerrainManager();

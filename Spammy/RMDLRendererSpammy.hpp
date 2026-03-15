@@ -36,6 +36,7 @@
 #include "VoronoiVoxel4D.hpp"
 #include "Utils/NonCopyable.h"
 #include "RMDLColors.hpp"
+#include "RMDLCards.hpp"
 
 #include "RMDLGrid.hpp"
 #include "RMDLSystem.hpp"
@@ -127,7 +128,7 @@ public:
     void buildDepthStencilStates(NS::UInteger width, NS::UInteger height);
     
     GamePlayMode m_gamePlayMode;
-    InputState  m_input;
+    InputState m_input;
     
     void update(float deltaTime, const InputState& input, MTL::CommandBuffer* commandBuffer);
 
@@ -324,7 +325,7 @@ private:
     
     cube::BlockSystem   blocs;
     
-    
+    HoloCardRenderer cards;
     inventoryWindow::InventoryPanel m_inventoryPanel;
     
 //    FabUI  fabUI;

@@ -124,6 +124,7 @@ vertexBuffer(nullptr), indexBuffer(nullptr), transformBuffer(nullptr), m_gamePla
 m_inventoryPanel(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath),
 terrainLisse(m_device, 89),
 blocs(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath, m_commandQueue),
+cards(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath),
 m_text(m_device, layerPixelFormat, depthPixelFormat, m_shaderLibrary, resourcePath)
 {
     m_viewportSizeBuffer = m_device->newBuffer(sizeof(m_viewportSize), MTL::ResourceStorageModeShared);
@@ -1217,10 +1218,11 @@ void GameCoordinator::draw(MTK::View* view)
     
     blocs.render(renderCommandEncoder, m_cameraUniforms.viewProjectionMatrix, m_camera.position(), dt);
     
+    cards.draw(renderCommandEncoder, m_depth.get(), math::makeIdentity(), m_cameraUniforms.viewProjectionMatrix * math::makeIdentity(), m_viewport.width, m_viewport.height);
+    
     if (m_gamePlayMode == GamePlayMode::FAB)
     {
         m_fabPanel->render(renderCommandEncoder, screenSz);
-
     }
     renderCommandEncoder->setViewport(m_viewport);
     renderCommandEncoder->setScissorRect(sc);

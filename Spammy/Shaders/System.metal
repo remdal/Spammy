@@ -34,14 +34,10 @@ struct PostProcessParams
     float _pad;
 };
 
-// ============================================
-// FULLSCREEN VERTEX SHADER
-// ============================================
-
-vertex FullscreenVertexOut fullscreen_vertex(uint vertexID [[vertex_id]]) {
+vertex FullscreenVertexOut fullscreen_vertex(uint vertexID [[vertex_id]])
+{
     FullscreenVertexOut out;
     
-    // Fullscreen triangle
     out.uv = float2((vertexID << 1) & 2, vertexID & 2);
     out.position = float4(out.uv * 2.0 - 1.0, 0.0, 1.0);
     out.uv.y = 1.0 - out.uv.y;
@@ -49,12 +45,10 @@ vertex FullscreenVertexOut fullscreen_vertex(uint vertexID [[vertex_id]]) {
     return out;
 }
 
-// ============================================
 // TONE MAPPING FUNCTIONS
-// ============================================
 
-// ACES Filmic Tone Mapping
-float3 acesFilm(float3 x) {
+float3 acesFilm(float3 x)
+{
     float a = 2.51;
     float b = 0.03;
     float c = 2.43;
@@ -63,13 +57,13 @@ float3 acesFilm(float3 x) {
     return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
-// Reinhard
-float3 reinhard(float3 x) {
+float3 reinhard(float3 x)
+{
     return x / (x + 1.0);
 }
 
-// Uncharted 2
-float3 uncharted2Tonemap(float3 x) {
+float3 uncharted2Tonemap(float3 x)
+{
     float A = 0.15;
     float B = 0.50;
     float C = 0.10;
@@ -79,7 +73,8 @@ float3 uncharted2Tonemap(float3 x) {
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-float3 uncharted2(float3 color) {
+float3 uncharted2(float3 color)
+{
     float W = 11.2;
     float exposureBias = 2.0;
     float3 curr = uncharted2Tonemap(exposureBias * color);
@@ -87,40 +82,33 @@ float3 uncharted2(float3 color) {
     return curr * whiteScale;
 }
 
-// ============================================
-// BLOOM THRESHOLD KERNEL
-// ============================================
-
-kernel void bloomThreshold(
-    texture2d<float, access::read> input [[texture(0)]],
-    texture2d<float, access::write> output [[texture(1)]],
-    constant PostProcessParams& params [[buffer(0)]],
-    uint2 gid [[thread_position_in_grid]]
-) {
+kernel void bloomThreshold(texture2d<float, access::read> input [[texture(0)]],
+                           texture2d<float, access::write> output [[texture(1)]],
+                           constant PostProcessParams& params [[buffer(0)]],
+                           uint2 gid [[thread_position_in_grid]])
+{
     float4 color = input.read(gid);
     
     float brightness = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
     
-    if (brightness > params.bloomThreshold) {
+    if (brightness > params.bloomThreshold)
+    {
         float excess = brightness - params.bloomThreshold;
         float factor = excess / (excess + 1.0);
         output.write(float4(color.rgb * factor, 1.0), gid);
-    } else {
+    }
+    else
+    {
         output.write(float4(0.0, 0.0, 0.0, 1.0), gid);
     }
 }
 
-// ============================================
-// GAUSSIAN BLUR KERNELS
-// ============================================
-
 constant float gaussianWeights[5] = { 0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216 };
 
-kernel void bloomBlurHorizontal(
-    texture2d<float, access::read> input [[texture(0)]],
-    texture2d<float, access::write> output [[texture(1)]],
-    uint2 gid [[thread_position_in_grid]]
-) {
+kernel void bloomBlurHorizontal(texture2d<float, access::read> input [[texture(0)]],
+                                texture2d<float, access::write> output [[texture(1)]],
+                                uint2 gid [[thread_position_in_grid]])
+{
     uint width = input.get_width();
     float3 result = input.read(gid).rgb * gaussianWeights[0];
     
@@ -135,11 +123,10 @@ kernel void bloomBlurHorizontal(
     output.write(float4(result, 1.0), gid);
 }
 
-kernel void bloomBlurVertical(
-    texture2d<float, access::read> input [[texture(0)]],
-    texture2d<float, access::write> output [[texture(1)]],
-    uint2 gid [[thread_position_in_grid]]
-) {
+kernel void bloomBlurVertical(texture2d<float, access::read> input [[texture(0)]],
+                              texture2d<float, access::write> output [[texture(1)]],
+                              uint2 gid [[thread_position_in_grid]])
+{
     uint height = input.get_height();
     float3 result = input.read(gid).rgb * gaussianWeights[0];
     
@@ -154,18 +141,13 @@ kernel void bloomBlurVertical(
     output.write(float4(result, 1.0), gid);
 }
 
-// ============================================
-// FINAL COMPOSITE FRAGMENT SHADER
-// ============================================
-
-fragment float4 postprocess_composite(
-    FullscreenVertexOut in [[stage_in]],
-    texture2d<float> sceneTexture [[texture(0)]],
-    texture2d<float> bloomTexture [[texture(1)]],
-    texture2d<float> depthTexture [[texture(2)]],
-    constant PostProcessParams& params [[buffer(0)]],
-    sampler texSampler [[sampler(0)]]
-) {
+fragment float4 postprocess_composite(FullscreenVertexOut in [[stage_in]],
+                                      texture2d<float> sceneTexture [[texture(0)]],
+                                      texture2d<float> bloomTexture [[texture(1)]],
+                                      texture2d<float> depthTexture [[texture(2)]],
+                                      constant PostProcessParams& params [[buffer(0)]],
+                                      sampler texSampler [[sampler(0)]])
+{
     float2 uv = in.uv;
     
     // Chromatic aberration
@@ -204,16 +186,11 @@ fragment float4 postprocess_composite(
     return float4(color, 1.0);
 }
 
-// ============================================
-// FXAA
-// ============================================
-
-fragment float4 fxaa_fragment(
-    FullscreenVertexOut in [[stage_in]],
-    texture2d<float> inputTexture [[texture(0)]],
-    constant float2& texelSize [[buffer(0)]],
-    sampler texSampler [[sampler(0)]]
-) {
+fragment float4 fxaa_fragment(FullscreenVertexOut in [[stage_in]],
+                              texture2d<float> inputTexture [[texture(0)]],
+                              constant float2& texelSize [[buffer(0)]],
+                              sampler texSampler [[sampler(0)]])
+{
     float2 uv = in.uv;
     
     float FXAA_SPAN_MAX = 8.0;
@@ -264,19 +241,14 @@ fragment float4 fxaa_fragment(
     }
 }
 
-// ============================================
-// ATMOSPHERIC SCATTERING
-// ============================================
-
-fragment float4 atmosphere_fragment(
-    FullscreenVertexOut in [[stage_in]],
-    texture2d<float> sceneTexture [[texture(0)]],
-    texture2d<float> depthTexture [[texture(1)]],
-    constant float4x4& invViewProj [[buffer(0)]],
-    constant float3& cameraPos [[buffer(1)]],
-    constant float3& sunDirection [[buffer(2)]],
-    sampler texSampler [[sampler(0)]]
-) {
+fragment float4 atmosphere_fragment(FullscreenVertexOut in [[stage_in]],
+                                    texture2d<float> sceneTexture [[texture(0)]],
+                                    texture2d<float> depthTexture [[texture(1)]],
+                                    constant float4x4& invViewProj [[buffer(0)]],
+                                    constant float3& cameraPos [[buffer(1)]],
+                                    constant float3& sunDirection [[buffer(2)]],
+                                    sampler texSampler [[sampler(0)]])
+{
     float2 uv = in.uv;
     float3 sceneColor = sceneTexture.sample(texSampler, uv).rgb;
     float depth = depthTexture.sample(texSampler, uv).r;
@@ -495,7 +467,8 @@ struct LightData {
     float4x4 lightSpaceMatrix;
 };
 
-struct TerrainPushConstants {
+struct TerrainPushConstants
+{
     float2 chunkWorldPos;
     float lodScale;
     uint biomeId;

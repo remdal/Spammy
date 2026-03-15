@@ -28,8 +28,8 @@ static simd::float4x4 makeTRS(simd::float3 t, simd::quatf r, simd::float3 s)
     return T * simd::float4x4(r) * S;
 }
 
-RMDLBlender::RMDLBlender(MTL::Device* pDevice, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary)
-: m_device(pDevice->retain()),
+RMDLBlender::RMDLBlender(MTL::Device* device, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat, const std::string& resourcesPath, MTL::Library* pShaderLibrary)
+: m_device(device->retain()),
 m_frame(0), _pCurrentTime(0.0f), _pAnimationDuration(12.0f)
 {
     m_boneMatrices.resize(28, math::makeIdentity());
@@ -277,73 +277,67 @@ void RMDLBlender::loadBones(aiMesh* pMesh, Blender& model, uint32_t baseVertex)
     }
 }
 
-void RMDLBlender::createPipelineBlender(MTL::Library *pShaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat)
+void RMDLBlender::createPipelineBlender(MTL::Library* shaderLibrary, MTL::PixelFormat pixelFormat, MTL::PixelFormat depthPixelFormat)
 {
-    MTL::VertexDescriptor* vertexDesc = MTL::VertexDescriptor::alloc()->init();
+    NS::SharedPtr<MTL::VertexDescriptor> vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
 
-    vertexDesc->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
-    vertexDesc->attributes()->object(0)->setOffset(offsetof(VertexBlender, position));
-    vertexDesc->attributes()->object(0)->setBufferIndex(0);
+    vertexDescriptor->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptor->attributes()->object(0)->setOffset(offsetof(VertexBlender, position));
+    vertexDescriptor->attributes()->object(0)->setBufferIndex(0);
 
-    vertexDesc->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
-    vertexDesc->attributes()->object(1)->setOffset(offsetof(VertexBlender, normal));
-    vertexDesc->attributes()->object(1)->setBufferIndex(0);
+    vertexDescriptor->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptor->attributes()->object(1)->setOffset(offsetof(VertexBlender, normal));
+    vertexDescriptor->attributes()->object(1)->setBufferIndex(0);
     
-    vertexDesc->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
-    vertexDesc->attributes()->object(2)->setOffset(offsetof(VertexBlender, texCoord));
-    vertexDesc->attributes()->object(2)->setBufferIndex(0);
+    vertexDescriptor->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
+    vertexDescriptor->attributes()->object(2)->setOffset(offsetof(VertexBlender, texCoord));
+    vertexDescriptor->attributes()->object(2)->setBufferIndex(0);
     
-    vertexDesc->layouts()->object(0)->setStride(sizeof(VertexBlender));
+    vertexDescriptor->layouts()->object(0)->setStride(sizeof(VertexBlender));
     
-    MTL::VertexDescriptor* vertexDescFull = MTL::VertexDescriptor::alloc()->init();
+    NS::SharedPtr<MTL::VertexDescriptor> vertexDescriptorAnyme = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
 
-    vertexDescFull->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
-    vertexDescFull->attributes()->object(0)->setOffset(offsetof(VertexBlenderFull, position));
-    vertexDescFull->attributes()->object(0)->setBufferIndex(0);
+    vertexDescriptorAnyme->attributes()->object(0)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptorAnyme->attributes()->object(0)->setOffset(offsetof(VertexBlenderFull, position));
+    vertexDescriptorAnyme->attributes()->object(0)->setBufferIndex(0);
 
-    vertexDescFull->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
-    vertexDescFull->attributes()->object(1)->setOffset(offsetof(VertexBlenderFull, normal));
-    vertexDescFull->attributes()->object(1)->setBufferIndex(0);
+    vertexDescriptorAnyme->attributes()->object(1)->setFormat(MTL::VertexFormatFloat3);
+    vertexDescriptorAnyme->attributes()->object(1)->setOffset(offsetof(VertexBlenderFull, normal));
+    vertexDescriptorAnyme->attributes()->object(1)->setBufferIndex(0);
     
-    vertexDescFull->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
-    vertexDescFull->attributes()->object(2)->setOffset(offsetof(VertexBlenderFull, texCoord));
-    vertexDescFull->attributes()->object(2)->setBufferIndex(0);
+    vertexDescriptorAnyme->attributes()->object(2)->setFormat(MTL::VertexFormatFloat2);
+    vertexDescriptorAnyme->attributes()->object(2)->setOffset(offsetof(VertexBlenderFull, texCoord));
+    vertexDescriptorAnyme->attributes()->object(2)->setBufferIndex(0);
     
-    vertexDescFull->attributes()->object(3)->setFormat(MTL::VertexFormatInt4);
-    vertexDescFull->attributes()->object(3)->setOffset(offsetof(VertexBlenderFull, joints));
-    vertexDescFull->attributes()->object(3)->setBufferIndex(0);
+    vertexDescriptorAnyme->attributes()->object(3)->setFormat(MTL::VertexFormatInt4);
+    vertexDescriptorAnyme->attributes()->object(3)->setOffset(offsetof(VertexBlenderFull, joints));
+    vertexDescriptorAnyme->attributes()->object(3)->setBufferIndex(0);
     
-    vertexDescFull->attributes()->object(4)->setFormat(MTL::VertexFormatFloat4);
-    vertexDescFull->attributes()->object(4)->setOffset(offsetof(VertexBlenderFull, weights));
-    vertexDescFull->attributes()->object(4)->setBufferIndex(0);
+    vertexDescriptorAnyme->attributes()->object(4)->setFormat(MTL::VertexFormatFloat4);
+    vertexDescriptorAnyme->attributes()->object(4)->setOffset(offsetof(VertexBlenderFull, weights));
+    vertexDescriptorAnyme->attributes()->object(4)->setBufferIndex(0);
     
-    vertexDescFull->layouts()->object(0)->setStride(sizeof(VertexBlenderFull));
+    vertexDescriptorAnyme->layouts()->object(0)->setStride(sizeof(VertexBlenderFull));
 //    vertexDescFull->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
     
-    MTL::RenderPipelineDescriptor* renderPipelineDesc = MTL::RenderPipelineDescriptor::alloc()->init();
-    renderPipelineDesc->setVertexFunction(pShaderLibrary->newFunction(NS::String::string("vertexmain", NS::UTF8StringEncoding)));
-    renderPipelineDesc->setFragmentFunction(pShaderLibrary->newFunction(NS::String::string("fragmentmain", NS::UTF8StringEncoding)));
-    renderPipelineDesc->setVertexDescriptor(vertexDesc);
+    NS::SharedPtr<MTL::RenderPipelineDescriptor> renderPipelineDesc = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
+    renderPipelineDesc->setVertexFunction(shaderLibrary->newFunction(NS::String::string("vertexmain_Blender", NS::UTF8StringEncoding)));
+    renderPipelineDesc->setFragmentFunction(shaderLibrary->newFunction(NS::String::string("fragmentmain_Blender", NS::UTF8StringEncoding)));
+    renderPipelineDesc->setVertexDescriptor(vertexDescriptor.get());
     renderPipelineDesc->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
     renderPipelineDesc->setDepthAttachmentPixelFormat(depthPixelFormat);
 
     NS::Error* pError = nullptr;
-    _pPipelineStateBlender = m_device->newRenderPipelineState(renderPipelineDesc, &pError);
+    _pPipelineStateBlender = m_device->newRenderPipelineState(renderPipelineDesc.get(), &pError);
     
-    renderPipelineDesc->setVertexFunction(pShaderLibrary->newFunction(MTLSTR("vertex_full")));
-    renderPipelineDesc->setVertexDescriptor(vertexDescFull);
-    _pPipelineStateBlenderFull = m_device->newRenderPipelineState(renderPipelineDesc, &pError);
+    renderPipelineDesc->setVertexFunction(shaderLibrary->newFunction(MTLSTR("vertexmain_BlenderAnyme")));
+    renderPipelineDesc->setVertexDescriptor(vertexDescriptorAnyme.get());
+    _pPipelineStateBlenderFull = m_device->newRenderPipelineState(renderPipelineDesc.get(), &pError);
 
-    MTL::DepthStencilDescriptor* depthDesc = MTL::DepthStencilDescriptor::alloc()->init();
-    depthDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
-    depthDesc->setDepthWriteEnabled(true);
-    _pDepthState = m_device->newDepthStencilState(depthDesc);
-
-    renderPipelineDesc->release();
-    vertexDesc->release();
-    vertexDescFull->release();
-    depthDesc->release();
-    printf("✓ Pipeline created\n");
+    NS::SharedPtr<MTL::DepthStencilDescriptor> depthStencilDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+    depthStencilDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+    depthStencilDesc->setDepthWriteEnabled(true);
+    _pDepthState = m_device->newDepthStencilState(depthStencilDesc.get());
 }
 
 void RMDLBlender::updateBlender(float deltaTim)
@@ -480,20 +474,18 @@ MTL::Texture* RMDLBlender::loadEmbeddedTexture(aiTexture *aiTexture, bool sRGB)
         data = reinterpret_cast<unsigned char*>(aiTexture->pcData);
     }
 
-    MTL::TextureDescriptor* desc = MTL::TextureDescriptor::alloc()->init();
-    desc->setPixelFormat(sRGB ? MTL::PixelFormatRGBA8Unorm_sRGB : MTL::PixelFormatRGBA8Unorm);
-    desc->setWidth(width);
-    desc->setHeight(height);
-    desc->setUsage(MTL::TextureUsageShaderRead);
+    NS::SharedPtr<MTL::TextureDescriptor> textureDescriptor = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
+    textureDescriptor->setPixelFormat(sRGB ? MTL::PixelFormatRGBA8Unorm_sRGB : MTL::PixelFormatRGBA8Unorm);
+    textureDescriptor->setWidth(width);
+    textureDescriptor->setHeight(height);
+    textureDescriptor->setUsage(MTL::TextureUsageShaderRead);
 
-    MTL::Texture* texture = m_device->newTexture(desc);
+    MTL::Texture* texture = m_device->newTexture(textureDescriptor.get());
     MTL::Region region = MTL::Region::Make2D(0, 0, width, height);
     texture->replaceRegion(region, 0, data, width * 4);
 
     if (aiTexture->mHeight == 0)
         stbi_image_free(data);
-    desc->release();
-
     return texture;
 }
 
@@ -519,6 +511,7 @@ void RMDLBlender::loadTextures(const aiScene* scene, Blender& model, const std::
     model.normalTexture = loadTex(aiTextureType_NORMALS, false);
     model.roughnessTexture = loadTex(aiTextureType_DIFFUSE_ROUGHNESS, false);
     model.metallicTexture = loadTex(aiTextureType_METALNESS, false);
+    model.ambientOcclusion = loadTex(aiTextureType_AMBIENT_OCCLUSION, false);
 }
 
 MTL::Texture* RMDLBlender::loadTexture(const std::string& resourcesPath, const char* path, const aiScene *scene, bool sRGB)
@@ -532,37 +525,23 @@ MTL::Texture* RMDLBlender::loadTexture(const std::string& resourcesPath, const c
     std::string fullPath = resourcesPath + "/" + std::string(path);
     int width, height, channels;
     unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &channels, 4);
-    MTL::PixelFormat format = sRGB ? MTL::PixelFormatRGBA8Unorm_sRGB : MTL::PixelFormatRGBA8Unorm;
+    MTL::PixelFormat pixelFormat = sRGB ? MTL::PixelFormatRGBA8Unorm_sRGB : MTL::PixelFormatRGBA8Unorm;
 
-    MTL::TextureDescriptor* desc = MTL::TextureDescriptor::alloc()->init();
-    desc->setTextureType(MTL::TextureType2D);
-    desc->setPixelFormat(format);
-    desc->setWidth(width);
-    desc->setHeight(height);
-    desc->setUsage(MTL::TextureUsageShaderRead);
+    NS::SharedPtr<MTL::TextureDescriptor> textureDescriptor = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
+    textureDescriptor->setTextureType(MTL::TextureType2D);
+    textureDescriptor->setPixelFormat(pixelFormat);
+    textureDescriptor->setWidth(width);
+    textureDescriptor->setHeight(height);
+    textureDescriptor->setUsage(MTL::TextureUsageShaderRead);
 
-    MTL::Texture* texture = m_device->newTexture(desc);
+    MTL::Texture* texture = m_device->newTexture(textureDescriptor.get());
     MTL::Region region = MTL::Region::Make2D(0, 0, width, height);
     texture->replaceRegion(region, 0, data, width * 4);
 
     stbi_image_free(data);
-    desc->release();
 
     return texture;
 }
-
-//void RMDLBlender::loadTextures(const std::string& resourcesPath, const aiScene *scene)
-//{
-//    aiMaterial* material = scene->mMaterials[0];
-//    aiString texPath;
-//    material->GetTexture(aiTextureType_DIFFUSE, 0, &texPath);
-//    _pDiffuseTexture = loadTexture(resourcesPath, texPath.C_Str(), scene, true);
-//    material->GetTexture(aiTextureType_NORMALS, 0, &texPath);
-//    _pNormalTexture = loadTexture(resourcesPath, texPath.C_Str(), scene, false);
-//    material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &texPath);
-//    _pRoughnessTexture = loadTexture(resourcesPath, texPath.C_Str(), scene, false);
-//    material->GetTexture(aiTextureType_METALNESS, 0, &texPath);
-//}
 
 void RMDLBlender::addAnimationLayer(size_t modelIndex, const std::string& animName, float weight)
 {
@@ -642,15 +621,14 @@ void RMDLBlender::loadAnimations(const aiScene *scene, Blender& model)
 
 void RMDLBlender::createSampler()
 {
-    MTL::SamplerDescriptor* samplerDesc = MTL::SamplerDescriptor::alloc()->init();
+    NS::SharedPtr<MTL::SamplerDescriptor> samplerDesc = NS::TransferPtr(MTL::SamplerDescriptor::alloc()->init());
     samplerDesc->setMinFilter(MTL::SamplerMinMagFilterLinear);
     samplerDesc->setMagFilter(MTL::SamplerMinMagFilterLinear);
     samplerDesc->setMipFilter(MTL::SamplerMipFilterLinear);
     samplerDesc->setSAddressMode(MTL::SamplerAddressModeRepeat);
     samplerDesc->setTAddressMode(MTL::SamplerAddressModeRepeat);
     samplerDesc->setMaxAnisotropy(16);
-    _pSampler = m_device->newSamplerState(samplerDesc);
-    samplerDesc->release();
+    _pSampler = m_device->newSamplerState(samplerDesc.get());
 }
 
 void RMDLBlender::computeBoneTransforms(float time, const NodeData& node, const simd::float4x4& parentTf, Blender& model)
@@ -879,48 +857,6 @@ void RMDLBlender::setAnimationSpeed(size_t modelIndex, float speed)
     m_models[modelIndex].animController.speedMultiplier = speed;
 }
 
-//// Interpoler entre keyframes
-//simd::float4x4 RMDLBlender::sampleChannel(const AnimationChannel& channel, float time)
-//{
-//    // Trouver les deux keyframes encadrant 'time'
-//    size_t i = 0;
-//    while (i < channel.keyframes.size() - 1 && channel.keyframes[i + 1].time < time)
-//        ++i;
-//    
-//    const auto& k0 = channel.keyframes[i];
-//    const auto& k1 = channel.keyframes[std::min(i + 1, channel.keyframes.size() - 1)];
-//    
-//    float t = (k1.time > k0.time) ? (time - k0.time) / (k1.time - k0.time) : 0.0f;
-//    
-//    // Interpolation
-//    simd::float3 pos = simd_mix(k0.position, k1.position, t);
-//    simd::quatf rot = simd::slerp(k0.rotation, k1.rotation, t);
-//    simd::float3 scl = simd_mix(k0.scale, k1.scale, t);
-//    
-//    return simd::float4x4(math::makeTranslate(pos) * simd::float4x4(rot) * simd::float4x4(math::makeScale(scl)));
-//}
-
-//void RMDLBlender::update(float deltaTime)
-//{
-//    m_currentTime = fmod(m_currentTime + deltaTime * ticksPerSecond, duration);
-//    
-//    for (auto& channel : currentAnimation->channels) {
-//        bones[channel.boneIndex].localTransform = sampleChannel(channel, currentTime);
-//    }
-//    
-//    // Propager dans la hiérarchie
-//    for (size_t i = 0; i < bones.size(); ++i) {
-//        if (bones[i].parentIndex >= 0)
-//            bones[i].globalTransform = bones[bones[i].parentIndex].globalTransform * bones[i].localTransform;
-//        else
-//            bones[i].globalTransform = bones[i].localTransform;
-//    }
-//    
-//    // Matrices finales pour le GPU
-//    for (size_t i = 0; i < bones.size(); ++i)
-//        boneMatrices[i] = bones[i].globalTransform * bones[i].offsetMatrix;
-//}
-
 void RMDLBlender::draw(MTL::RenderCommandEncoder* pEncoder, const simd::float4x4& viewProj, const RMDLUniforms &uniforms)
 {
     for (size_t i = 0; i < m_models.size(); i++)
@@ -961,3 +897,54 @@ void RMDLBlender::drawBlender(MTL::RenderCommandEncoder *pEncoder, size_t index,
     pEncoder->setFragmentSamplerState(_pSampler, 0);
     pEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, model.indices.size(), MTL::IndexTypeUInt32, model.indexBuffer, 0);
 }
+
+/*
+void RMDLBlender::loadTextures(const std::string& resourcesPath, const aiScene *scene)
+{
+    aiMaterial* material = scene->mMaterials[0];
+    aiString texPath;
+    _pRoughnessTexture = loadTexture(resourcesPath, texPath.C_Str(), scene, false);
+    material->GetTexture(aiTextureType_METALNESS, 0, &texPath);
+*/
+
+//// Interpoler entre keyframes
+//simd::float4x4 RMDLBlender::sampleChannel(const AnimationChannel& channel, float time)
+//{
+//    // Trouver les deux keyframes encadrant 'time'
+//    size_t i = 0;
+//    while (i < channel.keyframes.size() - 1 && channel.keyframes[i + 1].time < time)
+//        ++i;
+//
+//    const auto& k0 = channel.keyframes[i];
+//    const auto& k1 = channel.keyframes[std::min(i + 1, channel.keyframes.size() - 1)];
+//
+//    float t = (k1.time > k0.time) ? (time - k0.time) / (k1.time - k0.time) : 0.0f;
+//
+//    // Interpolation
+//    simd::float3 pos = simd_mix(k0.position, k1.position, t);
+//    simd::quatf rot = simd::slerp(k0.rotation, k1.rotation, t);
+//    simd::float3 scl = simd_mix(k0.scale, k1.scale, t);
+//
+//    return simd::float4x4(math::makeTranslate(pos) * simd::float4x4(rot) * simd::float4x4(math::makeScale(scl)));
+//}
+
+//void RMDLBlender::update(float deltaTime)
+//{
+//    m_currentTime = fmod(m_currentTime + deltaTime * ticksPerSecond, duration);
+//
+//    for (auto& channel : currentAnimation->channels) {
+//        bones[channel.boneIndex].localTransform = sampleChannel(channel, currentTime);
+//    }
+//
+//    // Propager dans la hiérarchie
+//    for (size_t i = 0; i < bones.size(); ++i) {
+//        if (bones[i].parentIndex >= 0)
+//            bones[i].globalTransform = bones[bones[i].parentIndex].globalTransform * bones[i].localTransform;
+//        else
+//            bones[i].globalTransform = bones[i].localTransform;
+//    }
+//
+//    // Matrices finales pour le GPU
+//    for (size_t i = 0; i < bones.size(); ++i)
+//        boneMatrices[i] = bones[i].globalTransform * bones[i].offsetMatrix;
+//}

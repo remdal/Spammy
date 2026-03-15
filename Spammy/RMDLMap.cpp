@@ -91,7 +91,6 @@ void InfiniteTerrainManager::buildRenderPipeline(MTL::PixelFormat colorFormat, M
     vertexDesc->layouts()->object(0)->setStride(sizeof(TerrainVertexLisse));
     vertexDesc->layouts()->object(0)->setStepFunction(MTL::VertexStepFunctionPerVertex);
     
-    // Pipeline descriptor
     auto pipelineDesc = MTL::RenderPipelineDescriptor::alloc()->init();
     pipelineDesc->setVertexFunction(vertexFunc);
     pipelineDesc->setFragmentFunction(fragmentFunc);
